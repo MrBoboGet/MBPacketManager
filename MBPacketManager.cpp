@@ -17,6 +17,7 @@ namespace MBPM
 	//BEGIN Private functions
 	MBError h_AddDirectoryFiles(MBPM_CmakeProject& ProjectToPopulate, std::string const& ProjectDirectory,std::string const& ProjectName)
 	{
+		MBError ReturnValue = true;
 		std::filesystem::recursive_directory_iterator ProjectIterator(ProjectDirectory);
 		for (auto const& Entries : ProjectIterator)
 		{
@@ -42,6 +43,7 @@ namespace MBPM
 				}
 			}
 		}
+		return(ReturnValue);
 	}
 	MBError h_EmbeddPacket_CmakeFile(MBPM_CmakeProject& ProjectToPopulate, MBPM_MakefileGenerationOptions const& CompileConfiguration, MBPM_PacketInfo const& PacketInfo, std::string const& PacketDirectory)
 	{
@@ -63,15 +65,6 @@ namespace MBPM
 		}
 		return(ReturnValue);
 	}
-	MBError h_GenerateCmakeFile(MBPM_CmakeProject& ProjectToPopulate, MBPM_MakefileGenerationOptions const& CompileConfiguration, std::string const& PacketDirectory)
-	{
-		MBError GenerationError = true;
-		MBPM_PacketInfo PacketInfo = ParseMBPM_PacketInfo(PacketDirectory + "MBPM_PacketInfo");
-		
-		GenerationError = h_GenerateCmakeFile(ProjectToPopulate, CompileConfiguration, PacketInfo,PacketDirectory);
-
-		return(GenerationError);
-	}
 	MBError h_GenerateCmakeFile(MBPM_CmakeProject& ProjectToPopulate, MBPM_MakefileGenerationOptions const& CompileConfiguration,MBPM_PacketInfo const& PacketInfo,std::string const& PacketDirectory)
 	{
 		MBError GenerationError = true;
@@ -82,11 +75,11 @@ namespace MBPM
 		}
 		if (IsTopPacket)
 		{
-			ProjectToPopulate.ProjectName = true;
+			ProjectToPopulate.ProjectName = PacketInfo.PacketName;
 		}
 		for (auto const& Dependancies : PacketInfo.PacketDependancies)
 		{
-			if (ProjectToPopulate.ProjectPacketsDepandancies.find(Dependancies) != ProjectToPopulate.ProjectPacketsDepandancies.end())
+			if (ProjectToPopulate.ProjectPacketsDepandancies.find(Dependancies) == ProjectToPopulate.ProjectPacketsDepandancies.end())
 			{
 				std::string DependancyPath = GetSystemPacketsDirectory() + Dependancies+"/";
 				MBPM_PacketInfo DependancyInfo = ParseMBPM_PacketInfo(DependancyPath +"MBPM_PacketInfo");
@@ -123,11 +116,20 @@ namespace MBPM
 		}
 		return(GenerationError);
 	}
+	MBError h_GenerateCmakeFile(MBPM_CmakeProject& ProjectToPopulate, MBPM_MakefileGenerationOptions const& CompileConfiguration, std::string const& PacketDirectory)
+	{
+		MBError GenerationError = true;
+		MBPM_PacketInfo PacketInfo = ParseMBPM_PacketInfo(PacketDirectory + "MBPM_PacketInfo");
+
+		GenerationError = h_GenerateCmakeFile(ProjectToPopulate, CompileConfiguration, PacketInfo, PacketDirectory);
+
+		return(GenerationError);
+	}
 	//END PrivateFunctions
 
 	std::string GetSystemPacketsDirectory()
 	{
-		return(std::getenv("MBPM_PACKETS_DIRECTORY"));
+		return("");
 	}
 	MBError SetSystemPacketsDirectory(std::string const& DirectoryPath)
 	{
@@ -144,7 +146,7 @@ namespace MBPM
 	MBPM_PacketInfo ParseMBPM_PacketInfo(std::string const& PacketPath)
 	{
 		std::map<std::string, std::vector<std::string>> ParsedAttributes = {};
-		std::ifstream FileToRead = std::ifstream(PacketPath,std::ios::in|std::ios::binary);
+		std::ifstream FileToRead = std::ifstream(PacketPath,std::ios::in);
 		std::string CurrentLine = "";
 		std::string CurrentAttribute = "";
 		while (std::getline(FileToRead,CurrentLine))
@@ -213,32 +215,32 @@ namespace MBPM
 			}
 		}
 		ReturnValue.PacketDependancies = ParsedAttributes["Dependancies"];
-		ReturnValue = MBPM_PacketInfo();
 		return(ReturnValue);
 	}
 	MBError WriteMBPM_PacketInfo(MBPM_PacketInfo const& PacketToWrite)
 	{
-
+		return(MBError());
 	}
 
 	MBError WriteCMakeProjectToFile(MBPM_CmakeProject const& ProjectToWrite, std::string const& OutputFilePath)
 	{
+		MBError ReturnValue = true;
 		std::ofstream OutputFile = std::ofstream(OutputFilePath, std::ios::out | std::ios::binary);
-		OutputFile << "project("+ProjectToWrite.ProjectName+")";
-		OutputFile << "set(PROJECT_NAME \"" + ProjectToWrite.ProjectName + "\")";
+		OutputFile << "project("+ProjectToWrite.ProjectName+")\n";
+		OutputFile << "set(PROJECT_NAME \"" + ProjectToWrite.ProjectName + "\")\n";
 		
 		//write common sources
 		OutputFile << "set(PROJECT_SOURCES \n";
 		for (std::string const& SourceFiles : ProjectToWrite.CommonSources)
 		{
-			OutputFile << SourceFiles << std::endl;
+			OutputFile <<'\t'<< SourceFiles << std::endl;
 		}
 		OutputFile << ")\n";
 		//write common headers
 		OutputFile << "set(PROJECT_HEADERS \n";
 		for (std::string const& Headers : ProjectToWrite.CommonHeaders)
 		{
-			OutputFile <<"    " << Headers << std::endl;
+			OutputFile << '\t' <<"    " << Headers << std::endl;
 		}
 		OutputFile << ")\n";
 		OutputFile << "set(COMMON_FILES ${PROJECT_SOURCES} ${PROJECT_HEADERS})\n";
@@ -257,38 +259,57 @@ namespace MBPM
 		}
 		OutputFile << ")\n";
 
-		OutputFile << "set(COMMON_LIBRARIES ${COMMON_STATIC_LIBRARIES} ${COMMON_DYNAMIC_LIBRARIES}";
+		OutputFile << "set(COMMON_LIBRARIES ${COMMON_STATIC_LIBRARIES} ${COMMON_DYNAMIC_LIBRARIES})\n";
 
 
 		for (auto const& TargetData : ProjectToWrite.TargetsData)
 		{
 			OutputFile << "\n";
-			std::string CmakeTargetName = "";
+			std::string CmakeTargetName = ProjectToWrite.ProjectName+'_';
 			bool IsDebug = false;
 			bool IsStatic = true;
-			//skapar target Sources
-			OutputFile << "set(" + CmakeTargetName + "_Sources \n";
-			for (auto const& Source : TargetData.second.ExplicitSourceFiles)
+			if (TargetData.first == MBPM::MBPM_CompileOutputConfiguration::DynamicDebug || TargetData.first == MBPM_CompileOutputConfiguration::DynamicRelease)
 			{
-				OutputFile <<'\t'<<Source + "\n";
+				CmakeTargetName += "Dynamic";
+				IsStatic = false;
 			}
-			OutputFile << ")\n";
-			//target headers
-			OutputFile << "set(" + CmakeTargetName+"_Headers \n";
-			for(auto const& Header : TargetData.second.ExplicitHeaders)
+			else
 			{
-				OutputFile << '\t' << Header << '\n';
+				CmakeTargetName += "Static";
 			}
 			if (TargetData.first == MBPM_CompileOutputConfiguration::StaticDebug || TargetData.first == MBPM_CompileOutputConfiguration::DynamicDebug)
 			{
+				CmakeTargetName += "Debug";
 				IsDebug = true;
 			}
-			if (TargetData.first == MBPM::MBPM_CompileOutputConfiguration::DynamicDebug || TargetData.first == MBPM_CompileOutputConfiguration::DynamicRelease)
+			else
 			{
-				IsStatic = false;
+				CmakeTargetName += "Release";
 			}
 
-			
+			std::string ExtraSourceFiles = "";
+			//skapar target Sources
+			if (TargetData.second.ExplicitSourceFiles.size() > 0)
+			{
+				OutputFile << "set(" + CmakeTargetName + "_Sources \n";
+				for (auto const& Source : TargetData.second.ExplicitSourceFiles)
+				{
+					OutputFile << '\t' << Source + "\n";
+				}
+				OutputFile << ")\n";
+				ExtraSourceFiles += " {" + CmakeTargetName + "_Sources}";
+			}
+			//target headers
+			if(TargetData.second.ExplicitHeaders.size() > 0)
+			{
+				OutputFile << "set(" + CmakeTargetName + "_Headers \n";
+				for (auto const& Header : TargetData.second.ExplicitHeaders)
+				{
+					OutputFile << '\t' << Header << '\n';
+				}
+				ExtraSourceFiles += " {" + CmakeTargetName + "_Headers}";
+			}
+
 			//skapar targeten
 			OutputFile << "add_library(" << CmakeTargetName << " ";
 			if (IsStatic)
@@ -299,26 +320,36 @@ namespace MBPM
 			{
 				OutputFile << "SHARED ";
 			}
-			OutputFile << "${COMMON_FILES} ${" << CmakeTargetName << "_Sources} " << "${" << CmakeTargetName << "_Headers})\n";
+			OutputFile << "${COMMON_FILES}"+ExtraSourceFiles+")\n";
 			//
 
 			//librarys to link
-			OutputFile << "set(" << CmakeTargetName << "_NeededStaticLibraries\n";
-			for(auto const& NeededStaticLibrarys : TargetData.second.StaticLibrarysNeeded)
+			std::string ExtraLibraries = "";
+			if (TargetData.second.StaticLibrarysNeeded.size() > 0)
 			{
-				OutputFile << '\t' << NeededStaticLibrarys << '\n';
+				OutputFile << "set(" << CmakeTargetName << "_NeededStaticLibraries\n";
+				for (auto const& NeededStaticLibrarys : TargetData.second.StaticLibrarysNeeded)
+				{
+					OutputFile << '\t' << NeededStaticLibrarys << '\n';
+				}
+				OutputFile << ")\n";
+				ExtraLibraries += " ${" + CmakeTargetName + "_NeededStaticLibraries}";
 			}
-			OutputFile << ")\n";
-			OutputFile << "set(" << CmakeTargetName << "_NeededDynamicLibraries\n";
-			for (auto const& NeededDynamicLibrarys : TargetData.second.DynamicLibrarysNeeded)
+			if (TargetData.second.DynamicLibrarysNeeded.size() > 0)
 			{
-				OutputFile << '\t' << NeededDynamicLibrarys << '\n';
+				OutputFile << "set(" << CmakeTargetName << "_NeededDynamicLibraries\n";
+				for (auto const& NeededDynamicLibrarys : TargetData.second.DynamicLibrarysNeeded)
+				{
+					OutputFile << '\t' << NeededDynamicLibrarys << '\n';
+				}
+				OutputFile << ")\n";
+				ExtraLibraries += " ${" + CmakeTargetName + "_NeededDynamicLibraries}";
 			}
-			OutputFile << ")\n";
-			OutputFile<<"set("<<CmakeTargetName<<"_NeededLibraries ${"<<CmakeTargetName<<"_NeededStaticLibraries} ${"<<CmakeTargetName<<"_NeededDynamicLibraries})\n";
+			OutputFile<<"set("<<CmakeTargetName<<"_NeededLibraries "<<ExtraLibraries<<")\n";
 			OutputFile << "target_link_libraries(" << CmakeTargetName << " ${" << CmakeTargetName << "_NeedLibraries} ${COMMON_LIBRARIES})\n";
 			
 		}
+		return(ReturnValue);
 	}
 
 	MBError GenerateCmakeFile(MBPM_PacketInfo const& PacketToConvert, std::string const& PacketDirectory, MBPM_MakefileGenerationOptions const& CompileConfiguration,std::string const& OutputName)
@@ -358,11 +389,11 @@ namespace MBPM
 
 	MBError CompileAndInstallPacket(std::string const& PacketToCompileDirectory)
 	{
-
+		return(MBError());
 	}
 
 	MBError DownloadPacket(std::string const& DestinationDirectory, std::string const& URI)
 	{
-
+		return(MBError());
 	}
 };

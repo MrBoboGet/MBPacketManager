@@ -1,0 +1,58 @@
+project(MBPacketManager)
+set(PROJECT_NAME "MBPacketManager")
+set(PROJECT_SOURCES 
+	/./MBPacketManager.cpp
+	/./MBPMCLIMain.cpp
+	/./out/build/x64-Debug/CMakeFiles/3.17.20032601-MSVC_2/CMakeCXXCompiler.cmake
+	/./out/build/x64-Debug/CMakeFiles/3.17.20032601-MSVC_2/CMakeRCCompiler.cmake
+	/./out/build/x64-Debug/CMakeFiles/3.17.20032601-MSVC_2/CMakeSystem.cmake
+	/./out/build/x64-Debug/CMakeFiles/3.17.20032601-MSVC_2/CompilerIdCXX/CMakeCXXCompilerId.cpp
+	/./out/build/x64-Debug/CMakeFiles/cmake.check_cache
+	/./out/build/x64-Debug/CMakeFiles/ShowIncludes/main.c
+	/./out/build/x64-Debug/cmake_install.cmake
+	/./out/build/x64-Debug (default)/CMakeFiles/3.17.20032601-MSVC_2/CMakeCXXCompiler.cmake
+	/./out/build/x64-Debug (default)/CMakeFiles/3.17.20032601-MSVC_2/CMakeRCCompiler.cmake
+	/./out/build/x64-Debug (default)/CMakeFiles/3.17.20032601-MSVC_2/CMakeSystem.cmake
+	/./out/build/x64-Debug (default)/CMakeFiles/3.17.20032601-MSVC_2/CompilerIdCXX/CMakeCXXCompilerId.cpp
+	/./out/build/x64-Debug (default)/CMakeFiles/cmake.check_cache
+	/./out/build/x64-Debug (default)/CMakeFiles/ShowIncludes/main.c
+)
+set(PROJECT_HEADERS 
+	    /MBPacketManager.h
+	    /foo.h
+	    /foo.h
+)
+set(COMMON_FILES ${PROJECT_SOURCES} ${PROJECT_HEADERS})
+set(COMMON_DYNAMIC_LIBRARIES 
+)
+set(COMMON_STATIC_LIBRARIES 
+)
+set(COMMON_LIBRARIES ${COMMON_STATIC_LIBRARIES} ${COMMON_DYNAMIC_LIBRARIES})
+
+add_library(MBPacketManager_StaticDebug ARCHIVE ${COMMON_FILES})
+set(MBPacketManager_StaticDebug_NeededStaticLibraries
+	.
+)
+set(MBPacketManager_StaticDebug_NeededLibraries  ${MBPacketManager_StaticDebug_NeededStaticLibraries})
+target_link_libraries(MBPacketManager_StaticDebug ${MBPacketManager_StaticDebug_NeedLibraries} ${COMMON_LIBRARIES})
+
+add_library(MBPacketManager_StaticRelease ARCHIVE ${COMMON_FILES})
+set(MBPacketManager_StaticRelease_NeededStaticLibraries
+	.
+)
+set(MBPacketManager_StaticRelease_NeededLibraries  ${MBPacketManager_StaticRelease_NeededStaticLibraries})
+target_link_libraries(MBPacketManager_StaticRelease ${MBPacketManager_StaticRelease_NeedLibraries} ${COMMON_LIBRARIES})
+
+add_library(MBPacketManager_DynamicDebug SHARED ${COMMON_FILES})
+set(MBPacketManager_DynamicDebug_NeededDynamicLibraries
+	.
+)
+set(MBPacketManager_DynamicDebug_NeededLibraries  ${MBPacketManager_DynamicDebug_NeededDynamicLibraries})
+target_link_libraries(MBPacketManager_DynamicDebug ${MBPacketManager_DynamicDebug_NeedLibraries} ${COMMON_LIBRARIES})
+
+add_library(MBPacketManager_DynamicRelease SHARED ${COMMON_FILES})
+set(MBPacketManager_DynamicRelease_NeededDynamicLibraries
+	.
+)
+set(MBPacketManager_DynamicRelease_NeededLibraries  ${MBPacketManager_DynamicRelease_NeededDynamicLibraries})
+target_link_libraries(MBPacketManager_DynamicRelease ${MBPacketManager_DynamicRelease_NeedLibraries} ${COMMON_LIBRARIES})

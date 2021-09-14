@@ -45,6 +45,7 @@ set(EXTLIBS_SOURCE_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/../BasicChatCmake/MrBoboSockets/TLSHandler.cpp;"
     "${CMAKE_CURRENT_SOURCE_DIR}/../BasicChatCmake/MBCrypto/MBCrypto.cpp;"
     "${CMAKE_CURRENT_SOURCE_DIR}/../BasicChatCmake/MBErrorHandling.cpp;"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../BasicChatCmake/MBParsing/MBParsing.cpp;"
 )
 
 set(Header_Files

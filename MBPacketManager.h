@@ -6,6 +6,7 @@
 #include <map>
 #include <set>
 #include <unordered_set>
+#include <MBParsing/MBParsing.h>
 namespace MBPM
 {
 	enum class MBPM_CompileOutputConfiguration
@@ -61,7 +62,11 @@ namespace MBPM
 
 	struct MBPM_MakefileGenerationOptions
 	{
-		std::set<MBPM_CompileOutputConfiguration> SupportedLibraryConfigurations = {};
+		std::set<MBPM_CompileOutputConfiguration> SupportedLibraryConfigurations = {
+			MBPM_CompileOutputConfiguration::StaticRelease,
+			MBPM_CompileOutputConfiguration::StaticDebug,
+			MBPM_CompileOutputConfiguration::DynamicRelease,
+			MBPM_CompileOutputConfiguration::DynamicDebug };
 	};
 	struct MBPM_CmakeProject_TargetData
 	{
