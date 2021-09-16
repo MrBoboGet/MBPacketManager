@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
+
 //magiska namn macros
 #define MBPM_PACKETINFO_FILENAME "MBPM_PacketInfo";
 
@@ -145,76 +146,63 @@ namespace MBPM
 
 	MBPM_PacketInfo ParseMBPM_PacketInfo(std::string const& PacketPath)
 	{
-		std::map<std::string, std::vector<std::string>> ParsedAttributes = {};
-		std::ifstream FileToRead = std::ifstream(PacketPath,std::ios::in);
-		std::string CurrentLine = "";
-		std::string CurrentAttribute = "";
-		while (std::getline(FileToRead,CurrentLine))
-		{
-			if (CurrentAttribute == "")
-			{
-				CurrentAttribute = CurrentLine;
-			}
-			else if (CurrentLine == "END")
-			{
-				CurrentAttribute = "";
-			}
-			else
-			{
-				ParsedAttributes[CurrentAttribute].push_back(CurrentLine);
-			}
-		}
+		std::string JsonData = std::string(std::filesystem::file_size(PacketPath), 0);
+		std::ifstream PacketFile = std::ifstream(PacketPath, std::ios::in | std::ios::binary);
+		PacketFile.read(JsonData.data(), JsonData.size());
+		MBParsing::JSONObject ParsedJson = MBParsing::ParseJSONObject(JsonData,0,nullptr,nullptr);
+
+
 		MBPM_PacketInfo ReturnValue;
-		ReturnValue.PacketName = ParsedAttributes["PacketName"].front();
-		for (auto const& Attribute : ParsedAttributes["Attributes"])
+		ReturnValue.PacketName = ParsedJson.GetAttribute("PacketName").GetStringData();
+		for (auto const& Attribute : ParsedJson.GetAttribute("Attributes").GetArrayData())
 		{
-			if (Attribute == "Embeddable")
+			if (Attribute.GetStringData() == "Embeddable")
 			{
 				ReturnValue.Attributes.insert(MBPM_PacketAttribute::Embedabble);
 			}
 		}
-		for (auto const& OutputConfigurations : ParsedAttributes["OutputConfigurations"])
+		for (auto const& OutputConfigurations : ParsedJson.GetAttribute("OutputConfigurations").GetArrayData())
 		{
-			if (OutputConfigurations == "StaticDebug")
+			if (OutputConfigurations.GetStringData() == "StaticDebug")
 			{
 				ReturnValue.SupportedOutputConfigurations.insert(MBPM_CompileOutputConfiguration::StaticRelease);
 			}
-			if (OutputConfigurations == "StaticRelease")
+			if (OutputConfigurations.GetStringData() == "StaticRelease")
 			{
 				ReturnValue.SupportedOutputConfigurations.insert(MBPM_CompileOutputConfiguration::DynamicDebug);
 			}
-			if (OutputConfigurations == "DynamicDebug")
+			if (OutputConfigurations.GetStringData() == "DynamicDebug")
 			{
 				ReturnValue.SupportedOutputConfigurations.insert(MBPM_CompileOutputConfiguration::DynamicRelease);
 			}
-			if (OutputConfigurations == "DynamicRelease")
+			if (OutputConfigurations.GetStringData() == "DynamicRelease")
 			{
 				ReturnValue.SupportedOutputConfigurations.insert(MBPM_CompileOutputConfiguration::DynamicRelease);
 			}
 		}
-		for (auto const& TargetNames : ParsedAttributes["OutputTargetNames"])
+		//för outout configuratuions
+		MBParsing::JSONObject OutputConfiguration = ParsedJson.GetAttribute("OutputTargetNames");
+		if (OutputConfiguration.HasAttribute("StaticDebug"))
 		{
-			size_t FirstSpace = TargetNames.find(' ');
-			std::string TargetConfiguration = TargetNames.substr(FirstSpace);
-			std::string TargetName = TargetNames.substr(0,FirstSpace);
-			if (TargetConfiguration == "StaticDebug")
-			{
-				ReturnValue.OutputConfigurationTargetNames[MBPM_CompileOutputConfiguration::StaticDebug] = TargetName;
-			}
-			if (TargetConfiguration == "StaticRelease")
-			{
-				ReturnValue.OutputConfigurationTargetNames[MBPM_CompileOutputConfiguration::StaticRelease] = TargetName;
-			}
-			if (TargetConfiguration == "DynamicDebug")
-			{
-				ReturnValue.OutputConfigurationTargetNames[MBPM_CompileOutputConfiguration::DynamicDebug] = TargetName;
-			}
-			if (TargetConfiguration == "DynamicRelease")
-			{
-				ReturnValue.OutputConfigurationTargetNames[MBPM_CompileOutputConfiguration::DynamicRelease] = TargetName;
-			}
+			ReturnValue.OutputConfigurationTargetNames[MBPM_CompileOutputConfiguration::StaticDebug] = OutputConfiguration.GetAttribute("StaticDebug").GetStringData();
 		}
-		ReturnValue.PacketDependancies = ParsedAttributes["Dependancies"];
+		if (OutputConfiguration.HasAttribute("StaticRelease"))
+		{
+			ReturnValue.OutputConfigurationTargetNames[MBPM_CompileOutputConfiguration::StaticRelease] = OutputConfiguration.GetAttribute("StaticRelease").GetStringData();
+		}
+		if (OutputConfiguration.HasAttribute("DynamicDebug"))
+		{
+			ReturnValue.OutputConfigurationTargetNames[MBPM_CompileOutputConfiguration::DynamicDebug] = OutputConfiguration.GetAttribute("DynamicDebug").GetStringData();
+		}
+		if (OutputConfiguration.HasAttribute("DynamicRelease"))
+		{
+			ReturnValue.OutputConfigurationTargetNames[MBPM_CompileOutputConfiguration::DynamicRelease] = OutputConfiguration.GetAttribute("DynamicRelease").GetStringData();
+		}
+		//ReturnValue.PacketDependancies = ParsedAttributes["Dependancies"];
+		for (auto const& Dependancie : ParsedJson.GetAttribute("Dependancies").GetArrayData())
+		{
+			ReturnValue.PacketDependancies.push_back(Dependancie.GetStringData());
+		}
 		return(ReturnValue);
 	}
 	MBError WriteMBPM_PacketInfo(MBPM_PacketInfo const& PacketToWrite)

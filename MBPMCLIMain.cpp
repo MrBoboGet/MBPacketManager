@@ -2,6 +2,7 @@
 #include <MrBoboSockets/MrBoboSockets.h>
 #include <iostream>
 #include <MBParsing/MBParsing.h>
+#include <MB_PacketProtocol.h>
 int main()
 {
 	//MBSockets::Init();
@@ -9,10 +10,13 @@ int main()
 	//TestSocket.Connect();
 	//TestSocket.EstablishTLSConnection();
 	//std::cout << TestSocket.GetDataFromRequest("GET","/")<<std::endl;
-	std::filesystem::current_path("C:\\Users\\emanu\\Desktop\\Program\\C++\\MBPacketManager");
-	MBPM::MBPM_MakefileGenerationOptions Options;
-	MBPM::GenerateCmakeFile("./",Options,"TestCmake.txt");
+	
+	
+	//std::filesystem::current_path("C:\\Users\\emanu\\Desktop\\Program\\C++\\MBPacketManager");
+	//MBPM::MBPM_MakefileGenerationOptions Options;
+	//MBPM::GenerateCmakeFile("./",Options,"TestCmake.txt");
 
+	MBPM::CreatePacketFilesData("./");
 
 	//std::string TestData = std::string(std::filesystem::file_size("MBPM_PacketInfo"), 0);
 	//std::ifstream PacketFile = std::ifstream("MBPM_PacketInfo", std::ios::in | std::ios::binary);

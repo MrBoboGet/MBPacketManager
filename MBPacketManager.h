@@ -7,6 +7,8 @@
 #include <set>
 #include <unordered_set>
 #include <MBParsing/MBParsing.h>
+
+//#include "MB_PacketProtocol.h"
 namespace MBPM
 {
 	enum class MBPM_CompileOutputConfiguration
@@ -99,7 +101,7 @@ namespace MBPM
 
 	MBError CompileAndInstallPacket(std::string const& PacketToCompileDirectory);
 
-	MBError DownloadPacket(std::string const& DestinationDirectory, std::string const& URI);
+	//MBError DownloadPacket(std::string const& DestinationDirectory, std::string const& URI);
 
 	std::string GetSystemPacketsDirectory();
 	MBError SetSystemPacketsDirectory(std::string const& DirectoryPath);

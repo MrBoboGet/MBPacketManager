@@ -3,6 +3,7 @@ set(PROJECT_NAME "MBPacketManager")
 set(PROJECT_SOURCES 
 	/./MBPacketManager.cpp
 	/./MBPMCLIMain.cpp
+	/./MB_PacketProtocol.cpp
 	/./out/build/x64-Debug/CMakeFiles/3.17.20032601-MSVC_2/CMakeCXXCompiler.cmake
 	/./out/build/x64-Debug/CMakeFiles/3.17.20032601-MSVC_2/CMakeRCCompiler.cmake
 	/./out/build/x64-Debug/CMakeFiles/3.17.20032601-MSVC_2/CMakeSystem.cmake
@@ -19,6 +20,7 @@ set(PROJECT_SOURCES
 )
 set(PROJECT_HEADERS 
 	    /MBPacketManager.h
+	    /MB_PacketProtocol.h
 	    /foo.h
 	    /foo.h
 )

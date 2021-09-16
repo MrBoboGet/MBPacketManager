@@ -1,8 +1,8 @@
 {
 	"Attributes":["Embeddable"],
 	"OutputConfigurations":["StaticDebug","StaticRelease","DynamicDebug","DynamicRelease"],
-	"OutputTargetNames":[["MBPacketManager_StaticRelease","StaticRelease"],["MBPacketManager_StaticDebug","StaticDebug"],["MBPacketManager_DynamicDebug","DynamicDebug"],
-	["MBPacketManager_DynamicRelease","DynamicRelease"]],
-	"Dependancies":".",
+	"OutputTargetNames":{"MBPacketManager_StaticRelease":"StaticRelease","MBPacketManager_StaticDebug":"StaticDebug","MBPacketManager_DynamicDebug":"DynamicDebug",
+	"MBPacketManager_DynamicRelease":"DynamicRelease"},
+	"Dependancies":["."],
 	"PacketName":"MBPacketManager"
 }

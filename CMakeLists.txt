@@ -50,11 +50,14 @@ set(EXTLIBS_SOURCE_FILES
 
 set(Header_Files
     "${CMAKE_CURRENT_SOURCE_DIR}/MBPacketManager.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/MB_PacketProtocol.h"
 )
 source_group("Header Files" FILES ${Header_Files})
 
 set(Source_Files
     "${CMAKE_CURRENT_SOURCE_DIR}/MBPacketManager.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/MB_PacketProtocol.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/MBPMCLIMain.cpp"
 )
 message(${Source_Files})
 source_group("Source Files" FILES ${Source_Files})
@@ -73,7 +76,7 @@ set(ALL_FILES
 ################################################################################
 # Target
 ################################################################################
-add_executable(${PROJECT_NAME} ${ALL_FILES} "MBPMCLIMain.cpp")
+add_executable(${PROJECT_NAME} ${ALL_FILES})
 
 
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_17)
