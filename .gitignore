@@ -42,3 +42,5 @@ Thumbs.db
 /out
 /x64
 /CMakeSettings.json
+/TestDirectory/
+/MBPM_FileInfo
