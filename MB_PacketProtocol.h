@@ -44,10 +44,39 @@ namespace MBPM
 		uint64_t FileSize = 0;
 		std::string FileData = "";//binär data
 	};
-	constexpr uint8_t MBPP_GenericRecordHeaderSize = 9;
+
+	enum class MBPP_ComputerInfoType : uint8_t
+	{
+		Standard,
+		Null
+	};
+	enum class MBPP_ProcessorType : uint32_t
+	{
+		x86,
+		x86_64,
+		ARM,
+		Null,
+	};
+	enum class MBPP_OSType : uint32_t
+	{
+		Linux,
+		Windows_10,
+		Windows_7,
+		MacOS,
+		Null,
+	};
+	struct MBPP_ComputerInfo
+	{
+		MBPP_ComputerInfoType Type = MBPP_ComputerInfoType::Standard;
+		MBPP_OSType OSType = MBPP_OSType::Null;
+		MBPP_ProcessorType ProcessorType = MBPP_ProcessorType::Null;
+	};
+	constexpr uint8_t MBPP_GenericRecordHeaderSize = 18;
+	constexpr uint8_t MBPP_StringLengthSize = 2;
 	struct MBPP_GenericRecord
 	{
 		MBPP_RecordType Type = MBPP_RecordType::Null;
+		MBPP_ComputerInfo ComputerInfo = MBPP_ComputerInfo();
 		uint64_t RecordSize = 0;
 		std::string RecordData = "";
 	};
@@ -91,8 +120,12 @@ namespace MBPM
 	{
 
 	};
+	MBPP_ComputerInfo GetComputerInfo();
+	MBPP_GenericRecord MBPP_ParseRecordHeader(const void* Data, size_t DataSize, size_t InOffset, size_t* OutOffset);
 	std::string MBPP_EncodeString(std::string const& StringToEncode);
+	std::string MBPP_GetRecordHeader(MBPP_GenericRecord const& RecordToConvert);
 	std::string MBPP_GetRecordData(MBPP_GenericRecord const& RecordToConvert);
+	std::string MBPP_GenerateFileList(std::vector<std::string> const& FilesToList);
 
 	struct MBPP_FileInfoDiff
 	{
@@ -173,15 +206,21 @@ namespace MBPM
 	};
 	class MBPP_ServerResponseIterator
 	{
-	private:
+	protected:
 		friend class MBPP_Server;
+		size_t m_MaxBytesInMemory = 300000000; //300mb, helt godtyckligt just nu
 		MBPP_Server* m_AssociatedServer = nullptr;
-		void* m_IterationData = nullptr; //ägs inte av iteratorn
+		//void* m_IterationData = nullptr; //ägs inte av iteratorn
 		std::string m_CurrentResponse = "";
-		bool m_HasEnded = true;
+		bool m_Finished = true;
 
-		MBPP_ServerResponseIterator(MBPP_Server* m_AssociatedServer);
-		MBPP_ServerResponseIterator();
+		//MBPP_ServerResponseIterator(MBPP_Server* m_AssociatedServer);
+		//MBPP_ServerResponseIterator();
+		template<typename T> T& p_GetResponseData()
+		{
+			return(m_AssociatedServer->p_GetResponseData());
+		}
+		std::string p_GetPacketDirectory(std::string const& PacketName);
 	public:
 		std::string& operator*()
 		{
@@ -191,9 +230,9 @@ namespace MBPM
 		{
 			return(m_CurrentResponse);
 		}
-		bool operator=(MBPP_ServerResponseIterator const& OtherIterator)
+		bool operator==(MBPP_ServerResponseIterator const& OtherIterator)
 		{
-			if (m_HasEnded == true && OtherIterator.m_HasEnded == true)
+			if (m_Finished == true && OtherIterator.m_Finished == true)
 			{
 				return(true);
 			}
@@ -205,8 +244,66 @@ namespace MBPM
 		}
 		MBPP_ServerResponseIterator& operator++();
 		MBPP_ServerResponseIterator& operator++(int); //postfix
-		bool IsFinished() { return(m_HasEnded);  }
-		~MBPP_ServerResponseIterator();
+		virtual void Increment();
+		bool IsFinished() { return(m_Finished);  }
+	};
+	struct MBPP_GetFileList_ResponseData
+	{
+		uint32_t PacketNameSize = -1; //totala sizen är egentligen 2, men utifall att
+		std::string PacketName = "";
+
+		uint32_t TotalFileListSize = -1;
+		uint32_t TotalParsedFileListData = -1;
+
+		std::string CurrentString = "";
+		size_t CurrentStringSize = -1;
+		size_t CurrentStringParsedData = 0;
+
+		std::vector<std::string>  FilesToGet = {};
+	};
+	struct MBPP_GetDirectories_ResponseData
+	{
+		uint32_t PacketNameSize = -1;
+		std::string PacketName = "";
+		uint32_t DirectoryListSize = -1;
+		std::vector<std::string> DirectoriesToGet = {};
+	};
+	struct MBPP_GetPacketInfo_ResponseData
+	{
+		uint32_t PacketNameSize = -1;
+		std::string PacketName = "";
+	};
+	class MBPP_GetFileList_ResponseIterator : public MBPP_ServerResponseIterator
+	{
+	private:
+		bool m_FileListSent = false;
+		size_t m_CurrentFileIndex = 0;
+		std::ifstream m_FileHandle;
+	public:
+		MBPP_GetFileList_ResponseIterator(MBPP_GetFileList_ResponseData const& ResponseData) {};
+		virtual void Increment() override;
+	};
+	class MBPP_GetDirectories_ResponseIterator : public MBPP_ServerResponseIterator
+	{
+	private:
+		bool m_FileListSent = false;
+		std::vector<std::string> m_FilesToSend = {};
+		size_t m_CurrentFileIndex = 0;
+		std::ifstream m_FileHandle;
+	public:
+		MBPP_GetDirectories_ResponseIterator(MBPP_GetDirectories_ResponseData const& ResponseData);
+		virtual void Increment() override;
+	};
+	class MBPP_GetPacketInfo_ResponseIterator : public MBPP_ServerResponseIterator
+	{
+	private:
+		bool m_FileListSent = false;
+		size_t m_CurrentFileIndex = 0;
+		std::vector<std::string> m_FilesToSend = { "MBPM_PacketInfo","MBPM_FileInfo" };
+		std::ifstream m_FileHandle;
+	public:
+		MBPP_GetPacketInfo_ResponseIterator(MBPP_GetPacketInfo_ResponseData const& ResponseData) {};
+		virtual void Increment() override;
 	};
 	class MBPP_Server
 	{
@@ -215,14 +312,14 @@ namespace MBPM
 		std::vector<std::string> m_PacketSearchDirectories = {};
 		bool m_RequestFinished = false;
 
-		MBPP_RecordType m_CurrentRequestType = MBPP_RecordType::Null;
+		MBPP_GenericRecord m_CurrentRequestHeader;
 		void* m_RequestResponseData = nullptr;
 
 		std::string m_RecievedData = "";
 		size_t m_RecievedDataOffset = 0;
 		size_t m_CurrentRequestSize = -1;
 		
-		template<typename T> T& p_GetRequestArgument()
+		template<typename T> T& p_GetResponseData()
 		{
 			return(*(T*)m_CurrentRequestData)
 		}
@@ -236,6 +333,8 @@ namespace MBPM
 
 		//Upload/Remove metoder
 		MBError p_Handle_UploadFiles();
+
+		std::string p_GetPacketDirectory(std::string const& PacketName);
 	public:
 		MBPP_Server(std::string const& PacketDirectory);
 
@@ -250,7 +349,8 @@ namespace MBPM
 		MBError InsertClientData(const void* ClientData, size_t DataSize);
 		MBError InsertClientData(std::string const& ClientData);
 		bool ClientRequestFinished();
-		MBPP_ServerResponseIterator GetResponseIterator();
+		MBPP_ServerResponseIterator* GetResponseIterator();
+		void FreeResponseIterator(MBPP_ServerResponseIterator* IteratorToFree);
 		//MBError SendResponse(MBSockets::ConnectSocket* SocketToUse);
 	};
 }
