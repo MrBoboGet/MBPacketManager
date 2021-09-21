@@ -212,13 +212,13 @@ namespace MBPM
 		MBPP_Server* m_AssociatedServer = nullptr;
 		//void* m_IterationData = nullptr; //ägs inte av iteratorn
 		std::string m_CurrentResponse = "";
-		bool m_Finished = true;
-
+		bool m_Finished = false;
+		MBPP_GenericRecord m_HeaderToSend;
 		//MBPP_ServerResponseIterator(MBPP_Server* m_AssociatedServer);
 		//MBPP_ServerResponseIterator();
 		template<typename T> T& p_GetResponseData()
 		{
-			return(m_AssociatedServer->p_GetResponseData());
+			return(m_AssociatedServer->p_GetResponseData<T>());
 		}
 		std::string p_GetPacketDirectory(std::string const& PacketName);
 	public:
@@ -280,7 +280,7 @@ namespace MBPM
 		size_t m_CurrentFileIndex = 0;
 		std::ifstream m_FileHandle;
 	public:
-		MBPP_GetFileList_ResponseIterator(MBPP_GetFileList_ResponseData const& ResponseData) {};
+		MBPP_GetFileList_ResponseIterator(MBPP_GetFileList_ResponseData const& ResponseData, MBPP_Server* AssociatedServer);
 		virtual void Increment() override;
 	};
 	class MBPP_GetDirectories_ResponseIterator : public MBPP_ServerResponseIterator
@@ -291,7 +291,7 @@ namespace MBPM
 		size_t m_CurrentFileIndex = 0;
 		std::ifstream m_FileHandle;
 	public:
-		MBPP_GetDirectories_ResponseIterator(MBPP_GetDirectories_ResponseData const& ResponseData);
+		MBPP_GetDirectories_ResponseIterator(MBPP_GetDirectories_ResponseData const& ResponseData, MBPP_Server* AssociatedServer);
 		virtual void Increment() override;
 	};
 	class MBPP_GetPacketInfo_ResponseIterator : public MBPP_ServerResponseIterator
@@ -302,7 +302,7 @@ namespace MBPM
 		std::vector<std::string> m_FilesToSend = { "MBPM_PacketInfo","MBPM_FileInfo" };
 		std::ifstream m_FileHandle;
 	public:
-		MBPP_GetPacketInfo_ResponseIterator(MBPP_GetPacketInfo_ResponseData const& ResponseData) {};
+		MBPP_GetPacketInfo_ResponseIterator(MBPP_GetPacketInfo_ResponseData const& ResponseData,MBPP_Server* AssociatedServer);
 		virtual void Increment() override;
 	};
 	class MBPP_Server
@@ -321,7 +321,7 @@ namespace MBPM
 		
 		template<typename T> T& p_GetResponseData()
 		{
-			return(*(T*)m_CurrentRequestData)
+			return(*(T*)m_RequestResponseData);
 		}
 		void p_FreeRequestResponseData();
 		void p_ResetRequestResponseState();
