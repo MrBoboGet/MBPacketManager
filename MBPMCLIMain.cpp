@@ -3,6 +3,7 @@
 #include <iostream>
 #include <MBParsing/MBParsing.h>
 #include <MB_PacketProtocol.h>
+#include <MBPM_CLI.h>
 
 void TestServerFunc()
 {
@@ -11,15 +12,19 @@ void TestServerFunc()
 	ServerSocket.Bind();
 	ServerSocket.Listen();
 	ServerSocket.Accept();
-	while (!TestServer.ClientRequestFinished())
+	while (true)
 	{
-		TestServer.InsertClientData(ServerSocket.RecieveData());
-	}
-	MBPM::MBPP_ServerResponseIterator* ResponseIterator = TestServer.GetResponseIterator();
-	while (ResponseIterator->IsFinished() == false)
-	{
-		ServerSocket.SendData(*(*ResponseIterator));
-		ResponseIterator->Increment();
+		while (!TestServer.ClientRequestFinished())
+		{
+			TestServer.InsertClientData(ServerSocket.RecieveData());
+		}
+		MBPM::MBPP_ServerResponseIterator* ResponseIterator = TestServer.GetResponseIterator();
+		while (ResponseIterator->IsFinished() == false)
+		{
+			ServerSocket.SendData(*(*ResponseIterator));
+			ResponseIterator->Increment();
+		}
+		TestServer.FreeResponseIterator(ResponseIterator);
 	}
 	std::cout << "Server done" << std::endl;
 }
@@ -43,10 +48,10 @@ int main()
 	MBError ConnectionResult = TestClient.Connect(MBPM::MBPP_TransferProtocol::TCP, "127.0.0.1", "42069");
 	assert(ConnectionResult);
 	
-	TestClient.DownloadPacket("./TestOutputDirectory/", "TestPacket");
+	TestClient.UpdatePacket("./TestOutputDirectory/", "TestPacket");
 
 
-	//MBPM::CreatePacketFilesData("./TestPacket/","MBPM_FileInfo");
+	//MBPM::CreatePacketFilesData("./TestOutputDirectory/","MBPM_FileInfo");
 	//MBPM::MBPP_FileInfoReader ClientVersion("./TestDirectory/ClientVersion");
 	//MBPM::MBPP_FileInfoReader ServerVersion("./TestDirectory/ServerVersion");
 	//MBPM::MBPP_FileInfoDiff VersionDifferance = MBPM::GetFileInfoDifference(ClientVersion, ServerVersion);

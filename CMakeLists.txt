@@ -46,6 +46,7 @@ set(EXTLIBS_SOURCE_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/../BasicChatCmake/MBCrypto/MBCrypto.cpp;"
     "${CMAKE_CURRENT_SOURCE_DIR}/../BasicChatCmake/MBErrorHandling.cpp;"
     "${CMAKE_CURRENT_SOURCE_DIR}/../BasicChatCmake/MBParsing/MBParsing.cpp;"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../BasicChatCmake/MBUnicode/MBUnicode.cpp;"
 )
 
 set(Header_Files
@@ -58,6 +59,8 @@ set(Source_Files
     "${CMAKE_CURRENT_SOURCE_DIR}/MBPacketManager.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/MB_PacketProtocol.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/MBPMCLIMain.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/MBPM_CLI.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/MBCLI/MBCLI.cpp"
 )
 message(${Source_Files})
 source_group("Source Files" FILES ${Source_Files})

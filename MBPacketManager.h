@@ -8,7 +8,7 @@
 #include <unordered_set>
 #include <MBParsing/MBParsing.h>
 
-//#include "MB_PacketProtocol.h"
+#include "MB_PacketProtocol.h"
 namespace MBPM
 {
 	enum class MBPM_CompileOutputConfiguration

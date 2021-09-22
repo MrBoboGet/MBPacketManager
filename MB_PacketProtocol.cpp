@@ -437,6 +437,10 @@ namespace MBPM
 		ClientSocket->Connect();
 		return(ReturnValue);
 	}
+	MBError MBPP_Client::Connect(MBPP_PacketHost const& PacketHost)
+	{
+		return(Connect(PacketHost.TransferProtocol, PacketHost.URL, std::to_string(PacketHost.Port)));
+	}
 	bool MBPP_Client::IsConnected()
 	{
 		return(m_ServerConnection->IsConnected());
@@ -463,7 +467,7 @@ namespace MBPM
 		}
 		else
 		{
-			ReturnValue = p_DownloadFileList(RecievedData, MBPP_GenericRecordHeaderSize, m_ServerConnection.get(), OutputDirectory);
+			ReturnValue = p_DownloadFileList(RecievedData, MBPP_GenericRecordHeaderSize, m_ServerConnection.get(), OutputDirectory,FilesToGet);
 		}
 		return(ReturnValue);
 	}
@@ -492,7 +496,7 @@ namespace MBPM
 		}
 		return(ReturnValue);
 	}
-	MBError MBPP_Client::p_DownloadServerFilesInfo(std::string const& PacketName,std::string const& OutputFilepath,std::string const& OutputDirectory)
+	MBError MBPP_Client::p_DownloadServerFilesInfo(std::string const& PacketName, std::string const& OutputDirectory,std::vector<std::string> const& OutputFileNames)
 	{
 		MBError ReturnValue = true;
 		MBPP_GenericRecord RecordToSend;
@@ -513,11 +517,12 @@ namespace MBPM
 		}
 		else
 		{
-			ReturnValue = p_DownloadFileList(RecievedData, MBPP_GenericRecordHeaderSize, m_ServerConnection.get(), OutputDirectory);
+			ReturnValue = p_DownloadFileList(RecievedData, MBPP_GenericRecordHeaderSize, m_ServerConnection.get(), OutputDirectory,OutputFileNames);
 		}
 		return(ReturnValue);
 	}
-	MBError MBPP_Client::p_DownloadFileList(std::string const& InitialData,size_t InitialDataOffset, MBSockets::ConnectSocket* SocketToUse, std::string const& OutputDirectory)
+	MBError MBPP_Client::p_DownloadFileList(std::string const& InitialData,size_t InitialDataOffset, MBSockets::ConnectSocket* SocketToUse, std::string const& OutputDirectory
+		,std::vector<std::string> const& OutputFileNames)
 	{
 		MBError ReturnValue = true;
 		size_t MaxRecieveSize = 300000000;
@@ -550,7 +555,17 @@ namespace MBPM
 			ResponseDataOffset += FileNameLength;
 			ParsedFileListBytes += MBPP_StringLengthSize + FileNameLength;
 		}
-
+		if (OutputFileNames.size() != 0)
+		{
+			assert(OutputFileNames.size() == FilesToDownload.size());
+			FilesToDownload = OutputFileNames;
+		}
+		for (size_t i = 0; i < FilesToDownload.size(); i++)
+		{
+			//kollar om directoryn finns, annars skapar vi dem
+			std::string FileDirectory =h_PathToUTF8(std::filesystem::path(OutputDirectory + FilesToDownload[i]).parent_path());
+			std::filesystem::create_directories(FileDirectory);
+		}
 		while (CurrentFileIndex < FilesToDownload.size())
 		{
 			if (FileHandle.is_open() == false)
@@ -600,7 +615,7 @@ namespace MBPM
 	MBError MBPP_Client::UpdatePacket(std::string const& OutputDirectory, std::string const& PacketName)
 	{
 		//kollar om att ladda ner packet infon är tillräckligt litet och skapar en diff fil, eller gör det genom att manuellt be om directory info för varje fil och se om hashen skiljer
-		MBError UpdateError = p_DownloadServerFilesInfo(PacketName,OutputDirectory + "/MBPM_ServerFileInfo",OutputDirectory);
+		MBError UpdateError = p_DownloadServerFilesInfo(PacketName, OutputDirectory, { "MBPM_ServerPacketInfo","MBPM_ServerFileInfo" });
 		if(!UpdateError)
 		{
 			return(UpdateError);
@@ -621,7 +636,10 @@ namespace MBPM
 		{
 			DirectoriesToGet.push_back(NewDirectories);
 		}
-		UpdateError = p_GetFiles(PacketName,FilesToGet,OutputDirectory);
+		if (FilesToGet.size() > 0)
+		{
+			UpdateError = p_GetFiles(PacketName, FilesToGet, OutputDirectory);
+		}
 		if (!UpdateError)
 		{
 			return(UpdateError);
@@ -639,7 +657,7 @@ namespace MBPM
 	MBError MBPP_Client::UploadPacket(std::string const& PacketDirectory, std::string const& PacketName)
 	{
 		//kollar om att ladda ner packet infon är tillräckligt litet och skapar en diff fil, eller gör det genom att manuellt be om directory info för varje fil och se om hashen skiljer
-		MBError UpdateError = p_DownloadServerFilesInfo(PacketName,PacketDirectory + "/MBPM_ServerFileInfo", PacketDirectory);
+		MBError UpdateError = p_DownloadServerFilesInfo(PacketName, PacketDirectory, { "MBPM_ServerPacketInfo" , "MBPM_ServerFileInfo" });
 		if (!UpdateError)
 		{
 			return(UpdateError);
@@ -976,8 +994,8 @@ namespace MBPM
 	}
 	void MBPP_Server::FreeResponseIterator(MBPP_ServerResponseIterator* IteratorToFree)
 	{
-
-
+		m_RequestFinished = false;
+		p_ResetRequestResponseState();
 	}
 
 	//MBError MBPP_Server::SendResponse(MBSockets::ConnectSocket* SocketToUse)

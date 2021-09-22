@@ -14,6 +14,7 @@ namespace MBPM
 		TCP,
 		HTTP,
 		HTTPS,
+		Null,
 	};
 	enum class MBPP_RecordType : uint8_t
 	{
@@ -169,8 +170,15 @@ namespace MBPM
 	public:
 		MBPP_FileInfoReader(std::string const& FileInfoPath);
 		bool ObjectExists(std::string const& ObjectToSearch);
-		const MBPP_FileInfo* GeFileInfo(std::string const& ObjectToSearch);
+		const MBPP_FileInfo* GetFileInfo(std::string const& ObjectToSearch);
 		const MBPP_DirectoryInfoNode * GetDirectoryInfo(std::string const& ObjectToSearch);
+	};
+
+	struct MBPP_PacketHost
+	{
+		std::string URL = "";
+		MBPP_TransferProtocol TransferProtocol = MBPP_TransferProtocol::Null;
+		size_t Port = -1; //-1 står för default port i förhållande till en transfer protocol
 	};
 
 	void CreatePacketFilesData(std::string const& PacketToHashDirectory,std::string const& FileName = "MBPM_FileInfo");
@@ -180,16 +188,21 @@ namespace MBPM
 	private:
 		std::unique_ptr<MBSockets::ConnectSocket> m_ServerConnection = nullptr;
 
-		MBError p_DownloadFileList(std::string const& InitialData,size_t DataOffset,MBSockets::ConnectSocket* SocketToUse,std::string const& OutputTopDirectory);
+		MBError p_DownloadFileList(std::string const& InitialData, size_t DataOffset, MBSockets::ConnectSocket* SocketToUse, std::string const& OutputTopDirectory
+			, std::vector<std::string> const& OutputFileNames = {});
 		MBError p_GetFiles(std::string const& PacketName,std::vector<std::string> const& FilesToGet,std::string const& OutputDirectory);
 		MBError p_GetDirectory(std::string const& PacketName,std::string const& DirectoryToGet,std::string const& OutputDirectory);
-		MBError p_DownloadServerFilesInfo(std::string const& PacketName,std::string const& OutputFilepath, std::string const& OutputDirectory);
+		MBError p_DownloadServerFilesInfo(std::string const& PacketName, std::string const& OutputDirectory, std::vector<std::string> const& OutputFileNames);
 	public:
 		MBError Connect(MBPP_TransferProtocol TransferProtocol, std::string const& Domain, std::string const& Port);
+		MBError Connect(MBPP_PacketHost const& PacketHost);
 		bool IsConnected();
 		MBError DownloadPacket(std::string const& OutputDirectory, std::string const& PacketName); //semantiken av denna funktion är att den laddar ner totalt nytt, medans update tar diffen
 		MBError UpdatePacket(std::string const& OutputDirectory, std::string const& PacketName);
 		MBError UploadPacket(std::string const& PacketDirectory, std::string const& PacketName);
+		MBError DownloadPacketFiles(std::string const& OutputDirectory, std::string const& PacketName,std::vector<std::string> const& FilesToGet);
+		MBError DownloadPacketDirectories(std::string const& OutputDirectory, std::string const& PacketName,std::vector<std::string> const& DirectoriesToGet);
+		MBPP_FileInfoReader GetPacketFileInfo(std::string const& PacketName,MBError* OutError);
 	};
 	//client grejer
 
