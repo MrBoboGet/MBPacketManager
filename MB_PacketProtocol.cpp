@@ -212,6 +212,10 @@ namespace MBPM
 		}
 		m_TopNode = p_ReadDirectoryInfoFromFile(PacketFileInfo,20);//sha1 diges size
 	}
+	MBPP_FileInfoReader::MBPP_FileInfoReader(const void* DataToRead, size_t DataSize)
+	{
+
+	}
 	void h_UpdateDiffDirectoryFiles(MBPP_FileInfoDiff& DiffToUpdate, MBPP_DirectoryInfoNode const& ClientDirectory, MBPP_DirectoryInfoNode const& ServerDirectory, std::string const& CurrentPath)
 	{
 		std::vector<MBPP_FileInfo>::const_iterator ClientEnd = ClientDirectory.Files.end();
@@ -388,7 +392,7 @@ namespace MBPM
 			}
 		}
 	}
-	const MBPP_FileInfo * MBPP_FileInfoReader::GeFileInfo(std::string const& ObjectToSearch)
+	const MBPP_FileInfo * MBPP_FileInfoReader::GetFileInfo(std::string const& ObjectToSearch)
 	{
 		const MBPP_FileInfo* ReturnValue = nullptr;
 		if (ObjectToSearch == "" || ObjectToSearch.front() != '/')
@@ -427,6 +431,48 @@ namespace MBPM
 		return(ReturnValue);
 	}
 	//END MBPP_FileInfoReader
+
+	//BEGIN 	class MBPP_FileListDownloadHandler
+	
+	MBError MBPP_FileListDownloadHandler::Open(std::string const& FileToDownloadName)
+	{
+		assert(false);
+		return(false);
+	}
+	MBError MBPP_FileListDownloadHandler::InsertData(const void* Data, size_t DataSize)
+	{
+		assert(false);
+		return(false);
+	}
+	MBError MBPP_FileListDownloadHandler::Close()
+	{
+		assert(false);
+		return(false);
+	}
+	//END MBPP_FileListDownloadHandler
+
+	//BEGIN MBPP_FileListMemoryMapper
+	MBPP_FileListMemoryMapper::MBPP_FileListMemoryMapper()
+	{
+
+	}
+	MBError MBPP_FileListMemoryMapper::Open(std::string const& FileToDownloadName)
+	{
+		m_CurrentFile = FileToDownloadName;
+		m_DownloadedFiles[FileToDownloadName] = "";
+		return(true);
+	}
+	MBError MBPP_FileListMemoryMapper::InsertData(const void* Data, size_t DataSize)
+	{
+		m_DownloadedFiles[m_CurrentFile] += std::string((char*)Data, DataSize);
+		return(true);
+	}
+	MBError MBPP_FileListMemoryMapper::Close()
+	{
+		m_CurrentFile = "";
+		return(true);
+	}
+	//END MBPP_FileListMemoryMapper
 
 	//BEGIN MBPP_Client
 	MBError MBPP_Client::Connect(MBPP_TransferProtocol TransferProtocol, std::string const& Domain, std::string const& Port)
@@ -540,12 +586,12 @@ namespace MBPM
 		//parsar fil listan
 		while (ResponseData.size() - ResponseDataOffset < 4)
 		{
-			ResponseData += m_ServerConnection->RecieveData(MaxRecieveSize);
+			ResponseData += SocketToUse->RecieveData(MaxRecieveSize);
 		}
 		uint32_t FileListSize = MBParsing::ParseBigEndianInteger(ResponseData.data(), 4, ResponseDataOffset, &ResponseDataOffset);
 		while (ResponseData.size() - ResponseDataOffset < FileListSize)
 		{
-			ResponseData += m_ServerConnection->RecieveData(MaxRecieveSize);
+			ResponseData += SocketToUse->RecieveData(MaxRecieveSize);
 		}
 		uint32_t ParsedFileListBytes = 0;
 		while (ParsedFileListBytes < FileListSize)
@@ -573,7 +619,7 @@ namespace MBPM
 				//vi måste få info om den fil vi ska skriva till nu
 				while (ResponseData.size() - ResponseDataOffset < 8)
 				{
-					ResponseData += m_ServerConnection->RecieveData(MaxRecieveSize);
+					ResponseData += SocketToUse->RecieveData(MaxRecieveSize);
 				}
 				CurrentFileSize = MBParsing::ParseBigEndianInteger(ResponseData.data(), 8, ResponseDataOffset, &ResponseDataOffset);
 				CurrentFileParsedBytes = 0;
@@ -586,7 +632,7 @@ namespace MBPM
 				//antar också att response data är tom här
 				if (ResponseData.size() == ResponseDataOffset)
 				{
-					ResponseData = m_ServerConnection->RecieveData(MaxRecieveSize);
+					ResponseData = SocketToUse->RecieveData(MaxRecieveSize);
 					ResponseDataOffset = 0;
 				}
 				uint64_t FileBytes = std::min((uint64_t)ResponseData.size() - ResponseDataOffset, CurrentFileSize - CurrentFileParsedBytes);
@@ -601,6 +647,82 @@ namespace MBPM
 				}
 			}
 		}
+		return(ReturnValue);
+	}
+	 MBError MBPP_Client::p_DownloadFileList(std::string const& InitialData, size_t DataOffset, MBSockets::ConnectSocket* SocketToUse, MBPP_FileListDownloadHandler* DownloadHandler)
+	{
+		MBError ReturnValue = true;
+		size_t MaxRecieveSize = 300000000;
+
+		std::string ResponseData = InitialData; //TODO borde kanske mova intial datan istället
+
+		size_t ResponseDataOffset = DataOffset;
+
+		std::vector<std::string> FilesToDownload = {};
+		size_t CurrentFileIndex = 0;
+		uint64_t CurrentFileSize = -1;
+		uint64_t CurrentFileParsedBytes = -1;
+
+		//parsar fil listan
+		while (ResponseData.size() - ResponseDataOffset < 4)
+		{
+			ResponseData += SocketToUse->RecieveData(MaxRecieveSize);
+		}
+		uint32_t FileListSize = MBParsing::ParseBigEndianInteger(ResponseData.data(), 4, ResponseDataOffset, &ResponseDataOffset);
+		while (ResponseData.size() - ResponseDataOffset < FileListSize)
+		{
+			ResponseData += SocketToUse->RecieveData(MaxRecieveSize);
+		}
+		uint32_t ParsedFileListBytes = 0;
+		while (ParsedFileListBytes < FileListSize)
+		{
+			uint32_t FileNameLength = MBParsing::ParseBigEndianInteger(ResponseData.data(), MBPP_StringLengthSize, ResponseDataOffset, &ResponseDataOffset);
+			FilesToDownload.push_back(std::string(ResponseData.data() + ResponseDataOffset, FileNameLength));
+			ResponseDataOffset += FileNameLength;
+			ParsedFileListBytes += MBPP_StringLengthSize + FileNameLength;
+		}
+		ReturnValue = DownloadHandler->NotifyFiles(FilesToDownload);
+		if (!ReturnValue)
+		{
+			return(ReturnValue);
+		}
+		bool NewFile = true;
+		while (CurrentFileIndex < FilesToDownload.size())
+		{
+			if (NewFile)
+			{
+				//vi måste få info om den fil vi ska skriva till nu
+				while (ResponseData.size() - ResponseDataOffset < 8)
+				{
+					ResponseData += SocketToUse->RecieveData(MaxRecieveSize);
+				}
+				CurrentFileSize = MBParsing::ParseBigEndianInteger(ResponseData.data(), 8, ResponseDataOffset, &ResponseDataOffset);
+				CurrentFileParsedBytes = 0;
+				//OBS!!! egentligen en security risk om vi inte kollar att filen är inom directoryn
+				DownloadHandler->Open(FilesToDownload[CurrentFileIndex]);
+			}
+			else
+			{
+				//all ny data vi får nu ska tillhöra filen
+				//antar också att response data är tom här
+				if (ResponseData.size() == ResponseDataOffset)
+				{
+					ResponseData = SocketToUse->RecieveData(MaxRecieveSize);
+					ResponseDataOffset = 0;
+				}
+				uint64_t FileBytes = std::min((uint64_t)ResponseData.size() - ResponseDataOffset, CurrentFileSize - CurrentFileParsedBytes);
+				DownloadHandler->InsertData(ResponseData.data() + ResponseDataOffset, FileBytes);
+				CurrentFileParsedBytes += FileBytes;
+				ResponseDataOffset += FileBytes;
+				if (CurrentFileParsedBytes == CurrentFileSize)
+				{
+					ReturnValue = DownloadHandler->Close();
+					NewFile = true;
+					CurrentFileIndex += 1;
+				}
+			}
+		}
+		DownloadHandler->Close();
 		return(ReturnValue);
 	}
 	MBError MBPP_Client::DownloadPacket(std::string const& OutputDirectory, std::string const& PacketName)
@@ -698,6 +820,70 @@ namespace MBPM
 		//	}
 		//}
 		return(UpdateError);
+	}
+	MBError MBPP_Client::DownloadPacketFiles(std::string const& OutputDirectory, std::string const& PacketName, std::vector<std::string> const& FilesToGet)
+	{
+		MBError ReturnValue = p_GetFiles(PacketName, FilesToGet, OutputDirectory);
+		return(ReturnValue);
+	}
+	MBError MBPP_Client::DownloadPacketDirectories(std::string const& OutputDirectory, std::string const& PacketName, std::vector<std::string> const& DirectoriesToGet)
+	{
+		//TODO kanske bara kan ersättas med en del av protocollet som är
+		MBError ReturnValue = true;
+		for (size_t i = 0;i < DirectoriesToGet.size();i++)
+		{
+			ReturnValue = p_GetDirectory(PacketName, DirectoriesToGet[i], OutputDirectory);
+			if (!ReturnValue)
+			{
+				break;
+			}
+		}
+		return(ReturnValue);
+	}
+	MBPP_FileInfoReader MBPP_Client::GetPacketFileInfo(std::string const& PacketName, MBError* OutError)
+	{
+		MBPP_FileListMemoryMapper MemoryMapper = MBPP_FileListMemoryMapper();
+		MBPP_FileInfoReader ReturnValue;
+		MBError GetPacketError = true;
+
+		MBPP_GenericRecord RecordToSend;
+		RecordToSend.Type = MBPP_RecordType::GetPacketInfo;
+		RecordToSend.ComputerInfo = GetComputerInfo();
+		RecordToSend.RecordData = MBPP_EncodeString(PacketName);
+		RecordToSend.RecordSize = RecordToSend.RecordData.size();
+		m_ServerConnection->SendData(MBPP_GetRecordData(RecordToSend));
+		std::string RecievedData = m_ServerConnection->RecieveData();
+		while (m_ServerConnection->IsConnected() && RecievedData.size() < MBPP_GenericRecordHeaderSize)
+		{
+			RecievedData += m_ServerConnection->RecieveData();
+		}
+		if (RecievedData.size() < MBPP_GenericRecordHeaderSize)
+		{
+			GetPacketError = false;
+			GetPacketError.ErrorMessage = "Server didn't send enough data for a MBPPGenericHeader";
+		}
+		else
+		{
+			GetPacketError = p_DownloadFileList(RecievedData, MBPP_GenericRecordHeaderSize, m_ServerConnection.get(), &MemoryMapper);
+		}
+		if (GetPacketError)
+		{
+			std::map<std::string, std::string> Result = MemoryMapper.GetDownloadedFiles();
+			if (Result.find("/MBPP_FileInfo") != Result.end())
+			{
+				ReturnValue = MBPP_FileInfoReader(Result["/MBPP_FileInfo"].data(), Result["/MBPP_FileInfo"].size());
+			}
+			else
+			{
+				GetPacketError = false;
+				GetPacketError.ErrorMessage = "Error getting server FileInfo: no MBPM_FileInfo file sent";
+			}
+		}
+		if (OutError != nullptr)
+		{
+			*OutError = std::move(GetPacketError);
+		}
+		return(ReturnValue);
 	}
 	//END MBPP_Client
 
@@ -925,7 +1111,21 @@ namespace MBPM
 	}
 	std::string MBPP_Server::p_GetPacketDirectory(std::string const& PacketName)
 	{
-		return("./" + PacketName+"/");
+		//går igenom packet search directorisen och ser om packeten existerar
+		std::string ReturnValue = "";
+		for (size_t i = 0; i < m_PacketSearchDirectories.size();i++)
+		{
+			if (std::filesystem::exists(m_PacketSearchDirectories[i] + PacketName))
+			{
+				ReturnValue = m_PacketSearchDirectories[i] + PacketName + "/";
+				break;
+			}
+		}
+		return(ReturnValue);
+	}
+	void MBPP_Server::AddPacketSearchDirectory(std::string const& PacketSearchDirectoryToAdd)
+	{
+		m_PacketSearchDirectories.push_back(PacketSearchDirectoryToAdd);
 	}
 	//Upload/Remove metoder
 	MBError MBPP_Server::InsertClientData(const void* Data, size_t DataSize)

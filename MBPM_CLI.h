@@ -1,3 +1,4 @@
+#pragma once
 #include "MBPacketManager.h"
 #include <MBCLI/MBCLI.h>
 #include <MBUnicode/MBUnicode.h>
@@ -15,4 +16,5 @@ namespace MBPM
 	public:
 		void HandleCommand(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
 	};
+	int MBCLI_Main(int argv, char** args);
 }

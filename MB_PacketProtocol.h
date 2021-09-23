@@ -1,3 +1,4 @@
+#pragma once
 #include <string>
 #include <MBErrorHandling.h>
 #include <cstdint>
@@ -168,7 +169,9 @@ namespace MBPM
 		MBPP_FileInfo p_ReadFileInfoFromDFile(std::ifstream& FileToReadFrom,size_t HashSize);
 		const MBPP_DirectoryInfoNode* p_GetTargetDirectory(std::vector<std::string> const& PathComponents);
 	public:
+		MBPP_FileInfoReader() {};
 		MBPP_FileInfoReader(std::string const& FileInfoPath);
+		MBPP_FileInfoReader(const void* DataToRead, size_t DataSize);
 		bool ObjectExists(std::string const& ObjectToSearch);
 		const MBPP_FileInfo* GetFileInfo(std::string const& ObjectToSearch);
 		const MBPP_DirectoryInfoNode * GetDirectoryInfo(std::string const& ObjectToSearch);
@@ -183,13 +186,50 @@ namespace MBPM
 
 	void CreatePacketFilesData(std::string const& PacketToHashDirectory,std::string const& FileName = "MBPM_FileInfo");
 	//generella
+	class MBPP_FileListDownloadHandler
+	{
+	private:
+	public:
+		virtual MBError NotifyFiles(std::vector<std::string> const& FileToNotify) { return(MBError(true)); };
+		virtual MBError Open(std::string const& FileToDownloadName);
+		virtual MBError InsertData(const void* Data, size_t DataSize);
+		virtual MBError Close();
+		MBError InsertData(std::string const& DataToInsert)
+		{
+			return(InsertData(DataToInsert.data(), DataToInsert.size()));
+		};
+	};
+	//class MBPP_FileListDownloader : public MBPP_FileListDownloadHandler
+	//{
+	//private:
+	//	std::string m_OutputDirectory = "";
+	//	std::vector<std::string> m_FileOutputNames = {};
+	//public:
+	//	MBPP_FileListDownloader(std::string const& OutputDirectory, std::vector<std::string> const& FileList);
+	//	virtual MBError Open(std::string const& FileToDownloadName) override;
+	//	virtual MBError InsertData(const void* Data, size_t DataSize) override;
+	//	virtual MBError Close();
+	//};
+	class MBPP_FileListMemoryMapper : public MBPP_FileListDownloadHandler
+	{
+	private:
+		std::string m_CurrentFile = "";
+		std::map<std::string, std::string> m_DownloadedFiles = {};
+	public:
+		MBPP_FileListMemoryMapper();
+		virtual MBError Open(std::string const& FileToDownloadName) override;
+		virtual MBError InsertData(const void* Data, size_t DataSize) override;
+		virtual MBError Close() override;
+		std::map<std::string, std::string>& GetDownloadedFiles() { return(m_DownloadedFiles); };
+	};
 	class MBPP_Client
 	{
 	private:
 		std::unique_ptr<MBSockets::ConnectSocket> m_ServerConnection = nullptr;
 
-		MBError p_DownloadFileList(std::string const& InitialData, size_t DataOffset, MBSockets::ConnectSocket* SocketToUse, std::string const& OutputTopDirectory
+		static MBError p_DownloadFileList(std::string const& InitialData, size_t DataOffset, MBSockets::ConnectSocket* SocketToUse, std::string const& OutputTopDirectory
 			, std::vector<std::string> const& OutputFileNames = {});
+		static MBError p_DownloadFileList(std::string const& InitialData, size_t DataOffset, MBSockets::ConnectSocket* SocketToUse, MBPP_FileListDownloadHandler* DownloadHandler);
 		MBError p_GetFiles(std::string const& PacketName,std::vector<std::string> const& FilesToGet,std::string const& OutputDirectory);
 		MBError p_GetDirectory(std::string const& PacketName,std::string const& DirectoryToGet,std::string const& OutputDirectory);
 		MBError p_DownloadServerFilesInfo(std::string const& PacketName, std::string const& OutputDirectory, std::vector<std::string> const& OutputFileNames);
@@ -357,6 +397,8 @@ namespace MBPM
 		//
 		//MBError SendResponse(MBSockets::ConnectSocket* SocketToUse,const void* RequestData,size_t RequestSize);
 		//MBError SendResponse(MBSockets::ConnectSocket* SocketToUse,std::string const& CompleteRequestData);
+
+		void AddPacketSearchDirectory(std::string const& PacketSearchDirectoryToAdd);
 
 		//om stora saker skickas kan inte allt sparas i minnet, så detta api så insertas dem rakt in i klassen, 
 		MBError InsertClientData(const void* ClientData, size_t DataSize);

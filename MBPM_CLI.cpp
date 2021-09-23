@@ -3,6 +3,15 @@
 namespace MBPM
 {
 	//BEGIN MBPM_CLI
+	std::string MBPM_ClI::p_GetPacketInstallDirectory()
+	{
+		return(std::getenv("MBPM_PACKET_INSTALL_DIRECTORY"));
+	}
+	MBPP_PacketHost MBPM_ClI::p_GetDefaultPacketHost()
+	{
+		MBPP_PacketHost ReturnValue = { "mrboboget.se",MBPP_TransferProtocol::HTTPS,-1 };
+		return(ReturnValue);
+	}
 	void MBPM_ClI::p_HandleUpdate(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
 	{
 		std::vector<std::string> PacketsToUpdate = {};
@@ -130,4 +139,13 @@ namespace MBPM
 		}
 	}
 	//END MBPM_CLI
+
+	int MBCLI_Main(int argc, char** argv)
+	{
+		MBCLI::ProcessedCLInput CommandInput(argc, argv);
+		MBCLI::MBTerminal ProgramTerminal;
+		MBPM_ClI CLIHandler;
+		CLIHandler.HandleCommand(CommandInput, &ProgramTerminal);
+		return(0);
+	}
 }
