@@ -9,7 +9,7 @@ namespace MBPM
 	}
 	MBPP_PacketHost MBPM_ClI::p_GetDefaultPacketHost()
 	{
-		MBPP_PacketHost ReturnValue = { "mrboboget.se",MBPP_TransferProtocol::HTTPS,-1 };
+		MBPP_PacketHost ReturnValue = { "127.0.0.1/MBPM/",MBPP_TransferProtocol::HTTPS,443 };
 		return(ReturnValue);
 	}
 	void MBPM_ClI::p_HandleUpdate(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
@@ -142,6 +142,7 @@ namespace MBPM
 
 	int MBCLI_Main(int argc, char** argv)
 	{
+		MBSockets::Init();
 		MBCLI::ProcessedCLInput CommandInput(argc, argv);
 		MBCLI::MBTerminal ProgramTerminal;
 		MBPM_ClI CLIHandler;

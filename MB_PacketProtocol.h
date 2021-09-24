@@ -5,6 +5,8 @@
 #include <MrBoboSockets/MrBoboSockets.h>
 #include <memory>
 #include <vector>
+
+#include <MBInterfaces.h>
 namespace MBPM
 {
 
@@ -181,7 +183,7 @@ namespace MBPM
 	{
 		std::string URL = "";
 		MBPP_TransferProtocol TransferProtocol = MBPP_TransferProtocol::Null;
-		size_t Port = -1; //-1 står för default port i förhållande till en transfer protocol
+		uint16_t Port = -1; //-1 står för default port i förhållande till en transfer protocol
 	};
 
 	void CreatePacketFilesData(std::string const& PacketToHashDirectory,std::string const& FileName = "MBPM_FileInfo");
@@ -221,6 +223,32 @@ namespace MBPM
 		virtual MBError InsertData(const void* Data, size_t DataSize) override;
 		virtual MBError Close() override;
 		std::map<std::string, std::string>& GetDownloadedFiles() { return(m_DownloadedFiles); };
+	};
+	class MBPP_ClientHTTPConverter : public MBSockets::ClientSocket
+	{
+	private:
+		std::unique_ptr<MBSockets::HTTPConnectSocket> m_InternalHTTPSocket = nullptr;
+
+		std::string m_MBPP_ResourceLocation = "";
+
+		std::string m_MBPP_CurrentHeaderData = "";
+		MBPP_GenericRecord m_MBPP_CurrentHeader;
+		bool m_MBPP_HeaderSent = false;
+		uint64_t m_TotalSentRecordData = 0;
+
+		std::string m_MBPP_ResponseData = "";
+		bool m_MBPP_HTTPHeaderRecieved = false;
+
+		void p_ResetSendState();
+		void p_ResetRecieveState();
+		std::string p_GenerateHTTPHeader(MBPP_GenericRecord const& MBPPHeader);
+	public:
+		MBPP_ClientHTTPConverter(MBPP_PacketHost const& HostData);
+		std::string RecieveData(size_t MaxDataToRecieve) override;
+		int SendData(const void* DataToSend,size_t DataSize) override;
+		int SendData(std::string const& StringToSend) override;
+		MBError EstablishTLSConnection() override;
+		int Connect() override;
 	};
 	class MBPP_Client
 	{
@@ -269,10 +297,11 @@ namespace MBPM
 		MBPP_GenericRecord m_HeaderToSend;
 		//MBPP_ServerResponseIterator(MBPP_Server* m_AssociatedServer);
 		//MBPP_ServerResponseIterator();
-		template<typename T> T& p_GetResponseData()
-		{
-			return(m_AssociatedServer->p_GetResponseData<T>());
-		}
+		//template<typename T> T& p_GetResponseData()
+		template<typename T> T& p_GetResponseData();
+		//{
+		//	return(m_AssociatedServer->p_GetResponseData<T>());
+		//}
 		std::string p_GetPacketDirectory(std::string const& PacketName);
 	public:
 		std::string& operator*()
@@ -295,6 +324,7 @@ namespace MBPM
 				return(false);
 			}
 		}
+		uint64_t GetResponseSize() { return(m_HeaderToSend.RecordSize); };
 		MBPP_ServerResponseIterator& operator++();
 		MBPP_ServerResponseIterator& operator++(int); //postfix
 		virtual void Increment();
@@ -408,4 +438,11 @@ namespace MBPM
 		void FreeResponseIterator(MBPP_ServerResponseIterator* IteratorToFree);
 		//MBError SendResponse(MBSockets::ConnectSocket* SocketToUse);
 	};
+
+
+	//TODO extremt fult, mest lat
+	template<typename T> T& MBPP_ServerResponseIterator::p_GetResponseData()
+	{
+		return(m_AssociatedServer->p_GetResponseData<T>());
+	}
 }

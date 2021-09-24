@@ -3,6 +3,8 @@
 #include <set>
 #include <MBCrypto/MBCrypto.h>
 #include <MBAlgorithms.h>
+
+#include <MBInterfaces.h>
 namespace MBPM
 {
 	std::string h_PathToUTF8(std::filesystem::path const& PathToConvert)
@@ -474,18 +476,135 @@ namespace MBPM
 	}
 	//END MBPP_FileListMemoryMapper
 
+	//BEGIN MBPP_ClientHTTPConverter
+	MBPP_ClientHTTPConverter::MBPP_ClientHTTPConverter(MBPP_PacketHost const& HostData) 
+		: MBSockets::ClientSocket(HostData.URL.substr(0, std::min(HostData.URL.find('/'), HostData.URL.size())),std::to_string(HostData.Port))
+	{
+		std::string PortToUse = "";
+		std::string Adress = HostData.URL.substr(0, std::min(HostData.URL.find('/'), HostData.URL.size()));
+		m_MBPP_ResourceLocation = HostData.URL.substr(std::min(HostData.URL.find('/'), HostData.URL.size()));
+		PortToUse = std::to_string(HostData.Port);
+		if (HostData.Port == -1)
+		{
+			if (HostData.TransferProtocol == MBPP_TransferProtocol::HTTPS)
+			{
+				PortToUse = "443";
+			}
+			else if(HostData.TransferProtocol == MBPP_TransferProtocol::HTTP)
+			{
+				PortToUse = "80";
+			}
+		}
+		m_InternalHTTPSocket = std::unique_ptr<MBSockets::HTTPConnectSocket>(new MBSockets::HTTPConnectSocket(Adress, PortToUse));
+	}
+	void MBPP_ClientHTTPConverter::p_ResetRecieveState()
+	{
+		m_MBPP_HTTPHeaderRecieved = false;
+		m_MBPP_ResponseData = "";
+	}
+	void MBPP_ClientHTTPConverter::p_ResetSendState()
+	{
+		m_MBPP_CurrentHeaderData = "";
+		m_MBPP_CurrentHeader = MBPP_GenericRecord();
+		m_MBPP_HeaderSent = false;
+		m_TotalSentRecordData = 0;
+
+		m_MBPP_ResponseData = "";
+		m_MBPP_HTTPHeaderRecieved = false;
+	}
+	std::string MBPP_ClientHTTPConverter::p_GenerateHTTPHeader(MBPP_GenericRecord const& MBPPHeader)
+	{
+		std::string ReturnValue = "POST " + m_MBPP_ResourceLocation + " HTTP/1.1\r\n";
+		ReturnValue += "Content-Type: application/x-MBPP-record\r\n";
+		ReturnValue += "Content-Length: " + std::to_string(MBPPHeader.RecordSize+MBPP_GenericRecordHeaderSize) + "\r\n\r\n";
+		return(ReturnValue);
+	}
+	int MBPP_ClientHTTPConverter::Connect()
+	{
+		return(m_InternalHTTPSocket->Connect());
+	}
+	MBError MBPP_ClientHTTPConverter::EstablishTLSConnection()
+	{
+		return(m_InternalHTTPSocket->EstablishTLSConnection());
+	}
+	std::string MBPP_ClientHTTPConverter::RecieveData(size_t MaxDataToRecieve)
+	{
+		if (m_MBPP_HTTPHeaderRecieved)
+		{
+			return(m_InternalHTTPSocket->RecieveData());
+		}
+		else
+		{
+			while (m_InternalHTTPSocket->IsConnected() && m_InternalHTTPSocket->IsValid())
+			{
+				m_MBPP_ResponseData += m_InternalHTTPSocket->RecieveData();
+				size_t HeaderEnd = m_MBPP_ResponseData.find("\r\n\r\n");
+				if (HeaderEnd != m_MBPP_ResponseData.npos)
+				{
+					m_MBPP_HTTPHeaderRecieved = true;
+					return(m_MBPP_ResponseData.substr(HeaderEnd+4));
+				}
+			}
+		}
+		return("");
+	}
+	int MBPP_ClientHTTPConverter::SendData(const void* DataToSend, size_t DataSize)
+	{
+		p_ResetRecieveState();
+		if (!m_MBPP_HeaderSent)
+		{
+			m_MBPP_CurrentHeaderData += std::string((char*)DataToSend, DataSize);
+			if (m_MBPP_CurrentHeaderData.size() >= MBPP_GenericRecordHeaderSize)
+			{
+				m_MBPP_CurrentHeader = MBPP_ParseRecordHeader(m_MBPP_CurrentHeaderData.data(), MBPP_GenericRecordHeaderSize, 0, nullptr);
+				m_InternalHTTPSocket->SendData(p_GenerateHTTPHeader(m_MBPP_CurrentHeader)+ m_MBPP_CurrentHeaderData);
+				m_MBPP_HeaderSent = true;
+				m_TotalSentRecordData = m_MBPP_CurrentHeaderData.size() - MBPP_GenericRecordHeaderSize;
+				m_MBPP_CurrentHeaderData = "";
+			}
+		}
+		else
+		{
+			m_InternalHTTPSocket->SendData(DataToSend,DataSize);
+			m_TotalSentRecordData += DataSize;
+			if (m_TotalSentRecordData == m_MBPP_CurrentHeader.RecordSize)
+			{
+				p_ResetSendState();
+			}
+		}
+		return(0);
+	}
+	int MBPP_ClientHTTPConverter::SendData(std::string const& StringToSend)
+	{
+		return(MBPP_ClientHTTPConverter::SendData(StringToSend.data(), StringToSend.size()));
+	}
+	//END MBPP_ClientHTTPConverter
+
 	//BEGIN MBPP_Client
 	MBError MBPP_Client::Connect(MBPP_TransferProtocol TransferProtocol, std::string const& Domain, std::string const& Port)
 	{
-		MBError ReturnValue = true;
-		m_ServerConnection = std::unique_ptr<MBSockets::ConnectSocket>(new MBSockets::ClientSocket(Domain,Port));
-		MBSockets::ClientSocket* ClientSocket = (MBSockets::ClientSocket*)m_ServerConnection.get();
-		ClientSocket->Connect();
-		return(ReturnValue);
+		return(Connect({ Domain,TransferProtocol,(uint16_t) std::stoi(Port) }));
 	}
 	MBError MBPP_Client::Connect(MBPP_PacketHost const& PacketHost)
 	{
-		return(Connect(PacketHost.TransferProtocol, PacketHost.URL, std::to_string(PacketHost.Port)));
+		MBError ReturnValue = true;
+		if (PacketHost.TransferProtocol == MBPP_TransferProtocol::TCP || PacketHost.TransferProtocol == MBPP_TransferProtocol::Null)
+		{
+			m_ServerConnection = std::unique_ptr<MBSockets::ConnectSocket>(new MBSockets::ClientSocket(PacketHost.URL, std::to_string(PacketHost.Port)));
+			MBSockets::ClientSocket* ClientSocket = (MBSockets::ClientSocket*)m_ServerConnection.get();
+			ClientSocket->Connect();
+		}
+		else if(PacketHost.TransferProtocol == MBPP_TransferProtocol::HTTP || PacketHost.TransferProtocol == MBPP_TransferProtocol::HTTPS)
+		{
+			m_ServerConnection = std::unique_ptr<MBSockets::ConnectSocket>(new MBPP_ClientHTTPConverter(PacketHost));
+			MBSockets::ClientSocket* ClientSocket = (MBSockets::ClientSocket*)m_ServerConnection.get();
+			ClientSocket->Connect();
+			if (PacketHost.TransferProtocol == MBPP_TransferProtocol::HTTPS)
+			{
+				ReturnValue = ClientSocket->EstablishTLSConnection();
+			}
+		}
+		return(ReturnValue);
 	}
 	bool MBPP_Client::IsConnected()
 	{
@@ -700,6 +819,7 @@ namespace MBPM
 				CurrentFileParsedBytes = 0;
 				//OBS!!! egentligen en security risk om vi inte kollar att filen är inom directoryn
 				DownloadHandler->Open(FilesToDownload[CurrentFileIndex]);
+				NewFile = false;
 			}
 			else
 			{
@@ -869,7 +989,7 @@ namespace MBPM
 		if (GetPacketError)
 		{
 			std::map<std::string, std::string> Result = MemoryMapper.GetDownloadedFiles();
-			if (Result.find("/MBPP_FileInfo") != Result.end())
+			if (Result.find("MBPP_FileInfo") != Result.end())
 			{
 				ReturnValue = MBPP_FileInfoReader(Result["/MBPP_FileInfo"].data(), Result["/MBPP_FileInfo"].size());
 			}
@@ -890,7 +1010,7 @@ namespace MBPM
 	//BEGIN MBPP_Server
 	MBPP_Server::MBPP_Server(std::string const& PacketDirectory)
 	{
-
+		m_PacketSearchDirectories.push_back(PacketDirectory);
 	}
 
 	//top level, garanterat att det är klart efter, inte garanterat att funka om inte låg level under är klara
