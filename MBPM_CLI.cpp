@@ -102,11 +102,15 @@ namespace MBPM
 			const MBPP_DirectoryInfoNode* ObjectDirectoryInfo = nullptr;
 			if ((ObjectFileInfo = PacketFileInfo.GetFileInfo(ObjectToGet)) != nullptr)
 			{
-				GetPacketError = PacketClient.DownloadPacketDirectories(OutputDirectory, PacketName, { ObjectToGet });
+				GetPacketError = PacketClient.DownloadPacketFiles(OutputDirectory, PacketName, { ObjectToGet });
 			}
 			else if ((ObjectDirectoryInfo = PacketFileInfo.GetDirectoryInfo(ObjectToGet)) != nullptr)
 			{
-				GetPacketError = PacketClient.DownloadPacketFiles(OutputDirectory, PacketName, { ObjectToGet });
+				GetPacketError = PacketClient.DownloadPacketDirectories(OutputDirectory, PacketName, { ObjectToGet });
+			}
+			else
+			{
+				AssociatedTerminal->PrintLine("No file named \"" + PacketName+"\"");
 			}
 			if (!GetPacketError)
 			{
@@ -118,6 +122,10 @@ namespace MBPM
 		{
 			AssociatedTerminal->PrintLine("Package \""+ PacketName +"\" has no filesystem object \""+ ObjectToGet +"\"");
 		}
+	}
+	void MBPM_ClI::p_HandleUpload(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
+	{
+		
 	}
 	void MBPM_ClI::HandleCommand(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
 	{
@@ -132,6 +140,10 @@ namespace MBPM
 		else if (CommandInput.TopCommand == "update")
 		{
 			p_HandleUpdate(CommandInput, AssociatedTerminal);
+		}
+		else if (CommandInput.TopCommand == "upload")
+		{
+
 		}
 		else
 		{

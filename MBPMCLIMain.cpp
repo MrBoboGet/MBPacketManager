@@ -30,12 +30,14 @@ void TestServerFunc()
 }
 int main(int argc,char** argv)
 {
-	argc = 4;
-	char* TestData[4];
+	//DEBUG GREJER
+	argc = 5;
+	char* TestData[5];
 	TestData[0] = "MBPM";
 	TestData[1] = "get";
 	TestData[2] = "TestPacket";
-	TestData[3] = "skruvhornsget-93x_1646.jpg";
+	TestData[3] = "/";
+	TestData[4] = "./TestDownlodOut/";
 	argv = TestData;
 	return(MBPM::MBCLI_Main(argc, argv));
 }

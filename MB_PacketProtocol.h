@@ -6,7 +6,9 @@
 #include <memory>
 #include <vector>
 
+
 #include <MBInterfaces.h>
+
 namespace MBPM
 {
 
@@ -26,21 +28,23 @@ namespace MBPM
 		GetFiles,
 		GetPacketInfo, //ladder ner MBPM_PacketInfo, och MBPM_FileInfo
 
-		UploadFiles,
-		RemoveFiles,
-		RemoveDirectories,
+		UploadChanges,
 
 		//FileInfo,
 		FilesData,
 		DirectoryData,
 		PacketInfo,
-		UploadResponse,
-		RemoveResponse,
+		UploadRequestResponse,
+		UploadChangesResponse,
 		Null,
 	};
 	enum class MBPP_ErrorCode : uint16_t
 	{
-
+		Ok,
+		LoginRequired,
+		Denied,
+		FilesystemObjectNotFound,
+		Null,
 	};
 	struct MBPP_FileData
 	{
@@ -124,13 +128,52 @@ namespace MBPM
 	{
 
 	};
+	struct MBPP_ErrorRecord
+	{
+		MBPP_ErrorCode ErrorCode = MBPP_ErrorCode::Null;
+		std::string ErrorMessage = "";
+	};
+	enum class MBPP_UserCredentialsType : uint8_t
+	{
+		Request,
+		Plain,
+		Null,
+	};
+	struct MBPP_UploadRequest
+	{
+		std::string PacketName = "";
+		MBPP_UserCredentialsType CredentialsType = MBPP_UserCredentialsType::Plain;//structuren beror på denna
+		uint32_t CredentialsDataLength = 0;//tillåter
+		//
+		//std::string Password = "";
+		///std::string Username = "";
+	};
+	struct MBPP_UploadRequest_Response
+	{
+		MBPP_ErrorCode Result = MBPP_ErrorCode::Null;
+		std::string DomainToLogin = "";
+		std::vector<MBPP_UserCredentialsType> SupportedLoginTypes = {};
+	};
+	struct MBPP_UploadChanges_Response
+	{
+		MBPP_ErrorCode Result = MBPP_ErrorCode::Null;
+	};
+	struct MBPP_UploadRecord
+	{
+		MBPP_UploadRequest Credentials;
+		uint32_t FilesToUploadListSize = 0;
+		std::vector<std::string> ObjectsToDeleteList = {};
+		uint32_t ObjectsToDeleteListSize = 0;// kan nu tolkas som en vanlig download files
+		std::vector<std::string> FilesToUpload = {};
+	};
 	MBPP_ComputerInfo GetComputerInfo();
 	MBPP_GenericRecord MBPP_ParseRecordHeader(const void* Data, size_t DataSize, size_t InOffset, size_t* OutOffset);
 	std::string MBPP_EncodeString(std::string const& StringToEncode);
 	std::string MBPP_GetRecordHeader(MBPP_GenericRecord const& RecordToConvert);
+	std::string MBPP_GetUploadCredentialsData(std::string const& PacketName, MBPP_UserCredentialsType CredentialsType, std::string const& CredentialsData);
 	std::string MBPP_GetRecordData(MBPP_GenericRecord const& RecordToConvert);
 	std::string MBPP_GenerateFileList(std::vector<std::string> const& FilesToList);
-
+	std::string MBPP_GetErrorCodeString(MBPP_ErrorCode ErrorToConvert);
 	struct MBPP_FileInfoDiff
 	{
 		std::vector<std::string> UpdatedFiles = {};
@@ -167,8 +210,8 @@ namespace MBPM
 		friend MBPP_FileInfoDiff GetFileInfoDifference(MBPP_FileInfoReader const& ClientInfo, MBPP_FileInfoReader const& ServerInfo);
 		MBPP_DirectoryInfoNode m_TopNode = MBPP_DirectoryInfoNode();
 		static std::vector<std::string> sp_GetPathComponents(std::string const& PathToDecompose);
-		MBPP_DirectoryInfoNode p_ReadDirectoryInfoFromFile(std::ifstream& FileToReadFrom,size_t HashSize);
-		MBPP_FileInfo p_ReadFileInfoFromDFile(std::ifstream& FileToReadFrom,size_t HashSize);
+		MBPP_DirectoryInfoNode p_ReadDirectoryInfoFromFile(MBUtility::MBOctetInputStream* FileToReadFrom,size_t HashSize);
+		MBPP_FileInfo p_ReadFileInfoFromFile(MBUtility::MBOctetInputStream* FileToReadFrom,size_t HashSize);
 		const MBPP_DirectoryInfoNode* p_GetTargetDirectory(std::vector<std::string> const& PathComponents);
 	public:
 		MBPP_FileInfoReader() {};
@@ -177,6 +220,7 @@ namespace MBPM
 		bool ObjectExists(std::string const& ObjectToSearch);
 		const MBPP_FileInfo* GetFileInfo(std::string const& ObjectToSearch);
 		const MBPP_DirectoryInfoNode * GetDirectoryInfo(std::string const& ObjectToSearch);
+		bool operator==(MBPP_FileInfoReader const& OtherReader) const;
 	};
 
 	struct MBPP_PacketHost
@@ -249,6 +293,8 @@ namespace MBPM
 		int SendData(std::string const& StringToSend) override;
 		MBError EstablishTLSConnection() override;
 		int Connect() override;
+		bool IsConnected() override;
+		bool IsValid() override;
 	};
 	class MBPP_Client
 	{
@@ -261,13 +307,14 @@ namespace MBPM
 		MBError p_GetFiles(std::string const& PacketName,std::vector<std::string> const& FilesToGet,std::string const& OutputDirectory);
 		MBError p_GetDirectory(std::string const& PacketName,std::string const& DirectoryToGet,std::string const& OutputDirectory);
 		MBError p_DownloadServerFilesInfo(std::string const& PacketName, std::string const& OutputDirectory, std::vector<std::string> const& OutputFileNames);
+		MBPP_UploadRequest_Response p_GetLoginResult(std::string const& PacketName, MBPP_UserCredentialsType CredentialsType, std::string const& CredentialsData,MBError* OutError);
 	public:
 		MBError Connect(MBPP_TransferProtocol TransferProtocol, std::string const& Domain, std::string const& Port);
 		MBError Connect(MBPP_PacketHost const& PacketHost);
 		bool IsConnected();
 		MBError DownloadPacket(std::string const& OutputDirectory, std::string const& PacketName); //semantiken av denna funktion är att den laddar ner totalt nytt, medans update tar diffen
 		MBError UpdatePacket(std::string const& OutputDirectory, std::string const& PacketName);
-		MBError UploadPacket(std::string const& PacketDirectory, std::string const& PacketName);
+		MBError UploadPacket(std::string const& PacketDirectory, std::string const& PacketName,MBPP_UserCredentialsType CredentialsType,std::string const& CredentialsData);
 		MBError DownloadPacketFiles(std::string const& OutputDirectory, std::string const& PacketName,std::vector<std::string> const& FilesToGet);
 		MBError DownloadPacketDirectories(std::string const& OutputDirectory, std::string const& PacketName,std::vector<std::string> const& DirectoriesToGet);
 		MBPP_FileInfoReader GetPacketFileInfo(std::string const& PacketName,MBError* OutError);
@@ -394,13 +441,16 @@ namespace MBPM
 	private:
 		std::vector<std::string> m_PacketSearchDirectories = {};
 		bool m_RequestFinished = false;
-
+		
 		MBPP_GenericRecord m_CurrentRequestHeader;
 		void* m_RequestResponseData = nullptr;
 
 		std::string m_RecievedData = "";
 		size_t m_RecievedDataOffset = 0;
 		size_t m_CurrentRequestSize = -1;
+		
+		//authentication
+		MBUtility::MBBasicUserAuthenticator* m_UserAuthenticator = nullptr;
 		
 		template<typename T> T& p_GetResponseData()
 		{
@@ -420,7 +470,7 @@ namespace MBPM
 		std::string p_GetPacketDirectory(std::string const& PacketName);
 	public:
 		MBPP_Server(std::string const& PacketDirectory);
-
+		void SetUserAuthenticator(MBUtility::MBBasicUserAuthenticator* AuthenticatorToSet);
 		//top level, garanterat att det är klart efter, inte garanterat att funka om inte låg level under är klara
 		//std::string GenerateResponse(const void* RequestData, size_t RequestSize,MBError* OutError);
 		//std::string GenerateResponse(std::string const& RequestData,MBError* OutError);

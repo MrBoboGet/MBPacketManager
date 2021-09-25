@@ -4,7 +4,6 @@
 #include <MBCrypto/MBCrypto.h>
 #include <MBAlgorithms.h>
 
-#include <MBInterfaces.h>
 namespace MBPM
 {
 	std::string h_PathToUTF8(std::filesystem::path const& PathToConvert)
@@ -33,6 +32,18 @@ namespace MBPM
 		uintmax_t ReturnValue = 0;
 		uint8_t ByteBuffer[sizeof(uintmax_t)];
 		FileToWriteFrom.read((char*) ByteBuffer, IntegerSize);
+		for (size_t i = 0; i < IntegerSize; i++)
+		{
+			ReturnValue <<= 8;
+			ReturnValue += ByteBuffer[i];
+		}
+		return(ReturnValue);
+	}
+	uintmax_t h_ReadBigEndianInteger(MBUtility::MBOctetInputStream* FileToReadFrom, uint8_t IntegerSize)
+	{
+		uintmax_t ReturnValue = 0;
+		uint8_t ByteBuffer[sizeof(uintmax_t)];
+		FileToReadFrom->Read((char*)ByteBuffer, IntegerSize);
 		for (size_t i = 0; i < IntegerSize; i++)
 		{
 			ReturnValue <<= 8;
@@ -172,19 +183,19 @@ namespace MBPM
 	}
 	//ANTAGANDE filer är sorterade i ordning
 	//BEGIN MBPP_FileInfoReader
-	MBPP_DirectoryInfoNode MBPP_FileInfoReader::p_ReadDirectoryInfoFromFile(std::ifstream& FileToReadFrom,size_t HashSize)
+	MBPP_DirectoryInfoNode MBPP_FileInfoReader::p_ReadDirectoryInfoFromFile(MBUtility::MBOctetInputStream* FileToReadFrom,size_t HashSize)
 	{
 		MBPP_DirectoryInfoNode ReturnValue;
 		h_ReadBigEndianInteger(FileToReadFrom, 8);//filepointer
 		std::string DirectoryHash = std::string(HashSize, 0);
-		FileToReadFrom.read(DirectoryHash.data(), HashSize);
+		FileToReadFrom->Read(DirectoryHash.data(), HashSize);
 		size_t NameSize = h_ReadBigEndianInteger(FileToReadFrom, 2);
 		std::string DirectoryName = std::string(NameSize, 0);
-		FileToReadFrom.read(DirectoryName.data(), NameSize);
+		FileToReadFrom->Read(DirectoryName.data(), NameSize);
 		uint32_t NumberOfFiles = h_ReadBigEndianInteger(FileToReadFrom, 4);
 		for (size_t i = 0; i < NumberOfFiles; i++)
 		{
-			ReturnValue.Files.push_back(p_ReadFileInfoFromDFile(FileToReadFrom, HashSize));
+			ReturnValue.Files.push_back(p_ReadFileInfoFromFile(FileToReadFrom, HashSize));
 		}
 		uint32_t NumberOfDirectories = h_ReadBigEndianInteger(FileToReadFrom, 4);
 		for (size_t i = 0; i < NumberOfDirectories; i++)
@@ -195,14 +206,14 @@ namespace MBPM
 		ReturnValue.DirectoryName = std::move(DirectoryName);
 		return(ReturnValue);
 	}
-	MBPP_FileInfo MBPP_FileInfoReader::p_ReadFileInfoFromDFile(std::ifstream& FileToReadFrom,size_t HashSize)
+	MBPP_FileInfo MBPP_FileInfoReader::p_ReadFileInfoFromFile(MBUtility::MBOctetInputStream* InputStream,size_t HashSize)
 	{
 		MBPP_FileInfo ReturnValue;
-		uint16_t FileNameSize = h_ReadBigEndianInteger(FileToReadFrom, 2);
+		uint16_t FileNameSize = h_ReadBigEndianInteger(InputStream, 2);
 		ReturnValue.FileName = std::string(FileNameSize, 0);
-		FileToReadFrom.read(ReturnValue.FileName.data(), FileNameSize);
+		InputStream->Read(ReturnValue.FileName.data(), FileNameSize);
 		ReturnValue.FileHash = std::string(HashSize, 0);
-		FileToReadFrom.read(ReturnValue.FileHash.data(), HashSize);
+		InputStream->Read(ReturnValue.FileHash.data(), HashSize);
 		return(ReturnValue);
 	}
 	MBPP_FileInfoReader::MBPP_FileInfoReader(std::string const& FileInfoPath)
@@ -212,11 +223,13 @@ namespace MBPM
 		{
 			return;
 		}
-		m_TopNode = p_ReadDirectoryInfoFromFile(PacketFileInfo,20);//sha1 diges size
+		MBUtility::MBFileInputStream FileReader(&PacketFileInfo);
+		m_TopNode = p_ReadDirectoryInfoFromFile(&FileReader,20);//sha1 diges size
 	}
 	MBPP_FileInfoReader::MBPP_FileInfoReader(const void* DataToRead, size_t DataSize)
 	{
-
+		MBUtility::MBBufferInputStream BufferReader(DataToRead,DataSize);
+		m_TopNode = p_ReadDirectoryInfoFromFile(&BufferReader, 20);//sha1 diges size
 	}
 	void h_UpdateDiffDirectoryFiles(MBPP_FileInfoDiff& DiffToUpdate, MBPP_DirectoryInfoNode const& ClientDirectory, MBPP_DirectoryInfoNode const& ServerDirectory, std::string const& CurrentPath)
 	{
@@ -333,7 +346,7 @@ namespace MBPM
 	const MBPP_DirectoryInfoNode* MBPP_FileInfoReader::p_GetTargetDirectory(std::vector<std::string> const& PathComponents)
 	{
 		const MBPP_DirectoryInfoNode* ReturnValue = nullptr;
-		if (PathComponents.size() == 1)
+		if (PathComponents.size() == 1  || PathComponents.size() == 0)
 		{
 			ReturnValue = &m_TopNode;
 		}
@@ -404,6 +417,10 @@ namespace MBPM
 		else
 		{
 			std::vector<std::string> PathComponents = sp_GetPathComponents(ObjectToSearch);
+			if (PathComponents.size() == 0)
+			{
+				return(nullptr);
+			}
 			const MBPP_DirectoryInfoNode* ObjectDirectory = p_GetTargetDirectory(PathComponents);
 			int FilePosition = MBAlgorithms::BinarySearch(ObjectDirectory->Files, PathComponents.back(), h_GetFileName, std::less<std::string>());
 			if (FilePosition != -1)
@@ -423,12 +440,26 @@ namespace MBPM
 		else
 		{
 			std::vector<std::string> PathComponents = sp_GetPathComponents(ObjectToSearch);
+			if (PathComponents.size() == 0)//antar att detta bara kan hända om pathen är på formen */
+			{
+				return(&m_TopNode);
+			}
 			const MBPP_DirectoryInfoNode* ObjectDirectory = p_GetTargetDirectory(PathComponents);
 			int DirectoryPosition = MBAlgorithms::BinarySearch(ObjectDirectory->Directories, PathComponents.back(), h_GetDirectoryName, std::less<std::string>());
 			if (DirectoryPosition != -1)
 			{
 				ReturnValue = &(ObjectDirectory->Directories[DirectoryPosition]);
 			}
+		}
+		return(ReturnValue);
+	}
+	bool MBPP_FileInfoReader::operator==(MBPP_FileInfoReader const& OtherReader) const
+	{
+		bool ReturnValue = true;
+		//snabb som kanske inte alltid är sann, men går på hash
+		if (m_TopNode.DirectoryName != OtherReader.m_TopNode.DirectoryName || m_TopNode.DirectoryHash != OtherReader.m_TopNode.DirectoryHash) 
+		{
+			ReturnValue = false;
 		}
 		return(ReturnValue);
 	}
@@ -523,6 +554,14 @@ namespace MBPM
 	{
 		return(m_InternalHTTPSocket->Connect());
 	}
+	bool MBPP_ClientHTTPConverter::IsConnected()
+	{
+		return(m_InternalHTTPSocket->IsConnected());
+	}
+	bool MBPP_ClientHTTPConverter::IsValid()
+	{
+		return(m_InternalHTTPSocket->IsValid());
+	}
 	MBError MBPP_ClientHTTPConverter::EstablishTLSConnection()
 	{
 		return(m_InternalHTTPSocket->EstablishTLSConnection());
@@ -567,10 +606,10 @@ namespace MBPM
 		{
 			m_InternalHTTPSocket->SendData(DataToSend,DataSize);
 			m_TotalSentRecordData += DataSize;
-			if (m_TotalSentRecordData == m_MBPP_CurrentHeader.RecordSize)
-			{
-				p_ResetSendState();
-			}
+		}
+		if (m_TotalSentRecordData == m_MBPP_CurrentHeader.RecordSize)
+		{
+			p_ResetSendState();
 		}
 		return(0);
 	}
@@ -896,50 +935,118 @@ namespace MBPM
 		}
 		return(UpdateError);
 	}
-	MBError MBPP_Client::UploadPacket(std::string const& PacketDirectory, std::string const& PacketName)
+	MBError MBPP_Client::UploadPacket(std::string const& PacketDirectory, std::string const& PacketName, MBPP_UserCredentialsType CredentialsType, std::string const& CredentialsData)
 	{
 		//kollar om att ladda ner packet infon är tillräckligt litet och skapar en diff fil, eller gör det genom att manuellt be om directory info för varje fil och se om hashen skiljer
-		MBError UpdateError = p_DownloadServerFilesInfo(PacketName, PacketDirectory, { "MBPM_ServerPacketInfo" , "MBPM_ServerFileInfo" });
-		if (!UpdateError)
+		MBError UploadError;
+		MBPP_UploadRequest_Response UploadRequestResponse = p_GetLoginResult(PacketName, CredentialsType, CredentialsData,&UploadError);
+		if (UploadRequestResponse.Result != MBPP_ErrorCode::Ok || !UploadError)
 		{
-			return(UpdateError);
+			//update out struct
+			return(UploadError);
+		}
+		//TODO finns det något smidigt sätt att undvika mycket redundant server nedladdande?
+		UploadError = p_DownloadServerFilesInfo(PacketName, PacketDirectory, { "MBPM_ServerPacketInfo" , "MBPM_ServerFileInfo" });
+		if (!UploadError)
+		{
+			return(UploadError);
 		}
 		//ANTAGANDE vi antar här att PacketFilesData är uppdaterad
 		//byter plats på client och server så att client tolkas som den uppdaterade q
+		MBPP_GenericRecord RecordToSend;
+		RecordToSend.ComputerInfo = GetComputerInfo();
+		RecordToSend.Type = MBPP_RecordType::UploadChanges;
+		
 		MBPP_FileInfoDiff FileInfoDifferance = GetFileInfoDifference( MBPP_FileInfoReader(PacketDirectory + "/MBPM_ServerFileInfo"), MBPP_FileInfoReader(PacketDirectory + "/MBPM_FileInfo"));
 		size_t TotalDataSize = 0;
+		TotalDataSize += 1+MBPP_StringLengthSize+PacketName.size()+4+CredentialsData.size();//credentials typen,string längden samt längden av credentials datan
+
 		std::vector<std::string> FilesToSend = {};
-		std::vector<std::string> DirectoriesToSend = {};
+		std::vector<std::string> ObjectsToDelete = {};
+		TotalDataSize += 4 + 4;//storleken av fileliststen
 		for (auto const& UpdatedFile : FileInfoDifferance.UpdatedFiles)
 		{
-			TotalDataSize += 2 + UpdatedFile.size();
+			TotalDataSize += MBPP_StringLengthSize + UpdatedFile.size();
 			TotalDataSize += MBGetFileSize(PacketDirectory + UpdatedFile);
 			FilesToSend.push_back(UpdatedFile);
 		}
 		for (auto const& NewFiles : FileInfoDifferance.AddedFiles)
 		{
-			TotalDataSize += 2 + NewFiles.size();
+			TotalDataSize += MBPP_StringLengthSize + NewFiles.size();
 			TotalDataSize += MBGetFileSize(PacketDirectory + NewFiles);
 			FilesToSend.push_back(PacketDirectory);
 		}
-		for (auto const& NewDirectories : FileInfoDifferance.AddedDirectories)
+		for (auto const& DeletedFiles : FileInfoDifferance.RemovedFiles)
 		{
-			DirectoriesToSend.push_back(NewDirectories);
+			TotalDataSize += MBPP_StringLengthSize + DeletedFiles.size();
+			ObjectsToDelete.push_back(DeletedFiles);
 		}
-		//UpdateError = p_GetFiles(PacketName, FilesToGet, OutputDirectory);
-		//if (!UpdateError)
-		//{
-		//	return(UpdateError);
-		//}
-		//for (auto const& Directories : DirectoriesToGet)
-		//{
-		//	UpdateError = p_GetDirectory(PacketName, Directories, OutputDirectory);
-		//	if (!UpdateError)
-		//	{
-		//		return(UpdateError);
-		//	}
-		//}
-		return(UpdateError);
+		for (auto const& DeletedDirectoris : FileInfoDifferance.DeletedDirectories)
+		{
+			TotalDataSize += MBPP_StringLengthSize + DeletedDirectoris.size();
+			ObjectsToDelete.push_back(DeletedDirectoris);
+		}
+		// nu till att skicka datan
+		RecordToSend.RecordSize = TotalDataSize;
+		std::string TotalHeaderData = MBPP_GetRecordHeader(RecordToSend);
+		TotalHeaderData += MBPP_GetUploadCredentialsData(PacketName, CredentialsType, CredentialsData);
+		TotalHeaderData += MBPP_GenerateFileList(FilesToSend);
+		TotalHeaderData += MBPP_GenerateFileList(ObjectsToDelete);
+		m_ServerConnection->SendData(TotalHeaderData);
+		//antar här att alla filer existerar
+		for (size_t i = 0; i < FilesToSend.size(); i++)
+		{
+			
+			std::string DataToSend = std::string(8, 0);
+			uint64_t FileSize = MBGetFileSize(PacketDirectory + FilesToSend[i]);
+			h_WriteBigEndianInteger(DataToSend.data(), FileSize, 8);
+			std::ifstream FileInputStream = std::ifstream(PacketDirectory + FilesToSend[i], std::ios::in | std::ios::binary);
+			m_ServerConnection->SendData(DataToSend);
+			const size_t BlockSize = 4096*4;
+			std::string Buffer = std::string(BlockSize, 0);
+			while (true)
+			{
+				FileInputStream.read(Buffer.data(), BlockSize);
+				size_t BytesRead = FileInputStream.gcount();
+				m_ServerConnection->SendData(Buffer.data(), BytesRead);
+				if (BytesRead < BlockSize)
+				{
+					break;
+				}
+			}
+		}
+
+		//nu kommer vi till att parsa serverns respons
+		std::string ResponseData = m_ServerConnection->RecieveData();
+		while (ResponseData.size() < (MBPP_GenericRecordHeaderSize+2) && m_ServerConnection->IsConnected() && m_ServerConnection->IsValid())
+		{
+			ResponseData = m_ServerConnection->RecieveData();
+		}
+		MBPP_GenericRecord ResponseHeader = MBPP_ParseRecordHeader(ResponseData.data(), ResponseData.size(), 0, nullptr);
+		if (ResponseHeader.Type != MBPP_RecordType::UploadChangesResponse)
+		{
+			if (ResponseHeader.Type == MBPP_RecordType::Error)
+			{
+				UploadError = false;
+				UploadError.ErrorMessage = "Error after sending UploadChanges: " + 
+					MBPP_GetErrorCodeString(MBPP_ErrorCode(MBParsing::ParseBigEndianInteger(ResponseData.data(),2, MBPP_GenericRecordHeaderSize,nullptr)));
+			}
+			else
+			{
+				UploadError = false;
+				UploadError.ErrorMessage = "Error after sending UploadChanges: Invalid response type";
+			}
+		}
+		else
+		{
+			MBPP_ErrorCode Result = MBPP_ErrorCode(MBParsing::ParseBigEndianInteger(ResponseData.data(), 2, MBPP_GenericRecordHeaderSize, nullptr));
+			if (Result != MBPP_ErrorCode::Null)
+			{
+				UploadError = false;
+				UploadError.ErrorMessage = "Error result in UploadChanges: "+MBPP_GetErrorCodeString(Result);
+			}
+		}
+		return(UploadError);
 	}
 	MBError MBPP_Client::DownloadPacketFiles(std::string const& OutputDirectory, std::string const& PacketName, std::vector<std::string> const& FilesToGet)
 	{
@@ -989,9 +1096,9 @@ namespace MBPM
 		if (GetPacketError)
 		{
 			std::map<std::string, std::string> Result = MemoryMapper.GetDownloadedFiles();
-			if (Result.find("MBPP_FileInfo") != Result.end())
+			if (Result.find("MBPM_FileInfo") != Result.end())
 			{
-				ReturnValue = MBPP_FileInfoReader(Result["/MBPP_FileInfo"].data(), Result["/MBPP_FileInfo"].size());
+				ReturnValue = MBPP_FileInfoReader(Result["MBPM_FileInfo"].data(), Result["MBPM_FileInfo"].size());
 			}
 			else
 			{
@@ -1419,6 +1526,7 @@ namespace MBPM
 		std::string PacketDirectory = p_GetPacketDirectory(ResponseData.PacketName);
 		for (size_t i = 0; i < ResponseData.DirectoriesToGet.size(); i++)
 		{
+			//TODO ta från MBPM_FileInfo filen istället
 			std::filesystem::recursive_directory_iterator DirectoryIterator = std::filesystem::recursive_directory_iterator(PacketDirectory + ResponseData.DirectoriesToGet[i]);
 			for (auto const& Entries : DirectoryIterator)
 			{
