@@ -27,6 +27,12 @@ namespace MBPM
 			CharData[i] = (IntegerToWrite >> ((IntegerSize * 8) - ((i + 1) * 8)));		
 		}
 	}
+	std::string h_GetBigEndianInteger(uintmax_t IntegerToConvert, uint8_t IntegerSize)
+	{
+		std::string ReturnValue = std::string(IntegerSize, 0);
+		h_WriteBigEndianInteger(ReturnValue.data(), IntegerToConvert, IntegerSize);
+		return(ReturnValue);
+	}
 	uintmax_t h_ReadBigEndianInteger(std::ifstream& FileToWriteFrom, uint8_t IntegerSize)
 	{
 		uintmax_t ReturnValue = 0;
@@ -118,6 +124,14 @@ namespace MBPM
 		OutputFile.flush();
 		OutputFile.close();
 	}
+	bool MBPP_PathIsValid(std::string const& PathToCheck)
+	{
+		if (PathToCheck.find("..") != PathToCheck.npos)
+		{
+			return(false);
+		}
+		return(true);
+	}
 	MBPP_ComputerInfo GetComputerInfo()
 	{
 		return(MBPP_ComputerInfo());
@@ -132,7 +146,7 @@ namespace MBPM
 		ReturnValue.ComputerInfo.OSType = (MBPP_OSType) MBParsing::ParseBigEndianInteger(Data, 4, ParseOffset, &ParseOffset);
 		ReturnValue.ComputerInfo.ProcessorType = (MBPP_ProcessorType) MBParsing::ParseBigEndianInteger(Data, 4, ParseOffset, &ParseOffset);
 		ReturnValue.RecordSize = MBParsing::ParseBigEndianInteger(Data, 8, ParseOffset, &ParseOffset);
-		
+		ReturnValue.VerificationDataSize = MBParsing::ParseBigEndianInteger(Data, 4, ParseOffset, &ParseOffset);
 		return(ReturnValue);
 	}
 	std::string MBPP_EncodeString(std::string const& StringToEncode)
@@ -147,16 +161,29 @@ namespace MBPM
 		std::string ReturnValue = "";
 		ReturnValue += char(RecordToConvert.Type);
 		ReturnValue += char(RecordToConvert.ComputerInfo.Type);
-		ReturnValue += std::string(16, 0);
+		ReturnValue += std::string(20, 0);
 		size_t ParseOffest = 2;
 		h_WriteBigEndianInteger(ReturnValue.data()+2, uint32_t(RecordToConvert.ComputerInfo.OSType), 4);
 		h_WriteBigEndianInteger(ReturnValue.data()+6, uint32_t(RecordToConvert.ComputerInfo.ProcessorType), 4);
 		h_WriteBigEndianInteger(ReturnValue.data()+10, RecordToConvert.RecordSize, 8);
+		h_WriteBigEndianInteger(ReturnValue.data()+18, RecordToConvert.VerificationDataSize, 4);
 		return(ReturnValue);
 	}
 	std::string MBPP_GetRecordData(MBPP_GenericRecord const& RecordToConvert)
 	{
 		return(MBPP_GetRecordHeader(RecordToConvert) + RecordToConvert.RecordData);
+	}
+	std::string MBPP_GetErrorCodeString(MBPP_ErrorCode ErrorToConvert)
+	{
+		return("palla inte implementera det nu lmaooo");
+	}
+	std::string MBPP_GetUploadCredentialsData(std::string const& PacketName, MBPP_UserCredentialsType CredentialsType, std::string const& CredentialsData)
+	{
+		std::string ReturnValue = h_GetBigEndianInteger(uint64_t(CredentialsType),sizeof(MBPP_UserCredentialsType));
+		ReturnValue += MBPP_EncodeString(PacketName);
+		ReturnValue += h_GetBigEndianInteger(CredentialsData.size(), 4);
+		ReturnValue += CredentialsData;
+		return(ReturnValue);
 	}
 	std::string MBPP_GenerateFileList(std::vector<std::string> const& FilesToList)
 	{
@@ -484,6 +511,40 @@ namespace MBPM
 	}
 	//END MBPP_FileListDownloadHandler
 
+
+	//BEGIN MBPP_FileListDownloader : public MBPP_FileListDownloadHandler
+	MBPP_FileListDownloader::MBPP_FileListDownloader(std::string const& OutputDirectory)
+	{
+		m_OutputDirectory = OutputDirectory;
+	}
+	MBError MBPP_FileListDownloader::Open(std::string const& FileToDownloadName)
+	{
+		MBError ReturnValue = true;
+		std::string FileOutputPath = m_OutputDirectory + FileToDownloadName;
+		std::filesystem::create_directories(std::filesystem::path(FileOutputPath).parent_path());
+		m_FileHandle.open(FileOutputPath);
+		if (!m_FileHandle.is_open())
+		{
+			ReturnValue = false;
+			ReturnValue.ErrorMessage = "Failed to open file \"" + FileOutputPath + "\"";
+		}
+		return(ReturnValue);
+	}
+	MBError MBPP_FileListDownloader::InsertData(const void* Data, size_t DataSize)
+	{
+		MBError ReturnValue = true;
+		m_FileHandle.write((char*)Data, DataSize);
+		return(ReturnValue);
+	}
+	MBError MBPP_FileListDownloader::Close()
+	{
+		MBError ReturnValue = true;
+		m_FileHandle.flush();
+		m_FileHandle.close();
+		return(ReturnValue);
+	}
+	//END MBPP_FileListDownloader
+
 	//BEGIN MBPP_FileListMemoryMapper
 	MBPP_FileListMemoryMapper::MBPP_FileListMemoryMapper()
 	{
@@ -722,6 +783,61 @@ namespace MBPM
 		else
 		{
 			ReturnValue = p_DownloadFileList(RecievedData, MBPP_GenericRecordHeaderSize, m_ServerConnection.get(), OutputDirectory,OutputFileNames);
+		}
+		return(ReturnValue);
+	}
+	MBPP_UploadRequest_Response MBPP_Client::p_GetLoginResult(std::string const& PacketName, MBPP_UserCredentialsType CredentialsType, std::string const& CredentialsData, MBError* OutError)
+	{
+		MBPP_UploadRequest_Response ReturnValue;
+		MBPP_GenericRecord RecordToSend;
+		RecordToSend.Type = MBPP_RecordType::UploadRequest;
+		RecordToSend.ComputerInfo = GetComputerInfo();
+
+		RecordToSend.RecordData = MBPP_EncodeString(PacketName);
+		RecordToSend.RecordData = uint8_t(CredentialsType);
+		size_t CredentialsLengthOffset = RecordToSend.RecordData.size();
+		RecordToSend.RecordData += std::string(4, 0);
+		h_WriteBigEndianInteger(((uint8_t*)RecordToSend.RecordData.data()) + CredentialsLengthOffset, CredentialsData.size(), 4);
+		RecordToSend.RecordData += CredentialsData;
+		RecordToSend.RecordSize = RecordToSend.RecordData.size();
+		if (m_ServerConnection->IsValid() == false && m_ServerConnection->IsConnected() == false)
+		{
+			*OutError = false;
+			OutError->ErrorMessage = "Error retrieving UploadRequestResponse, not connected";
+			return(ReturnValue);
+		}
+		m_ServerConnection->SendData(MBPP_GetRecordData(RecordToSend));
+		std::string ResponseData = m_ServerConnection->RecieveData();
+		size_t ResponseDataOffset = 0;
+		while (m_ServerConnection->IsValid() && m_ServerConnection->IsConnected() && ResponseData.size() < MBPP_GenericRecordHeaderSize)
+		{
+			ResponseData += m_ServerConnection->RecieveData();
+		}
+		if (ResponseData.size() < MBPP_GenericRecordHeaderSize)
+		{
+			*OutError = false;
+			OutError->ErrorMessage = "Error retrieving UploadRequestResponse, not enough data sent from server";
+			return(ReturnValue);
+		}
+		MBPP_GenericRecord RecordHeader = MBPP_ParseRecordHeader(ResponseData.data(), ResponseData.size(), 0, &ResponseDataOffset);
+		//reciever all data vi kan, vet att det här kommer få plats i ram
+		while (m_ServerConnection->IsValid() && m_ServerConnection->IsConnected() && ResponseData.size() < MBPP_GenericRecordHeaderSize)
+		{
+			ResponseData += m_ServerConnection->RecieveData();
+		}
+		if (ResponseData.size() < MBPP_GenericRecordHeaderSize+RecordHeader.RecordSize)
+		{
+			*OutError = false;
+			OutError->ErrorMessage = "Error retrieving UploadRequestResponse, not enough data sent from server";
+			return(ReturnValue);
+		}
+		ReturnValue.Result = MBPP_ErrorCode(MBParsing::ParseBigEndianInteger(ResponseData.data(), sizeof(MBPP_ErrorCode), ResponseDataOffset, &ResponseDataOffset));
+		size_t StringSize = MBParsing::ParseBigEndianInteger(ResponseData.data(), MBPP_StringLengthSize, ResponseDataOffset, &ResponseDataOffset);
+		ReturnValue.DomainToLogin = std::string((char*)ResponseData.data(), StringSize);
+		uint32_t SupportedLoginMethodsLength = MBParsing::ParseBigEndianInteger(ResponseData.data(), sizeof(MBPP_UserCredentialsType), ResponseDataOffset, &ResponseDataOffset);
+		for (size_t i = 0; i < SupportedLoginMethodsLength/sizeof(MBPP_UserCredentialsType); i++)
+		{
+			ReturnValue.SupportedLoginTypes.push_back(MBPP_UserCredentialsType(MBParsing::ParseBigEndianInteger(ResponseData.data(), sizeof(MBPP_UserCredentialsType), ResponseDataOffset, &ResponseDataOffset)));
 		}
 		return(ReturnValue);
 	}
@@ -1119,7 +1235,14 @@ namespace MBPM
 	{
 		m_PacketSearchDirectories.push_back(PacketDirectory);
 	}
-
+	void MBPP_Server::SetUserAuthenticator(MBUtility::MBBasicUserAuthenticator* AuthenticatorToSet) 
+	{
+		m_UserAuthenticator = AuthenticatorToSet;
+	}
+	void MBPP_Server::SetTopDomain(std::string const& NewTopDomain)
+	{
+		m_ServerDomain = NewTopDomain;
+	}
 	//top level, garanterat att det är klart efter, inte garanterat att funka om inte låg level under är klara
 	//std::string MBPP_Server::GenerateResponse(const void* RequestData, size_t RequestSize, MBError* OutError)	
 	//{
@@ -1154,6 +1277,14 @@ namespace MBPM
 		{
 			delete (MBPP_GetPacketInfo_ResponseData*)m_RequestResponseData;
 		}
+		else if (m_CurrentRequestHeader.Type == MBPP_RecordType::UploadRequest)
+		{
+			delete (MBPP_UploadRequest_ResponseData*)m_RequestResponseData;
+		}
+		else if (m_CurrentRequestHeader.Type == MBPP_RecordType::UploadChanges)
+		{
+
+		}
 		else
 		{
 			assert(false);
@@ -1170,7 +1301,6 @@ namespace MBPM
 
 		m_RecievedData = "";
 		m_RecievedDataOffset = 0;
-		m_CurrentRequestSize = -1;
 	}
 
 	//Get metoder
@@ -1332,9 +1462,65 @@ namespace MBPM
 		}
 		return(ReturnValue);
 	}
-	MBError MBPP_Server::p_Handle_UploadFiles()
+	std::string MBPP_Server::p_GetPacketDomain(std::string const& PacketName)
 	{
-		return(MBError());
+		return(m_ServerDomain);
+	}
+	MBPP_ErrorCode MBPP_Server::p_VerifyPlainLogin(std::string const& PacketName)
+	{
+		size_t ParseOffset = 0;
+		if (ParseOffset + MBPP_StringLengthSize > PacketName.size())
+		{
+			return(MBPP_ErrorCode::ParseError);
+		}
+		size_t UsernameSize = MBParsing::ParseBigEndianInteger(PacketName.data(), MBPP_StringLengthSize, ParseOffset, &ParseOffset);
+		std::string Username = PacketName.substr(ParseOffset,UsernameSize);
+		if (UsernameSize + ParseOffset > PacketName.size())
+		{
+			return(MBPP_ErrorCode::ParseError);
+		}
+		ParseOffset += UsernameSize;
+		if (ParseOffset + MBPP_StringLengthSize > PacketName.size())
+		{
+			return(MBPP_ErrorCode::ParseError);
+		}
+		size_t PasswordSize = MBParsing::ParseBigEndianInteger(PacketName.data(), MBPP_StringLengthSize, ParseOffset, &ParseOffset);
+		if (PasswordSize + ParseOffset > PacketName.size())
+		{
+			return(MBPP_ErrorCode::ParseError);
+		}
+		ParseOffset += PasswordSize;
+		std::string Password = PacketName.substr(ParseOffset,UsernameSize);
+		bool VerificationResult = m_UserAuthenticator->VerifyUser(Username, Password);
+		if (VerificationResult)
+		{
+			return(MBPP_ErrorCode::Ok);
+		}
+		else
+		{
+			return(MBPP_ErrorCode::InvalidCredentials);
+		}
+	}
+	MBPP_ErrorCode MBPP_Server::p_VerifyRequest(std::string const& PacketName)
+	{
+		MBPP_ErrorCode ReturnValue = MBPP_ErrorCode::Null;
+		if (m_RequestVerificationData.CredentialsType == MBPP_UserCredentialsType::Null)
+		{
+			ReturnValue = MBPP_ErrorCode::NoVerification;
+		}
+		else if(m_RequestVerificationData.CredentialsType == MBPP_UserCredentialsType::Plain)
+		{
+			ReturnValue = p_VerifyPlainLogin(PacketName);
+		}
+		else if (m_RequestVerificationData.CredentialsType == MBPP_UserCredentialsType::Request)
+		{
+			ReturnValue = MBPP_ErrorCode::LoginRequired;
+		}
+		else
+		{
+			ReturnValue = MBPP_ErrorCode::NoVerification;
+		}
+		return(ReturnValue);
 	}
 	std::string MBPP_Server::p_GetPacketDirectory(std::string const& PacketName)
 	{
@@ -1347,6 +1533,179 @@ namespace MBPM
 				ReturnValue = m_PacketSearchDirectories[i] + PacketName + "/";
 				break;
 			}
+		}
+		return(ReturnValue);
+	}
+	MBError MBPP_Server::p_ParseRequestVerificationData()
+	{
+		MBError ReturnValue = true;
+		//vi vet att denna data får plats i minnet
+		if (m_RecievedData.size() - m_RecievedDataOffset >= m_CurrentRequestHeader.VerificationDataSize)
+		{
+			m_RequestVerificationData.CredentialsType = MBPP_UserCredentialsType(MBParsing::ParseBigEndianInteger(m_RecievedData.data(),
+				sizeof(MBPP_UserCredentialsType), m_RecievedDataOffset, &m_RecievedDataOffset));
+			m_RequestVerificationData.PacketNameStringLength = MBParsing::ParseBigEndianInteger(m_RecievedData.data(), MBPP_StringLengthSize, m_RecievedDataOffset, &m_RecievedDataOffset);
+			if (m_RecievedData.size() - m_RecievedDataOffset < m_RequestVerificationData.PacketNameStringLength)
+			{
+				ReturnValue = false;
+				ReturnValue.ErrorMessage = "Error parsing UploadRequest record, invalid packet name string length";
+				return(ReturnValue);
+			}
+			m_RequestVerificationData.PacketName = m_RecievedData.substr(m_RecievedDataOffset, m_RequestVerificationData.PacketNameStringLength);
+			m_RecievedDataOffset += m_RequestVerificationData.PacketNameStringLength;
+			m_RequestVerificationData.CredentialsDataLength = MBParsing::ParseBigEndianInteger(m_RecievedData.data(), 4, m_RecievedDataOffset, &m_RecievedDataOffset);
+			if (m_RecievedData.size() - m_RecievedDataOffset < m_RequestVerificationData.CredentialsDataLength)
+			{
+				ReturnValue = false;
+				ReturnValue.ErrorMessage = "Error parsing UploadRequest record, invalid credntials length";
+				return(ReturnValue);
+			}
+			m_RequestVerificationData.CredentialsData = m_RecievedData.substr(m_RecievedDataOffset, m_RequestVerificationData.CredentialsDataLength);
+			m_VerificationDataParsed = true;
+			//vi uppdaterar resultet
+			m_VerificationResult = p_VerifyRequest(m_RequestVerificationData.PacketName);
+		}
+		return(ReturnValue);
+	}
+	MBError MBPP_Server::p_ParseFileList(MBPP_FileList& FileListToUpdate,bool* BoolToUpdate)
+	{
+		MBError ReturnValue = true;
+		if (FileListToUpdate.FileListSize == -1)
+		{
+			if (m_RecievedData.size() - m_RecievedDataOffset >= MBPP_FileListLengthSize)
+			{
+				FileListToUpdate.FileListSize = MBParsing::ParseBigEndianInteger(m_RecievedData.data(), MBPP_FileListLengthSize, m_RecievedDataOffset, &m_RecievedDataOffset);
+			}
+		}
+		if (FileListToUpdate.FileListSize != -1)
+		{
+			if (m_RecievedData.size() - m_RecievedDataOffset >= FileListToUpdate.FileListSize)
+			{
+				size_t CurrentOffset = m_RecievedDataOffset;
+				while (CurrentOffset-m_RecievedDataOffset < FileListToUpdate.FileListSize)
+				{
+					size_t CurrentStringSize = MBParsing::ParseBigEndianInteger(m_RecievedData.data(), MBPP_StringLengthSize, CurrentOffset, &CurrentOffset);
+					if (CurrentOffset + CurrentStringSize - m_RecievedDataOffset > FileListToUpdate.FileListSize)
+					{
+						ReturnValue = false;
+						ReturnValue.ErrorMessage = "Error parsing FileList: Invalid string size";
+						return(ReturnValue);
+					}
+					std::string NewString = m_RecievedData.substr(CurrentOffset, CurrentStringSize);
+					CurrentOffset += CurrentStringSize;
+					FileListToUpdate.Files.push_back(std::move(NewString));
+				}
+				*BoolToUpdate = true;
+			}
+		}
+		return(ReturnValue);
+	}
+	MBError MBPP_Server::p_DownloadClientFileList(MBPP_FileListDownloadState* DownloadState, MBPP_FileListDownloadHandler* DownloadHandler)
+	{
+		MBError ReturnValue = false;
+		while (m_RecievedDataOffset < m_RecievedData.size() && ReturnValue)
+		{
+			if (DownloadState->CurrentFileIndex >= DownloadState->FileNames.size())
+			{
+				m_RequestFinished = true;
+				break;
+			}
+			if (DownloadState->NewFile)
+			{
+				if (!MBPP_PathIsValid(DownloadState->FileNames[DownloadState->CurrentFileIndex]))
+				{
+					ReturnValue = false;
+					ReturnValue.ErrorMessage = "Error downloading file: Invalid filename";
+					return(ReturnValue);
+				}
+				ReturnValue = DownloadHandler->Open(DownloadState->FileNames[DownloadState->CurrentFileIndex]);
+				if (!ReturnValue)
+				{
+					break;
+				}
+				DownloadState->NewFile = false;
+				DownloadState->CurrentFileSize = -1;
+				DownloadState->CurrentFileParsedData = 0;
+			}
+			if (DownloadState->CurrentFileSize == -1)
+			{
+				if (m_RecievedData.size() - m_RecievedDataOffset >= 8)
+				{
+					DownloadState->CurrentFileSize = MBParsing::ParseBigEndianInteger(m_RecievedData.data(), 8, m_RecievedDataOffset, &m_RecievedDataOffset);
+				}
+			}
+			if (DownloadState->CurrentFileSize != -1)
+			{
+				uint64_t BytesToWrite = std::min(uint64_t(m_RecievedData.size()-m_RecievedDataOffset),uint64_t(DownloadState->CurrentFileSize-DownloadState->CurrentFileParsedData));
+				ReturnValue = DownloadHandler->InsertData(m_RecievedData.substr(m_RecievedDataOffset, BytesToWrite));
+				if (!ReturnValue)
+				{
+					break;
+				}
+				m_RecievedDataOffset += BytesToWrite;
+				DownloadState->CurrentFileParsedData += BytesToWrite;
+				if (DownloadState->CurrentFileSize == DownloadState->CurrentFileParsedData)
+				{
+					DownloadState->NewFile = true;
+					DownloadState->CurrentFileIndex += 1;
+					ReturnValue = DownloadHandler->Close();
+				}
+			}
+		}
+		if (DownloadState->CurrentFileIndex >= DownloadState->FileNames.size())
+		{
+			m_RequestFinished = true;
+		}
+		return(ReturnValue);
+	}
+	MBError MBPP_Server::p_Handle_UploadChanges()
+	{
+		MBError ReturnValue = true;
+		if (m_RequestResponseData == nullptr)
+		{
+			m_RequestResponseData = new MBPP_UploadChanges_ResponseData();
+		}
+		//behöver packet namnet för att kunna verifiera
+		MBPP_UploadChanges_ResponseData& CurrentResponseData = p_GetResponseData<MBPP_UploadChanges_ResponseData>();
+		if (CurrentResponseData.PacketName == "")
+		{
+			if (m_RecievedData.size() - m_RecievedDataOffset >= MBPP_StringLengthSize)
+			{
+				CurrentResponseData.PacketNameSize = MBParsing::ParseBigEndianInteger(m_RecievedData.data(), MBPP_StringLengthSize, m_RecievedDataOffset, &m_RecievedDataOffset);
+			}
+			if (CurrentResponseData.PacketNameSize != -1)
+			{
+				if (m_RecievedData.size() - m_RecievedDataOffset >= CurrentResponseData.PacketNameSize)
+				{
+					CurrentResponseData.PacketName = m_RecievedData.substr(m_RecievedDataOffset, CurrentResponseData.PacketNameSize);
+					m_RecievedDataOffset += CurrentResponseData.PacketNameSize;
+				}
+			}
+		}
+		//2 stycken filelists att parsa
+		if (CurrentResponseData.PacketName != "" && (CurrentResponseData.ObjectsToDeleteParsed == false || CurrentResponseData.FilesToDownloadParsed ==false))
+		{
+			if (CurrentResponseData.ObjectsToDeleteParsed == false)
+			{
+				ReturnValue = p_ParseFileList(CurrentResponseData.ObjectsToDelete, &(CurrentResponseData.ObjectsToDeleteParsed));
+			}
+			if (!ReturnValue)
+			{
+				return(ReturnValue);
+			}
+			if (CurrentResponseData.FilesToDownloadParsed == false)
+			{
+				ReturnValue = p_ParseFileList(CurrentResponseData.FilesToDownload, &(CurrentResponseData.FilesToDownloadParsed));
+			}
+			if (CurrentResponseData.FilesToDownloadParsed && CurrentResponseData.ObjectsToDeleteParsed)
+			{
+				CurrentResponseData.Downloader = std::unique_ptr<MBPP_FileListDownloader>(new MBPP_FileListDownloader(p_GetPacketDirectory(CurrentResponseData.PacketName + "/MBPM_UploadedChanges")));
+				CurrentResponseData.DownloadState.FileNames = CurrentResponseData.FilesToDownload.Files;
+			}
+		}
+		if (CurrentResponseData.PacketName != "" && CurrentResponseData.FilesToDownloadParsed && CurrentResponseData.ObjectsToDeleteParsed)
+		{
+			ReturnValue = p_DownloadClientFileList(&CurrentResponseData.DownloadState, CurrentResponseData.Downloader.get());
 		}
 		return(ReturnValue);
 	}
@@ -1372,24 +1731,51 @@ namespace MBPM
 				}
 				else
 				{
-					m_CurrentRequestSize = MBParsing::ParseBigEndianInteger(m_RecievedData.data()+1, 8, 0, nullptr);
 					m_RecievedDataOffset = MBPP_GenericRecordHeaderSize;
 				}
 			}
 		}
-		//Dessa kräver extra data
-		if (m_CurrentRequestHeader.Type == MBPP_RecordType::GetFiles)
+		if (m_CurrentRequestHeader.Type != MBPP_RecordType::Null && m_CurrentRequestHeader.VerificationDataSize != 0 && m_VerificationDataParsed == false)
 		{
-			p_Handle_GetFiles();
+			ReturnValue = p_ParseRequestVerificationData();
 		}
-		else if (m_CurrentRequestHeader.Type == MBPP_RecordType::GetDirectory)
+		if (m_CurrentRequestHeader.Type != MBPP_RecordType::Null && (m_VerificationDataParsed || m_CurrentRequestHeader.VerificationDataSize == 0))
 		{
-			p_Handle_GetDirectories();
-		}
-		//tom, kräver ingen extra data
-		else if (m_CurrentRequestHeader.Type == MBPP_RecordType::GetPacketInfo)
-		{
-			p_Handle_GetPacketInfo();
+			if (m_CurrentRequestHeader.Type == MBPP_RecordType::GetFiles)
+			{
+				p_Handle_GetFiles();
+			}
+			else if (m_CurrentRequestHeader.Type == MBPP_RecordType::GetDirectory)
+			{
+				p_Handle_GetDirectories();
+			}
+			//tom, kräver ingen extra data
+			else if (m_CurrentRequestHeader.Type == MBPP_RecordType::GetPacketInfo)
+			{
+				p_Handle_GetPacketInfo();
+			}
+			else if (m_CurrentRequestHeader.Type == MBPP_RecordType::UploadRequest)
+			{
+				//vi vill bara skicka request datan servern hantarerar, så är finished redan här 
+				m_RequestResponseData = new MBPP_UploadRequest_ResponseData();
+				MBPP_UploadRequest_ResponseData& CurrentData = p_GetResponseData<MBPP_UploadRequest_ResponseData>();
+				CurrentData.Response.Result = m_VerificationResult;
+				CurrentData.Response.DomainToLogin = p_GetPacketDomain(m_RequestVerificationData.PacketName);
+				CurrentData.Response.SupportedLoginTypes = m_SupportedCredentials;
+			}
+			else if (m_CurrentRequestHeader.Type == MBPP_RecordType::UploadChanges)
+			{
+				//om det misslyckas med autentiseringen så är det inte något vi svarar på, så vi bara avbryter
+				if (m_VerificationResult != MBPP_ErrorCode::Ok)
+				{
+					p_Handle_UploadChanges();
+				}
+				else
+				{
+					ReturnValue = false;
+					ReturnValue.ErrorMessage = "Client sent UploadChanges message with invalid credentials";
+				}
+			}
 		}
 		//lägger alltid 
 		return(ReturnValue);
@@ -1416,6 +1802,14 @@ namespace MBPM
 		else if (m_CurrentRequestHeader.Type == MBPP_RecordType::GetPacketInfo)
 		{
 			ReturnValue = new MBPP_GetPacketInfo_ResponseIterator(p_GetResponseData<MBPP_GetPacketInfo_ResponseData>(),this);
+		}
+		else if (m_CurrentRequestHeader.Type == MBPP_RecordType::UploadRequest)
+		{
+			ReturnValue = new MBPP_UploadRequest_ResponseIterator(p_GetResponseData<MBPP_UploadRequest_ResponseData>(), this);
+		}
+		else if (m_CurrentRequestHeader.Type == MBPP_RecordType::UploadChanges)
+		{
+			ReturnValue = new MBPP_UploadChanges_ResponseIterator();
 		}
 		return(ReturnValue);
 	}
@@ -1582,4 +1976,55 @@ namespace MBPM
 		}
 	}
 	//END MBPP_GetPacketInfo_ResponseIterator
+
+	//BEGIN MBPP_GetPacketInfo_UploadRequestResponseIterator
+	MBPP_UploadRequest_ResponseIterator::MBPP_UploadRequest_ResponseIterator(MBPP_UploadRequest_ResponseData const& ResponseData, MBPP_Server* AssociatedServer)
+	{
+		m_RequestResponse = ResponseData.Response;
+		Increment();
+	}
+	void MBPP_UploadRequest_ResponseIterator::Increment()
+	{
+		if (!m_ResponseSent)
+		{
+			MBPP_GenericRecord RecordToSend;
+			RecordToSend.Type = MBPP_RecordType::UploadRequestResponse;
+			RecordToSend.ComputerInfo = GetComputerInfo();
+			RecordToSend.RecordData = std::string(sizeof(MBPP_ErrorCode), 0);
+			h_WriteBigEndianInteger(RecordToSend.RecordData.data(), uint32_t(m_RequestResponse.Result), sizeof(MBPP_ErrorCode));
+			RecordToSend.RecordData = MBPP_EncodeString(m_RequestResponse.DomainToLogin);
+			size_t ParseOffset = RecordToSend.RecordData.size();
+			RecordToSend.RecordData = std::string(sizeof(MBPP_UserCredentialsType), 0);
+			h_WriteBigEndianInteger(((char*)RecordToSend.RecordData.data()) + ParseOffset, m_RequestResponse.SupportedLoginTypes.size() * sizeof(MBPP_UserCredentialsType), sizeof(MBPP_UserCredentialsType));
+			ParseOffset += sizeof(MBPP_UserCredentialsType);
+			for (size_t i = 0; i < m_RequestResponse.SupportedLoginTypes.size();i++)
+			{
+				h_WriteBigEndianInteger(((char*)RecordToSend.RecordData.data()) + ParseOffset, uint64_t(m_RequestResponse.SupportedLoginTypes[i]), sizeof(MBPP_UserCredentialsType));
+			}
+			RecordToSend.RecordSize = RecordToSend.RecordData.size();
+			m_CurrentResponse = MBPP_GetRecordData(RecordToSend);
+		}
+		else
+		{
+			m_Finished = true;
+		}
+	}
+	//END MBPP_GetPacketInfo_UploadRequestResponseIterator
+
+	//END MBPP_UploadChanges_ResponseIterator
+	MBPP_UploadChanges_ResponseIterator::MBPP_UploadChanges_ResponseIterator()
+	{
+		MBPP_GenericRecord RecordToSend;
+		RecordToSend.ComputerInfo = GetComputerInfo();
+		RecordToSend.Type = MBPP_RecordType::UploadChangesResponse;
+		RecordToSend.RecordData = std::string(sizeof(MBPP_ErrorCode), 0);
+		h_WriteBigEndianInteger(RecordToSend.RecordData.data(), uint64_t(MBPP_ErrorCode::Ok), sizeof(MBPP_ErrorCode));
+		RecordToSend.RecordSize = RecordToSend.RecordData.size();
+		m_CurrentResponse = MBPP_GetRecordData(RecordToSend);
+	}
+	void MBPP_UploadChanges_ResponseIterator::Increment()
+	{
+		m_Finished = true;
+	}
+	//END MBPP_UploadChanges_ResponseIterator
 }
