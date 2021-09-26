@@ -91,8 +91,9 @@ namespace MBPM
 	{
 		MBPP_RecordType Type = MBPP_RecordType::Null;
 		MBPP_ComputerInfo ComputerInfo = MBPP_ComputerInfo();
-		uint64_t RecordSize = 0;
 		uint32_t VerificationDataSize = 0;
+		uint64_t RecordSize = 0;
+		std::string VerificationData = "";
 		std::string RecordData = "";
 	};
 	struct MBPP_GetDirectoryRecord
@@ -331,7 +332,8 @@ namespace MBPM
 		bool IsConnected();
 		MBError DownloadPacket(std::string const& OutputDirectory, std::string const& PacketName); //semantiken av denna funktion är att den laddar ner totalt nytt, medans update tar diffen
 		MBError UpdatePacket(std::string const& OutputDirectory, std::string const& PacketName);
-		MBError UploadPacket(std::string const& PacketDirectory, std::string const& PacketName,MBPP_UserCredentialsType CredentialsType,std::string const& CredentialsData);
+		MBError UploadPacket(std::string const& PacketDirectory, std::string const& PacketName,MBPP_UserCredentialsType CredentialsType,std::string const& CredentialsData
+		, MBPP_UploadRequest_Response* OutResponse);
 		MBError DownloadPacketFiles(std::string const& OutputDirectory, std::string const& PacketName,std::vector<std::string> const& FilesToGet);
 		MBError DownloadPacketDirectories(std::string const& OutputDirectory, std::string const& PacketName,std::vector<std::string> const& DirectoriesToGet);
 		MBPP_FileInfoReader GetPacketFileInfo(std::string const& PacketName,MBError* OutError);
@@ -388,7 +390,7 @@ namespace MBPM
 				return(false);
 			}
 		}
-		uint64_t GetResponseSize() { return(m_HeaderToSend.RecordSize); };
+		uint64_t GetResponseSize() { return(m_HeaderToSend.RecordSize+MBPP_GenericRecordHeaderSize); };
 		MBPP_ServerResponseIterator& operator++();
 		MBPP_ServerResponseIterator& operator++(int); //postfix
 		virtual void Increment();
@@ -523,7 +525,7 @@ namespace MBPM
 		void p_ResetRequestResponseState();
 
 
-		std::string m_ServerDomain = "";
+		std::string m_ServerDomain = "TestDomain";
 		//Get metoder
 		MBError p_Handle_GetFiles();
 		MBError p_Handle_GetDirectories();

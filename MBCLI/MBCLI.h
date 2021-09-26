@@ -19,6 +19,7 @@ namespace MBCLI
 	public:
 		void Print(std::string const& StringToPrint);
 		void PrintLine(std::string const& StringToPrint);
+		void GetLine(std::string& OutLine);
 		//void SetTextColor();
 	};
 }

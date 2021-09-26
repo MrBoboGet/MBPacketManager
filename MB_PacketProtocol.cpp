@@ -147,6 +147,10 @@ namespace MBPM
 		ReturnValue.ComputerInfo.ProcessorType = (MBPP_ProcessorType) MBParsing::ParseBigEndianInteger(Data, 4, ParseOffset, &ParseOffset);
 		ReturnValue.RecordSize = MBParsing::ParseBigEndianInteger(Data, 8, ParseOffset, &ParseOffset);
 		ReturnValue.VerificationDataSize = MBParsing::ParseBigEndianInteger(Data, 4, ParseOffset, &ParseOffset);
+		if (OutOffset != nullptr)
+		{
+			*OutOffset = ParseOffset;
+		}
 		return(ReturnValue);
 	}
 	std::string MBPP_EncodeString(std::string const& StringToEncode)
@@ -171,7 +175,7 @@ namespace MBPM
 	}
 	std::string MBPP_GetRecordData(MBPP_GenericRecord const& RecordToConvert)
 	{
-		return(MBPP_GetRecordHeader(RecordToConvert) + RecordToConvert.RecordData);
+		return(MBPP_GetRecordHeader(RecordToConvert) +RecordToConvert.VerificationData+ RecordToConvert.RecordData);
 	}
 	std::string MBPP_GetErrorCodeString(MBPP_ErrorCode ErrorToConvert)
 	{
@@ -793,13 +797,13 @@ namespace MBPM
 		RecordToSend.Type = MBPP_RecordType::UploadRequest;
 		RecordToSend.ComputerInfo = GetComputerInfo();
 
-		RecordToSend.RecordData = MBPP_EncodeString(PacketName);
-		RecordToSend.RecordData = uint8_t(CredentialsType);
-		size_t CredentialsLengthOffset = RecordToSend.RecordData.size();
-		RecordToSend.RecordData += std::string(4, 0);
-		h_WriteBigEndianInteger(((uint8_t*)RecordToSend.RecordData.data()) + CredentialsLengthOffset, CredentialsData.size(), 4);
-		RecordToSend.RecordData += CredentialsData;
-		RecordToSend.RecordSize = RecordToSend.RecordData.size();
+		RecordToSend.VerificationData = uint8_t(CredentialsType);
+		RecordToSend.VerificationData += MBPP_EncodeString(PacketName);
+		size_t CredentialsLengthOffset = RecordToSend.VerificationData.size();
+		RecordToSend.VerificationData += std::string(4, 0);
+		h_WriteBigEndianInteger(((uint8_t*)RecordToSend.VerificationData.data()) + CredentialsLengthOffset, CredentialsData.size(), 4);
+		RecordToSend.VerificationData += CredentialsData;
+		RecordToSend.VerificationDataSize = RecordToSend.VerificationData.size();
 		if (m_ServerConnection->IsValid() == false && m_ServerConnection->IsConnected() == false)
 		{
 			*OutError = false;
@@ -833,7 +837,8 @@ namespace MBPM
 		}
 		ReturnValue.Result = MBPP_ErrorCode(MBParsing::ParseBigEndianInteger(ResponseData.data(), sizeof(MBPP_ErrorCode), ResponseDataOffset, &ResponseDataOffset));
 		size_t StringSize = MBParsing::ParseBigEndianInteger(ResponseData.data(), MBPP_StringLengthSize, ResponseDataOffset, &ResponseDataOffset);
-		ReturnValue.DomainToLogin = std::string((char*)ResponseData.data(), StringSize);
+		ReturnValue.DomainToLogin = std::string(((char*)ResponseData.data())+ResponseDataOffset, StringSize);
+		ResponseDataOffset += StringSize;
 		uint32_t SupportedLoginMethodsLength = MBParsing::ParseBigEndianInteger(ResponseData.data(), sizeof(MBPP_UserCredentialsType), ResponseDataOffset, &ResponseDataOffset);
 		for (size_t i = 0; i < SupportedLoginMethodsLength/sizeof(MBPP_UserCredentialsType); i++)
 		{
@@ -1051,11 +1056,13 @@ namespace MBPM
 		}
 		return(UpdateError);
 	}
-	MBError MBPP_Client::UploadPacket(std::string const& PacketDirectory, std::string const& PacketName, MBPP_UserCredentialsType CredentialsType, std::string const& CredentialsData)
+	MBError MBPP_Client::UploadPacket(std::string const& PacketDirectory, std::string const& PacketName, MBPP_UserCredentialsType CredentialsType, std::string const& CredentialsData, 
+		MBPP_UploadRequest_Response* OutResponse)
 	{
 		//kollar om att ladda ner packet infon är tillräckligt litet och skapar en diff fil, eller gör det genom att manuellt be om directory info för varje fil och se om hashen skiljer
-		MBError UploadError;
+		MBError UploadError = true;
 		MBPP_UploadRequest_Response UploadRequestResponse = p_GetLoginResult(PacketName, CredentialsType, CredentialsData,&UploadError);
+		*OutResponse = UploadRequestResponse;
 		if (UploadRequestResponse.Result != MBPP_ErrorCode::Ok || !UploadError)
 		{
 			//update out struct
@@ -1469,28 +1476,28 @@ namespace MBPM
 	MBPP_ErrorCode MBPP_Server::p_VerifyPlainLogin(std::string const& PacketName)
 	{
 		size_t ParseOffset = 0;
-		if (ParseOffset + MBPP_StringLengthSize > PacketName.size())
+		if (ParseOffset + MBPP_StringLengthSize > m_RequestVerificationData.CredentialsData.size())
 		{
 			return(MBPP_ErrorCode::ParseError);
 		}
-		size_t UsernameSize = MBParsing::ParseBigEndianInteger(PacketName.data(), MBPP_StringLengthSize, ParseOffset, &ParseOffset);
-		std::string Username = PacketName.substr(ParseOffset,UsernameSize);
-		if (UsernameSize + ParseOffset > PacketName.size())
+		size_t UsernameSize = MBParsing::ParseBigEndianInteger(m_RequestVerificationData.CredentialsData.data(), MBPP_StringLengthSize, ParseOffset, &ParseOffset);
+		std::string Username = m_RequestVerificationData.CredentialsData.substr(ParseOffset,UsernameSize);
+		if (UsernameSize + ParseOffset > m_RequestVerificationData.CredentialsData.size())
 		{
 			return(MBPP_ErrorCode::ParseError);
 		}
 		ParseOffset += UsernameSize;
-		if (ParseOffset + MBPP_StringLengthSize > PacketName.size())
+		if (ParseOffset + MBPP_StringLengthSize > m_RequestVerificationData.CredentialsData.size())
 		{
 			return(MBPP_ErrorCode::ParseError);
 		}
-		size_t PasswordSize = MBParsing::ParseBigEndianInteger(PacketName.data(), MBPP_StringLengthSize, ParseOffset, &ParseOffset);
-		if (PasswordSize + ParseOffset > PacketName.size())
+		size_t PasswordSize = MBParsing::ParseBigEndianInteger(m_RequestVerificationData.CredentialsData.data(), MBPP_StringLengthSize, ParseOffset, &ParseOffset);
+		if (PasswordSize + ParseOffset > m_RequestVerificationData.CredentialsData.size())
 		{
 			return(MBPP_ErrorCode::ParseError);
 		}
+		std::string Password = m_RequestVerificationData.CredentialsData.substr(ParseOffset, PasswordSize);
 		ParseOffset += PasswordSize;
-		std::string Password = PacketName.substr(ParseOffset,UsernameSize);
 		bool VerificationResult = m_UserAuthenticator->VerifyUser(Username, Password);
 		if (VerificationResult)
 		{
@@ -1762,6 +1769,7 @@ namespace MBPM
 				CurrentData.Response.Result = m_VerificationResult;
 				CurrentData.Response.DomainToLogin = p_GetPacketDomain(m_RequestVerificationData.PacketName);
 				CurrentData.Response.SupportedLoginTypes = m_SupportedCredentials;
+				m_RequestFinished = true;
 			}
 			else if (m_CurrentRequestHeader.Type == MBPP_RecordType::UploadChanges)
 			{
@@ -1981,33 +1989,29 @@ namespace MBPM
 	MBPP_UploadRequest_ResponseIterator::MBPP_UploadRequest_ResponseIterator(MBPP_UploadRequest_ResponseData const& ResponseData, MBPP_Server* AssociatedServer)
 	{
 		m_RequestResponse = ResponseData.Response;
-		Increment();
+		m_HeaderToSend.Type = MBPP_RecordType::UploadRequestResponse;
+		m_HeaderToSend.ComputerInfo = GetComputerInfo();
+		m_HeaderToSend.RecordData += std::string(sizeof(MBPP_ErrorCode), 0);
+		h_WriteBigEndianInteger(m_HeaderToSend.RecordData.data(), uint32_t(m_RequestResponse.Result), sizeof(MBPP_ErrorCode));
+		m_HeaderToSend.RecordData += MBPP_EncodeString(m_RequestResponse.DomainToLogin);
+		size_t ParseOffset = m_HeaderToSend.RecordData.size();
+		m_HeaderToSend.RecordData += std::string(sizeof(MBPP_UserCredentialsType), 0);
+		h_WriteBigEndianInteger(((char*)m_HeaderToSend.RecordData.data()) + ParseOffset, m_RequestResponse.SupportedLoginTypes.size() * sizeof(MBPP_UserCredentialsType), sizeof(MBPP_UserCredentialsType));
+		ParseOffset += sizeof(MBPP_UserCredentialsType);
+		m_HeaderToSend.RecordData += std::string(m_RequestResponse.SupportedLoginTypes.size() * sizeof(MBPP_UserCredentialsType), 0);
+		for (size_t i = 0; i < m_RequestResponse.SupportedLoginTypes.size();i++)
+		{
+			h_WriteBigEndianInteger(((char*)m_HeaderToSend.RecordData.data()) + ParseOffset, uint64_t(m_RequestResponse.SupportedLoginTypes[i]), sizeof(MBPP_UserCredentialsType));
+			ParseOffset += sizeof(MBPP_UserCredentialsType);
+		}
+		m_HeaderToSend.RecordSize = m_HeaderToSend.RecordData.size();
+		m_CurrentResponse = MBPP_GetRecordData(m_HeaderToSend);
+		m_HeaderToSend.RecordSize = m_HeaderToSend.RecordData.size();
+		m_ResponseSent = true;
 	}
 	void MBPP_UploadRequest_ResponseIterator::Increment()
 	{
-		if (!m_ResponseSent)
-		{
-			MBPP_GenericRecord RecordToSend;
-			RecordToSend.Type = MBPP_RecordType::UploadRequestResponse;
-			RecordToSend.ComputerInfo = GetComputerInfo();
-			RecordToSend.RecordData = std::string(sizeof(MBPP_ErrorCode), 0);
-			h_WriteBigEndianInteger(RecordToSend.RecordData.data(), uint32_t(m_RequestResponse.Result), sizeof(MBPP_ErrorCode));
-			RecordToSend.RecordData = MBPP_EncodeString(m_RequestResponse.DomainToLogin);
-			size_t ParseOffset = RecordToSend.RecordData.size();
-			RecordToSend.RecordData = std::string(sizeof(MBPP_UserCredentialsType), 0);
-			h_WriteBigEndianInteger(((char*)RecordToSend.RecordData.data()) + ParseOffset, m_RequestResponse.SupportedLoginTypes.size() * sizeof(MBPP_UserCredentialsType), sizeof(MBPP_UserCredentialsType));
-			ParseOffset += sizeof(MBPP_UserCredentialsType);
-			for (size_t i = 0; i < m_RequestResponse.SupportedLoginTypes.size();i++)
-			{
-				h_WriteBigEndianInteger(((char*)RecordToSend.RecordData.data()) + ParseOffset, uint64_t(m_RequestResponse.SupportedLoginTypes[i]), sizeof(MBPP_UserCredentialsType));
-			}
-			RecordToSend.RecordSize = RecordToSend.RecordData.size();
-			m_CurrentResponse = MBPP_GetRecordData(RecordToSend);
-		}
-		else
-		{
-			m_Finished = true;
-		}
+		m_Finished = true;
 	}
 	//END MBPP_GetPacketInfo_UploadRequestResponseIterator
 

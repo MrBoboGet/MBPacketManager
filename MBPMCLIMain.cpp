@@ -31,13 +31,14 @@ void TestServerFunc()
 int main(int argc,char** argv)
 {
 	//DEBUG GREJER
-	argc = 5;
-	char* TestData[5];
+	const int argr = 4;
+	char* TestData[argr];
+	std::filesystem::current_path("C:/Users/emanu/Desktop/Program/C++/MBPacketManager");
 	TestData[0] = "MBPM";
-	TestData[1] = "get";
+	TestData[1] = "upload";
 	TestData[2] = "TestPacket";
-	TestData[3] = "/";
-	TestData[4] = "./TestDownlodOut/";
+	TestData[3] = "./TestPacket";
+	argc = argr;
 	argv = TestData;
 	return(MBPM::MBCLI_Main(argc, argv));
 }

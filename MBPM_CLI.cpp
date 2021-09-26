@@ -125,7 +125,44 @@ namespace MBPM
 	}
 	void MBPM_ClI::p_HandleUpload(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
 	{
-		
+		//först så behöver vi skicka data för att se login typen
+		if (CommandInput.TopCommandArguments.size() < 2)
+		{
+			AssociatedTerminal->PrintLine("Command \"upload\" requires arguments");
+			return;
+		}
+		MBPP_UploadRequest_Response RequestResponse;
+		MBPP_Client ClientToUse;
+		ClientToUse.Connect(p_GetDefaultPacketHost());
+		std::string PacketToUploadDirectory = CommandInput.TopCommandArguments[1];
+		MBError UploadError = ClientToUse.UploadPacket(PacketToUploadDirectory, CommandInput.TopCommandArguments[0], MBPP_UserCredentialsType::Request, "",&RequestResponse);
+		if (RequestResponse.Result != MBPP_ErrorCode::Ok || !UploadError)
+		{
+			AssociatedTerminal->PrintLine("Need verification for " + RequestResponse.DomainToLogin + ":");
+			//Borde egentligen kolla vilka typer den stödjer
+			AssociatedTerminal->Print("Username: ");
+			std::string Username;
+			AssociatedTerminal->GetLine(Username);
+			std::string Password;
+			AssociatedTerminal->Print("Password: ");
+			AssociatedTerminal->GetLine(Password);
+			std::string VerificationData = MBPP_EncodeString(Username) + MBPP_EncodeString(Password);
+			ClientToUse.Connect(p_GetDefaultPacketHost());
+			UploadError = ClientToUse.UploadPacket(PacketToUploadDirectory, CommandInput.TopCommandArguments[0], MBPP_UserCredentialsType::Plain, VerificationData, &RequestResponse);
+			if (!UploadError)
+			{
+				AssociatedTerminal->PrintLine("Error uploading file: " + UploadError.ErrorMessage);
+			}
+			else
+			{
+				AssociatedTerminal->PrintLine("Sucessfully uploaded packet");
+			}
+			
+		}
+		else
+		{
+			AssociatedTerminal->PrintLine("Upload packet sucessful");
+		}
 	}
 	void MBPM_ClI::HandleCommand(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
 	{
@@ -143,7 +180,7 @@ namespace MBPM
 		}
 		else if (CommandInput.TopCommand == "upload")
 		{
-
+			p_HandleUpload(CommandInput, AssociatedTerminal);
 		}
 		else
 		{

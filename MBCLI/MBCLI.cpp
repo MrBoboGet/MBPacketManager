@@ -41,4 +41,8 @@ namespace MBCLI
 	{
 		std::cout << DataToPrint << std::endl;
 	}
+	void MBTerminal::GetLine(std::string& OutLine)
+	{
+		std::cin >> OutLine;
+	}
 }
