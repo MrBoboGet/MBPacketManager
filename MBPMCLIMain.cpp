@@ -34,10 +34,12 @@ int main(int argc,char** argv)
 	const int argr = 4;
 	char* TestData[argr];
 	std::filesystem::current_path("C:/Users/emanu/Desktop/Program/C++/MBPacketManager");
+	//MBPM::CreatePacketFilesData("./TestUploadPacket/");
+	
 	TestData[0] = "MBPM";
 	TestData[1] = "upload";
 	TestData[2] = "TestPacket";
-	TestData[3] = "./TestPacket";
+	TestData[3] = "./TestUploadPacket/";
 	argc = argr;
 	argv = TestData;
 	return(MBPM::MBCLI_Main(argc, argv));

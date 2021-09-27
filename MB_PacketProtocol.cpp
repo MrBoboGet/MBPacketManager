@@ -605,14 +605,12 @@ namespace MBPM
 		m_MBPP_HeaderSent = false;
 		m_TotalSentRecordData = 0;
 
-		m_MBPP_ResponseData = "";
-		m_MBPP_HTTPHeaderRecieved = false;
 	}
 	std::string MBPP_ClientHTTPConverter::p_GenerateHTTPHeader(MBPP_GenericRecord const& MBPPHeader)
 	{
 		std::string ReturnValue = "POST " + m_MBPP_ResourceLocation + " HTTP/1.1\r\n";
 		ReturnValue += "Content-Type: application/x-MBPP-record\r\n";
-		ReturnValue += "Content-Length: " + std::to_string(MBPPHeader.RecordSize+MBPP_GenericRecordHeaderSize) + "\r\n\r\n";
+		ReturnValue += "Content-Length: " + std::to_string(MBPPHeader.RecordSize+MBPPHeader.VerificationDataSize+MBPP_GenericRecordHeaderSize) + "\r\n\r\n";
 		return(ReturnValue);
 	}
 	int MBPP_ClientHTTPConverter::Connect()
@@ -633,6 +631,7 @@ namespace MBPM
 	}
 	std::string MBPP_ClientHTTPConverter::RecieveData(size_t MaxDataToRecieve)
 	{
+		p_ResetSendState();
 		if (m_MBPP_HTTPHeaderRecieved)
 		{
 			return(m_InternalHTTPSocket->RecieveData());
@@ -663,7 +662,7 @@ namespace MBPM
 				m_MBPP_CurrentHeader = MBPP_ParseRecordHeader(m_MBPP_CurrentHeaderData.data(), MBPP_GenericRecordHeaderSize, 0, nullptr);
 				m_InternalHTTPSocket->SendData(p_GenerateHTTPHeader(m_MBPP_CurrentHeader)+ m_MBPP_CurrentHeaderData);
 				m_MBPP_HeaderSent = true;
-				m_TotalSentRecordData = m_MBPP_CurrentHeaderData.size() - MBPP_GenericRecordHeaderSize;
+				//m_TotalSentRecordData = m_MBPP_CurrentHeaderData.size() - MBPP_GenericRecordHeaderSize;
 				m_MBPP_CurrentHeaderData = "";
 			}
 		}
@@ -671,10 +670,6 @@ namespace MBPM
 		{
 			m_InternalHTTPSocket->SendData(DataToSend,DataSize);
 			m_TotalSentRecordData += DataSize;
-		}
-		if (m_TotalSentRecordData == m_MBPP_CurrentHeader.RecordSize)
-		{
-			p_ResetSendState();
 		}
 		return(0);
 	}
@@ -1069,7 +1064,7 @@ namespace MBPM
 			return(UploadError);
 		}
 		//TODO finns det något smidigt sätt att undvika mycket redundant server nedladdande?
-		UploadError = p_DownloadServerFilesInfo(PacketName, PacketDirectory, { "MBPM_ServerPacketInfo" , "MBPM_ServerFileInfo" });
+		MBPP_FileInfoReader  ServerFileInfo = GetPacketFileInfo(PacketName, &UploadError);
 		if (!UploadError)
 		{
 			return(UploadError);
@@ -1080,9 +1075,11 @@ namespace MBPM
 		RecordToSend.ComputerInfo = GetComputerInfo();
 		RecordToSend.Type = MBPP_RecordType::UploadChanges;
 		
-		MBPP_FileInfoDiff FileInfoDifferance = GetFileInfoDifference( MBPP_FileInfoReader(PacketDirectory + "/MBPM_ServerFileInfo"), MBPP_FileInfoReader(PacketDirectory + "/MBPM_FileInfo"));
-		size_t TotalDataSize = 0;
-		TotalDataSize += 1+MBPP_StringLengthSize+PacketName.size()+4+CredentialsData.size();//credentials typen,string längden samt längden av credentials datan
+		MBPP_FileInfoDiff FileInfoDifferance = GetFileInfoDifference(ServerFileInfo, MBPP_FileInfoReader(PacketDirectory + "/MBPM_FileInfo"));
+		
+		RecordToSend.VerificationData = MBPP_GetUploadCredentialsData(PacketName, CredentialsType, CredentialsData);
+		RecordToSend.VerificationDataSize = RecordToSend.VerificationData.size();
+		size_t TotalDataSize = MBPP_StringLengthSize+PacketName.size();
 
 		std::vector<std::string> FilesToSend = {};
 		std::vector<std::string> ObjectsToDelete = {};
@@ -1097,7 +1094,12 @@ namespace MBPM
 		{
 			TotalDataSize += MBPP_StringLengthSize + NewFiles.size();
 			TotalDataSize += MBGetFileSize(PacketDirectory + NewFiles);
-			FilesToSend.push_back(PacketDirectory);
+			FilesToSend.push_back(NewFiles);
+		}
+		for (auto const& NewDirectoris : FileInfoDifferance.AddedDirectories)
+		{
+			assert(false);
+			//här ska vi egentligen lägga till alla dem nya filerna att skicka
 		}
 		for (auto const& DeletedFiles : FileInfoDifferance.RemovedFiles)
 		{
@@ -1111,11 +1113,10 @@ namespace MBPM
 		}
 		// nu till att skicka datan
 		RecordToSend.RecordSize = TotalDataSize;
-		std::string TotalHeaderData = MBPP_GetRecordHeader(RecordToSend);
-		TotalHeaderData += MBPP_GetUploadCredentialsData(PacketName, CredentialsType, CredentialsData);
-		TotalHeaderData += MBPP_GenerateFileList(FilesToSend);
-		TotalHeaderData += MBPP_GenerateFileList(ObjectsToDelete);
-		m_ServerConnection->SendData(TotalHeaderData);
+		RecordToSend.RecordData += MBPP_EncodeString(PacketName);
+		RecordToSend.RecordData += MBPP_GenerateFileList(ObjectsToDelete);
+		RecordToSend.RecordData += MBPP_GenerateFileList(FilesToSend);
+		m_ServerConnection->SendData(MBPP_GetRecordData(RecordToSend));
 		//antar här att alla filer existerar
 		for (size_t i = 0; i < FilesToSend.size(); i++)
 		{
@@ -1163,7 +1164,7 @@ namespace MBPM
 		else
 		{
 			MBPP_ErrorCode Result = MBPP_ErrorCode(MBParsing::ParseBigEndianInteger(ResponseData.data(), 2, MBPP_GenericRecordHeaderSize, nullptr));
-			if (Result != MBPP_ErrorCode::Null)
+			if (Result != MBPP_ErrorCode::Ok)
 			{
 				UploadError = false;
 				UploadError.ErrorMessage = "Error result in UploadChanges: "+MBPP_GetErrorCodeString(Result);
@@ -1568,6 +1569,7 @@ namespace MBPM
 				return(ReturnValue);
 			}
 			m_RequestVerificationData.CredentialsData = m_RecievedData.substr(m_RecievedDataOffset, m_RequestVerificationData.CredentialsDataLength);
+			m_RecievedDataOffset += m_RequestVerificationData.CredentialsDataLength;
 			m_VerificationDataParsed = true;
 			//vi uppdaterar resultet
 			m_VerificationResult = p_VerifyRequest(m_RequestVerificationData.PacketName);
@@ -1602,6 +1604,7 @@ namespace MBPM
 					CurrentOffset += CurrentStringSize;
 					FileListToUpdate.Files.push_back(std::move(NewString));
 				}
+				m_RecievedDataOffset = CurrentOffset;
 				*BoolToUpdate = true;
 			}
 		}
@@ -1609,7 +1612,7 @@ namespace MBPM
 	}
 	MBError MBPP_Server::p_DownloadClientFileList(MBPP_FileListDownloadState* DownloadState, MBPP_FileListDownloadHandler* DownloadHandler)
 	{
-		MBError ReturnValue = false;
+		MBError ReturnValue = true;
 		while (m_RecievedDataOffset < m_RecievedData.size() && ReturnValue)
 		{
 			if (DownloadState->CurrentFileIndex >= DownloadState->FileNames.size())
@@ -1706,7 +1709,7 @@ namespace MBPM
 			}
 			if (CurrentResponseData.FilesToDownloadParsed && CurrentResponseData.ObjectsToDeleteParsed)
 			{
-				CurrentResponseData.Downloader = std::unique_ptr<MBPP_FileListDownloader>(new MBPP_FileListDownloader(p_GetPacketDirectory(CurrentResponseData.PacketName + "/MBPM_UploadedChanges")));
+				CurrentResponseData.Downloader = std::unique_ptr<MBPP_FileListDownloader>(new MBPP_FileListDownloader(p_GetPacketDirectory(CurrentResponseData.PacketName) + "/MBPM_UploadedChanges/"));
 				CurrentResponseData.DownloadState.FileNames = CurrentResponseData.FilesToDownload.Files;
 			}
 		}
@@ -1774,7 +1777,7 @@ namespace MBPM
 			else if (m_CurrentRequestHeader.Type == MBPP_RecordType::UploadChanges)
 			{
 				//om det misslyckas med autentiseringen så är det inte något vi svarar på, så vi bara avbryter
-				if (m_VerificationResult != MBPP_ErrorCode::Ok)
+				if (m_VerificationResult == MBPP_ErrorCode::Ok)
 				{
 					p_Handle_UploadChanges();
 				}
