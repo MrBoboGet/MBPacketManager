@@ -67,15 +67,20 @@ namespace MBPM
 		FileToWriteTo.write(FileHash.data(), FileHash.size());
 		return(FileHash);
 	}
-	std::string h_WriteDirectoryData_Recursive(std::ofstream& FileToWriteTo, std::string const& DirectoryName,std::string const& SubPathToIterate,
-		std::set<std::string>const& ExcludedFiles,MBCrypto::HashFunction HashFunctionToUse)
+	std::string h_WriteDirectoryData_Recursive(std::ofstream& FileToWriteTo, std::string const& TopPacketDirectory, std::string const& DirectoryName, std::string const& SubPathToIterate,
+		MBPM_FileInfoExcluder& FileInfoExcluder,MBCrypto::HashFunction HashFunctionToUse)
 	{
 		std::set<std::string> DirectoriesToWrite = {};
 		std::set<std::filesystem::path> FilesToWrite = {};
 		std::filesystem::directory_iterator DirectoryIterator = std::filesystem::directory_iterator(SubPathToIterate);
 		for (auto const& Entries : DirectoryIterator)
 		{
-			if (Entries.is_regular_file() && ExcludedFiles.find(Entries.path().filename().generic_u8string()) == ExcludedFiles.end())
+			std::string AbsolutePacketPath = "/"+h_PathToUTF8(std::filesystem::relative(Entries.path(),TopPacketDirectory));
+			if (FileInfoExcluder.Excludes(AbsolutePacketPath) && !FileInfoExcluder.Includes(AbsolutePacketPath))
+			{
+				continue;
+			}
+			if (Entries.is_regular_file())
 			{
 				FilesToWrite.insert(Entries.path());
 			}
@@ -102,7 +107,7 @@ namespace MBPM
 		h_WriteBigEndianInteger(FileToWriteTo, DirectoriesToWrite.size(), 4);
 		for (auto const& Directories : DirectoriesToWrite)
 		{
-			DataToHash += h_WriteDirectoryData_Recursive(FileToWriteTo, std::filesystem::path(Directories).filename().generic_u8string(), Directories, ExcludedFiles, HashFunctionToUse);
+			DataToHash += h_WriteDirectoryData_Recursive(FileToWriteTo, TopPacketDirectory,std::filesystem::path(Directories).filename().generic_u8string(), Directories, FileInfoExcluder, HashFunctionToUse);
 		}
 		uint64_t DirectoryEndPosition = FileToWriteTo.tellp();
 		FileToWriteTo.seekp(SkipPointerPosition);
@@ -112,6 +117,7 @@ namespace MBPM
 		FileToWriteTo.seekp(DirectoryEndPosition);
 		return(DirectoryHash);
 	}
+	
 	void CreatePacketFilesData(std::string const& PacketToHashDirectory,std::string const& OutputName)
 	{
 		std::ofstream OutputFile = std::ofstream(PacketToHashDirectory + OutputName,std::ios::out|std::ios::binary);
@@ -119,8 +125,13 @@ namespace MBPM
 		{
 			assert(false);
 		}
-		std::set<std::string> ExcludedFiles = {"MBPM_FileInfo"};
-		h_WriteDirectoryData_Recursive(OutputFile, "/", PacketToHashDirectory, ExcludedFiles, MBCrypto::HashFunction::SHA1);
+		MBPM_FileInfoExcluder Excluder;
+		if (std::filesystem::exists(PacketToHashDirectory + "/MBPM_FileInfoIgnore"))
+		{
+			Excluder = MBPM_FileInfoExcluder(PacketToHashDirectory + "/MBPM_FileInfoIgnore");
+		}
+		Excluder.AddExcludeFile("/MBPM_FileInfo");
+		h_WriteDirectoryData_Recursive(OutputFile, PacketToHashDirectory, "/", PacketToHashDirectory, Excluder, MBCrypto::HashFunction::SHA1);
 		OutputFile.flush();
 		OutputFile.close();
 	}
@@ -213,6 +224,112 @@ namespace MBPM
 		return(ReturnValue);
 	}
 	//ANTAGANDE filer är sorterade i ordning
+	//BEGIN MBPM_FileInfoExcluder
+	bool MBPM_FileInfoExcluder::p_MatchDirectory(std::string const& Directory, std::string const& StringToMatch)
+	{
+		bool ReturnValue = false;
+		std::string ProcessedStringToMatch = StringToMatch;
+		if (StringToMatch.back() != '/')
+		{
+			ProcessedStringToMatch += '/';
+		}
+		if (Directory.size() > ProcessedStringToMatch.size())
+		{
+			return(false);
+		}
+		return(ProcessedStringToMatch.substr(0, Directory.size()) == Directory);
+	}
+	bool MBPM_FileInfoExcluder::p_MatchFile(std::string const& StringToCompare, std::string const& StringToMatch)
+	{
+		return(StringToCompare == StringToMatch);
+	}
+	void MBPM_FileInfoExcluder::AddExcludeFile(std::string const& FileToExlude)
+	{
+		m_ExcludeStrings.push_back(FileToExlude);
+	}
+	MBPM_FileInfoExcluder::MBPM_FileInfoExcluder(std::string const& PathPosition)
+	{
+		std::ifstream InputStream = std::ifstream(PathPosition, std::ios::in);
+		std::string CurrentLine = "";
+		bool IsInclude = false;
+		bool IsExclude = false;
+		while (std::getline(InputStream, CurrentLine))
+		{
+			if (CurrentLine == "Excludes:")
+			{
+				IsExclude = true;
+				IsInclude = false;
+			}
+			else if (CurrentLine == "Includes:")
+			{
+				IsExclude = false;
+				IsInclude = true;
+			}
+			else if(CurrentLine != "")
+			{
+				if (IsInclude)
+				{
+					m_IncludeStrings.push_back(CurrentLine);
+				}
+				else
+				{
+					m_ExcludeStrings.push_back(CurrentLine);
+				}
+			}
+		}
+	}
+	bool MBPM_FileInfoExcluder::Excludes(std::string const& StringToMatch)
+	{
+		bool ReturnValue = false;
+		for (size_t i = 0; i < m_ExcludeStrings.size(); i++)
+		{
+			std::string CurrentExludeString = m_ExcludeStrings[i];
+			if (CurrentExludeString.front() != '/')
+			{
+				continue;
+			}
+			if (CurrentExludeString.back() == '/')
+			{
+				ReturnValue = p_MatchDirectory(CurrentExludeString, StringToMatch);
+			}
+			else
+			{
+				ReturnValue = p_MatchFile(CurrentExludeString, StringToMatch);
+			}
+			if (ReturnValue)
+			{
+				break;
+			}
+		}
+		return(ReturnValue);
+	}
+	bool MBPM_FileInfoExcluder::Includes(std::string const& StringToMatch)
+	{
+		bool ReturnValue = false;
+		for (size_t i = 0; i < m_IncludeStrings.size(); i++)
+		{
+			std::string CurrentIncludeString = m_IncludeStrings[i];
+			if (CurrentIncludeString.front() != '/')
+			{
+				continue;
+			}
+			if (CurrentIncludeString.back() == '/')
+			{
+				ReturnValue = p_MatchDirectory(CurrentIncludeString, StringToMatch);
+			}
+			else
+			{
+				ReturnValue = p_MatchFile(CurrentIncludeString, StringToMatch);
+			}
+			if (ReturnValue)
+			{
+				break;
+			}
+		}
+		return(ReturnValue);
+	}
+	//END MBPM_FileInfoExcluder
+	
 	//BEGIN MBPP_FileInfoReader
 	MBPP_DirectoryInfoNode MBPP_FileInfoReader::p_ReadDirectoryInfoFromFile(MBUtility::MBOctetInputStream* FileToReadFrom,size_t HashSize)
 	{
@@ -255,7 +372,15 @@ namespace MBPM
 			return;
 		}
 		MBUtility::MBFileInputStream FileReader(&PacketFileInfo);
-		m_TopNode = p_ReadDirectoryInfoFromFile(&FileReader,20);//sha1 diges size
+		try
+		{
+			m_TopNode = p_ReadDirectoryInfoFromFile(&FileReader, 20);//sha1 diges size
+		}
+		catch (const std::exception&)
+		{
+			m_TopNode = MBPP_DirectoryInfoNode();
+		}
+
 	}
 	MBPP_FileInfoReader::MBPP_FileInfoReader(const void* DataToRead, size_t DataSize)
 	{
@@ -494,7 +619,120 @@ namespace MBPM
 		}
 		return(ReturnValue);
 	}
+	void MBPP_FileInfoReader::p_UpdateDirectoriesParents(MBPP_DirectoryInfoNode* DirectoryToUpdate)
+	{
+		const size_t DirectoryCount = DirectoryToUpdate->Directories.size();
+		for (size_t i = 0; i < DirectoryCount;i++)
+		{
+			DirectoryToUpdate->Directories[i].m_ParentDirectory = DirectoryToUpdate;
+			p_UpdateDirectoriesParents(&(DirectoryToUpdate->Directories[i]));
+		}
+	}
+	void swap(MBPP_FileInfoReader& LeftInfoReader, MBPP_FileInfoReader& RightInfoReader) noexcept
+	{
+		std::swap(LeftInfoReader.m_TopNode, RightInfoReader.m_TopNode);
+		LeftInfoReader.p_UpdateDirectoriesParents(&LeftInfoReader.m_TopNode);
+		RightInfoReader.p_UpdateDirectoriesParents(&RightInfoReader.m_TopNode);
+	}
+	MBPP_FileInfoReader::MBPP_FileInfoReader(MBPP_FileInfoReader&& ReaderToSteal) noexcept
+	{
+		swap(*this, ReaderToSteal);
+	}
+	MBPP_FileInfoReader::MBPP_FileInfoReader(MBPP_FileInfoReader const& ReaderToCopy)
+	{
+		m_TopNode = ReaderToCopy.m_TopNode;
+		p_UpdateDirectoriesParents(&m_TopNode);
+	}
+	MBPP_FileInfoReader& MBPP_FileInfoReader::operator=(MBPP_FileInfoReader ReaderToCopy)
+	{
+		swap(*this, ReaderToCopy);
+		return(*this);
+	}
 	//END MBPP_FileInfoReader
+
+	//BEGIN MBPP_DirectoryInfoNode_ConstIterator
+	void MBPP_DirectoryInfoNode_ConstIterator::p_Increment()
+	{
+		while (m_IterationInfo.size() > 0)
+		{
+			m_IterationInfo.top().CurrentFileOffset += 1;
+			if (m_IterationInfo.top().CurrentFileOffset >= m_IterationInfo.top().AssociatedDirectory->Files.size())
+			{
+				//ska lägga till en ny directory på stacken, eller gå ner för den
+				m_IterationInfo.top().CurrentDirectoryOffset += 1;
+				if (m_IterationInfo.top().CurrentDirectoryOffset < m_IterationInfo.top().AssociatedDirectory->Directories.size())
+				{
+					//händer enbart då vi ska lägga till en ny
+					DirectoryIterationInfo NewInfo;
+					NewInfo.CurrentDirectoryOffset = -1;
+					NewInfo.CurrentFileOffset = -1;
+					NewInfo.AssociatedDirectory = &(m_IterationInfo.top().AssociatedDirectory->Directories[m_IterationInfo.top().CurrentDirectoryOffset]);
+					m_IterationInfo.push(NewInfo);
+					m_CurrentDirectoryPath += NewInfo.AssociatedDirectory->DirectoryName + "/";
+				}
+				else
+				{
+					//vi har iterat över alla directories och ska då poppa
+					if (m_IterationInfo.size() > 1)
+					{
+						m_CurrentDirectoryPath.resize(m_CurrentDirectoryPath.size() - (m_IterationInfo.top().AssociatedDirectory->DirectoryName.size() + 1));
+					}
+					m_IterationInfo.pop();
+				}
+			}
+			else
+			{
+				//den nuvarande offseten är giltig, vi breaker
+				break;
+			}
+		}
+		if (m_IterationInfo.size() == 0)
+		{
+			m_Finished = true;
+		}
+	}
+	MBPP_DirectoryInfoNode_ConstIterator::MBPP_DirectoryInfoNode_ConstIterator(const MBPP_DirectoryInfoNode* InitialNode)
+	{
+		m_Finished = false;
+		DirectoryIterationInfo NewInfo;
+		NewInfo.AssociatedDirectory = InitialNode;
+		NewInfo.CurrentDirectoryOffset = -1;
+		NewInfo.CurrentFileOffset = -1;
+		m_IterationInfo.push(NewInfo); //blir relativt till den här nodens grejer
+		p_Increment();
+	}
+	bool MBPP_DirectoryInfoNode_ConstIterator::operator==(MBPP_DirectoryInfoNode_ConstIterator const& IteratorToCompare)
+	{
+		return(m_Finished == IteratorToCompare.m_Finished);
+	}
+	MBPP_DirectoryInfoNode_ConstIterator& MBPP_DirectoryInfoNode_ConstIterator::operator++()
+	{
+		p_Increment();
+		return(*this);
+	}
+	MBPP_DirectoryInfoNode_ConstIterator& MBPP_DirectoryInfoNode_ConstIterator::operator++(int)
+	{
+		p_Increment();
+		return(*this);
+	}
+	MBPP_FileInfo const& MBPP_DirectoryInfoNode_ConstIterator::operator*()
+	{
+		return(m_IterationInfo.top().AssociatedDirectory->Files[m_IterationInfo.top().CurrentFileOffset]);
+	}
+	MBPP_FileInfo const& MBPP_DirectoryInfoNode_ConstIterator::operator->()
+	{
+		return(**this);
+	}
+
+	MBPP_DirectoryInfoNode_ConstIterator MBPP_DirectoryInfoNode::begin() const
+	{
+		return(MBPP_DirectoryInfoNode_ConstIterator(this));
+	}
+	MBPP_DirectoryInfoNode_ConstIterator MBPP_DirectoryInfoNode::end() const
+	{
+		return(MBPP_DirectoryInfoNode_ConstIterator());
+	}
+	//END MBPP_DirectoryInfoNode_ConstIterator
 
 	//BEGIN 	class MBPP_FileListDownloadHandler
 	
@@ -1065,6 +1303,8 @@ namespace MBPM
 		}
 		//TODO finns det något smidigt sätt att undvika mycket redundant server nedladdande?
 		MBPP_FileInfoReader  ServerFileInfo = GetPacketFileInfo(PacketName, &UploadError);
+		
+
 		if (!UploadError)
 		{
 			return(UploadError);
@@ -1075,8 +1315,18 @@ namespace MBPM
 		RecordToSend.ComputerInfo = GetComputerInfo();
 		RecordToSend.Type = MBPP_RecordType::UploadChanges;
 		
-		MBPP_FileInfoDiff FileInfoDifferance = GetFileInfoDifference(ServerFileInfo, MBPP_FileInfoReader(PacketDirectory + "/MBPM_FileInfo"));
-		
+		MBPP_FileInfoReader LocalFileInfo = MBPP_FileInfoReader(PacketDirectory + "/MBPM_FileInfo");
+		MBPP_FileInfoDiff FileInfoDifferance = GetFileInfoDifference(ServerFileInfo, LocalFileInfo);
+		//DEBUG 
+		std::cout << "Local files: " << std::endl;
+		MBPP_DirectoryInfoNode_ConstIterator Iterator = LocalFileInfo.GetDirectoryInfo("/")->begin();
+		while (!(Iterator == LocalFileInfo.GetDirectoryInfo("/")->end()))
+		{
+			std::cout << Iterator.GetCurrentDirectory() + (*Iterator).FileName << std::endl;
+			Iterator++;
+		}
+
+
 		RecordToSend.VerificationData = MBPP_GetUploadCredentialsData(PacketName, CredentialsType, CredentialsData);
 		RecordToSend.VerificationDataSize = RecordToSend.VerificationData.size();
 		size_t TotalDataSize = MBPP_StringLengthSize+PacketName.size();
@@ -1087,19 +1337,29 @@ namespace MBPM
 		for (auto const& UpdatedFile : FileInfoDifferance.UpdatedFiles)
 		{
 			TotalDataSize += MBPP_StringLengthSize + UpdatedFile.size();
-			TotalDataSize += MBGetFileSize(PacketDirectory + UpdatedFile);
+			TotalDataSize += 8+ MBGetFileSize(PacketDirectory + UpdatedFile);
 			FilesToSend.push_back(UpdatedFile);
 		}
 		for (auto const& NewFiles : FileInfoDifferance.AddedFiles)
 		{
 			TotalDataSize += MBPP_StringLengthSize + NewFiles.size();
-			TotalDataSize += MBGetFileSize(PacketDirectory + NewFiles);
+			TotalDataSize += 8+MBGetFileSize(PacketDirectory + NewFiles);
 			FilesToSend.push_back(NewFiles);
 		}
-		for (auto const& NewDirectoris : FileInfoDifferance.AddedDirectories)
+		for (auto const& NewDirectories : FileInfoDifferance.AddedDirectories)
 		{
-			assert(false);
-			//här ska vi egentligen lägga till alla dem nya filerna att skicka
+			const MBPP_DirectoryInfoNode* DirectoryNode = LocalFileInfo.GetDirectoryInfo(NewDirectories);
+			MBPP_DirectoryInfoNode_ConstIterator DirectoryIterator = DirectoryNode->begin();
+			MBPP_DirectoryInfoNode_ConstIterator DirectoryIteratorEnd = DirectoryNode->end();
+			while (!(DirectoryIterator == DirectoryIteratorEnd))
+			{
+				std::string PacketPath = NewDirectories + DirectoryIterator.GetCurrentDirectory() + (*DirectoryIterator).FileName;
+				TotalDataSize += MBPP_StringLengthSize + PacketPath.size();
+				TotalDataSize += 8+MBGetFileSize(PacketDirectory + PacketPath);
+				FilesToSend.push_back(PacketPath);
+				DirectoryIterator++;
+			}
+
 		}
 		for (auto const& DeletedFiles : FileInfoDifferance.RemovedFiles)
 		{
@@ -1530,6 +1790,10 @@ namespace MBPM
 		}
 		return(ReturnValue);
 	}
+	MBPP_FileInfoReader MBPP_Server::GetPacketFileInfo(std::string const& PacketName)
+	{
+		return(MBPP_FileInfoReader(p_GetPacketDirectory(PacketName) + "/MBPM_FileInfo"));
+	}
 	std::string MBPP_Server::p_GetPacketDirectory(std::string const& PacketName)
 	{
 		//går igenom packet search directorisen och ser om packeten existerar
@@ -1865,7 +2129,7 @@ namespace MBPM
 		for (size_t i = 0; i < FilesToSend.size(); i++)
 		{
 			ReturnValue += MBPP_StringLengthSize+FilesToSend[i].size();//för filelisten
-			ReturnValue += MBGetFileSize(PacketDirectory + FilesToSend[i]);
+			ReturnValue += 8+MBGetFileSize(PacketDirectory + FilesToSend[i]);
 		}
 		return(ReturnValue);
 	}
@@ -1931,22 +2195,31 @@ namespace MBPM
 		std::string PacketDirectory = p_GetPacketDirectory(ResponseData.PacketName);
 		for (size_t i = 0; i < ResponseData.DirectoriesToGet.size(); i++)
 		{
-			//TODO ta från MBPM_FileInfo filen istället
-			std::filesystem::recursive_directory_iterator DirectoryIterator = std::filesystem::recursive_directory_iterator(PacketDirectory + ResponseData.DirectoriesToGet[i]);
-			for (auto const& Entries : DirectoryIterator)
+			//std::filesystem::recursive_directory_iterator DirectoryIterator = std::filesystem::recursive_directory_iterator(PacketDirectory + ResponseData.DirectoriesToGet[i]);
+			MBPP_FileInfoReader PacketFileInfo = AssociatedServer->GetPacketFileInfo(ResponseData.PacketName);
+			const MBPP_DirectoryInfoNode* DirectoryToIterate = PacketFileInfo.GetDirectoryInfo(ResponseData.DirectoriesToGet[i]);
+			if (DirectoryToIterate == nullptr)
 			{
-				if (Entries.is_regular_file())
+				continue;
+			}
+			MBPP_DirectoryInfoNode_ConstIterator DirectoryIterator = DirectoryToIterate->begin();
+			while(!(DirectoryIterator == DirectoryToIterate->end()))
+			{
+				std::string CurrentFilePath = PacketDirectory+ ResponseData.DirectoriesToGet[i] +DirectoryIterator.GetCurrentDirectory() + (*DirectoryIterator).FileName;
+				if (!std::filesystem::exists(CurrentFilePath))
 				{
-					m_HeaderToSend.RecordSize += std::filesystem::file_size(Entries.path());
-					std::filesystem::path PacketPath = std::filesystem::relative(DirectoryIterator->path(), PacketDirectory);
-					m_FilesToSend.push_back(h_PathToUTF8(PacketPath));
+					DirectoryIterator++;
+					continue;
 				}
+				m_HeaderToSend.RecordSize += 8+std::filesystem::file_size(CurrentFilePath);
+				m_FilesToSend.push_back(ResponseData.DirectoriesToGet[i] + DirectoryIterator.GetCurrentDirectory() + (*DirectoryIterator).FileName);
+				DirectoryIterator++;
 			}
 		}
 		m_HeaderToSend.RecordSize += 4;
 		for (size_t i = 0; i < m_FilesToSend.size(); i++)
 		{
-			m_HeaderToSend.RecordSize += MBPP_StringLengthSize + m_FilesToSend.size();
+			m_HeaderToSend.RecordSize += MBPP_StringLengthSize + m_FilesToSend[i].size();
 		}
 		Increment();
 	}

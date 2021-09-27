@@ -1,0 +1,12 @@
+Excludes:
+/.git/
+/.vs/
+/MBCLI/
+/out/
+/TestDirectory/
+/TestOutputDirectory/
+/TestPacket/
+/TestUploadPacket/
+/CMakeSettings.json
+/MBPM_FileInfo
+Includes:

@@ -5,7 +5,7 @@
 #include <MrBoboSockets/MrBoboSockets.h>
 #include <memory>
 #include <vector>
-
+#include <stack>
 
 #include <MBInterfaces.h>
 
@@ -203,8 +203,40 @@ namespace MBPM
 			return(FileName < OtherFileInfo.FileName);
 		}
 	};
+	class MBPP_FileInfoReader;
+	class MBPP_DirectoryInfoNode;
+	class MBPP_DirectoryInfoNode_ConstIterator
+	{
+	private:
+		struct DirectoryIterationInfo
+		{
+			const MBPP_DirectoryInfoNode* AssociatedDirectory = nullptr;
+			size_t CurrentFileOffset = 0;
+			size_t CurrentDirectoryOffset = 0;
+		};
+		std::stack<DirectoryIterationInfo> m_IterationInfo = {};
+		std::string m_CurrentDirectoryPath = "/";
+		bool m_Finished = true;
+		void p_Increment();
+	public:
+		MBPP_DirectoryInfoNode_ConstIterator() {};
+		MBPP_DirectoryInfoNode_ConstIterator(const MBPP_DirectoryInfoNode* InitialNode);
+		
+		std::string GetCurrentDirectory() { return(m_CurrentDirectoryPath); };
+
+		bool operator==(MBPP_DirectoryInfoNode_ConstIterator const& IteratorToCompare);
+		MBPP_DirectoryInfoNode_ConstIterator& operator++();
+		MBPP_DirectoryInfoNode_ConstIterator& operator++(int);
+		MBPP_FileInfo const& operator*();
+		MBPP_FileInfo const& operator->();
+	};
+	
 	struct MBPP_DirectoryInfoNode
 	{
+	private:
+		friend class MBPP_FileInfoReader;
+		MBPP_DirectoryInfoNode* m_ParentDirectory = nullptr;//enbart till för att kunna iterera enkelt över filler/directories
+	public:
 		std::string DirectoryName = "";
 		std::string DirectoryHash = "";
 		std::vector<MBPP_FileInfo> Files = {};
@@ -213,6 +245,8 @@ namespace MBPM
 		{
 			return(DirectoryName < OtherDirectory.DirectoryName);
 		}
+		MBPP_DirectoryInfoNode_ConstIterator begin() const;
+		MBPP_DirectoryInfoNode_ConstIterator end() const;
 	};
 
 	struct MBPP_FileList
@@ -222,13 +256,18 @@ namespace MBPM
 	};
 	class MBPP_FileInfoReader
 	{
+
 	private:
+
+
 		friend MBPP_FileInfoDiff GetFileInfoDifference(MBPP_FileInfoReader const& ClientInfo, MBPP_FileInfoReader const& ServerInfo);
 		MBPP_DirectoryInfoNode m_TopNode = MBPP_DirectoryInfoNode();
 		static std::vector<std::string> sp_GetPathComponents(std::string const& PathToDecompose);
 		MBPP_DirectoryInfoNode p_ReadDirectoryInfoFromFile(MBUtility::MBOctetInputStream* FileToReadFrom,size_t HashSize);
 		MBPP_FileInfo p_ReadFileInfoFromFile(MBUtility::MBOctetInputStream* FileToReadFrom,size_t HashSize);
 		const MBPP_DirectoryInfoNode* p_GetTargetDirectory(std::vector<std::string> const& PathComponents);
+	
+		void p_UpdateDirectoriesParents(MBPP_DirectoryInfoNode* DirectoryToUpdate);
 	public:
 		MBPP_FileInfoReader() {};
 		MBPP_FileInfoReader(std::string const& FileInfoPath);
@@ -237,6 +276,12 @@ namespace MBPM
 		const MBPP_FileInfo* GetFileInfo(std::string const& ObjectToSearch);
 		const MBPP_DirectoryInfoNode * GetDirectoryInfo(std::string const& ObjectToSearch);
 		bool operator==(MBPP_FileInfoReader const& OtherReader) const;
+		
+		//copy grejer
+		friend void swap(MBPP_FileInfoReader& LeftInfoReader, MBPP_FileInfoReader& RightInfoReader) noexcept;
+		MBPP_FileInfoReader(MBPP_FileInfoReader&& ReaderToSteal) noexcept;
+		MBPP_FileInfoReader(MBPP_FileInfoReader const& ReaderToCopy);
+		MBPP_FileInfoReader& operator=(MBPP_FileInfoReader ReaderToCopy);
 	};
 
 	struct MBPP_PacketHost
@@ -244,6 +289,21 @@ namespace MBPM
 		std::string URL = "";
 		MBPP_TransferProtocol TransferProtocol = MBPP_TransferProtocol::Null;
 		uint16_t Port = -1; //-1 står för default port i förhållande till en transfer protocol
+	};
+
+	class MBPM_FileInfoExcluder
+	{
+	private:
+		std::vector<std::string> m_ExcludeStrings = {};
+		std::vector<std::string> m_IncludeStrings = {};
+		bool p_MatchDirectory(std::string const& Directory,std::string const& StringToMatch);
+		bool p_MatchFile(std::string const& StringToCompare, std::string const& StringToMatch);
+	public:
+		MBPM_FileInfoExcluder(std::string const& PathPosition);
+		MBPM_FileInfoExcluder() {};
+		bool Excludes(std::string const& StringToMatch);
+		bool Includes(std::string const& StringToMatch);
+		void AddExcludeFile(std::string const& FileToExlude);
 	};
 
 	void CreatePacketFilesData(std::string const& PacketToHashDirectory,std::string const& FileName = "MBPM_FileInfo");
@@ -553,6 +613,7 @@ namespace MBPM
 		bool ClientRequestFinished();
 		MBPP_ServerResponseIterator* GetResponseIterator();
 		void FreeResponseIterator(MBPP_ServerResponseIterator* IteratorToFree);
+		MBPP_FileInfoReader GetPacketFileInfo(std::string const& PacketName);
 		//MBError SendResponse(MBSockets::ConnectSocket* SocketToUse);
 	};
 

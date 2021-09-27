@@ -31,16 +31,27 @@ void TestServerFunc()
 int main(int argc,char** argv)
 {
 	//DEBUG GREJER
-	const int argr = 4;
-	char* TestData[argr];
-	std::filesystem::current_path("C:/Users/emanu/Desktop/Program/C++/MBPacketManager");
+	//std::filesystem::current_path("C:/Users/emanu/Desktop/Program/C++/MBPacketManager");
 	//MBPM::CreatePacketFilesData("./TestUploadPacket/");
-	
-	TestData[0] = "MBPM";
-	TestData[1] = "upload";
-	TestData[2] = "TestPacket";
-	TestData[3] = "./TestUploadPacket/";
-	argc = argr;
-	argv = TestData;
+	//MBPM::MBPP_FileInfoReader InfoToIterate("./MBPM_FileInfo");
+	//const MBPM::MBPP_DirectoryInfoNode* TopNode = InfoToIterate.GetDirectoryInfo("/");
+	//MBPM::MBPP_DirectoryInfoNode_ConstIterator TestIterator = TopNode->begin();
+	//MBPM::MBPP_DirectoryInfoNode_ConstIterator EndIterator = TopNode->end();
+	//while(!(TestIterator == EndIterator))
+	//{
+	//	std::cout << TestIterator.GetCurrentDirectory() + (*TestIterator).FileName << std::endl;
+	//	TestIterator++;
+	//}
+
+	//return(MBPM::MBCLI_Main(argc, argv));
+
+	//const int argr = 4;
+	//char* TestData[argr];
+	//TestData[0] = "MBPM";
+	//TestData[1] = "upload";
+	//TestData[2] = "TestPacket";
+	//TestData[3] = "./TestUploadPacket/";
+	//argc = argr;
+	//argv = TestData;
 	return(MBPM::MBCLI_Main(argc, argv));
 }

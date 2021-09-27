@@ -135,6 +135,7 @@ namespace MBPM
 		MBPP_Client ClientToUse;
 		ClientToUse.Connect(p_GetDefaultPacketHost());
 		std::string PacketToUploadDirectory = CommandInput.TopCommandArguments[1];
+		std::cout << "Packet to upload directory: " << PacketToUploadDirectory << std::endl;
 		MBError UploadError = ClientToUse.UploadPacket(PacketToUploadDirectory, CommandInput.TopCommandArguments[0], MBPP_UserCredentialsType::Request, "",&RequestResponse);
 		if (RequestResponse.Result != MBPP_ErrorCode::Ok || !UploadError)
 		{
