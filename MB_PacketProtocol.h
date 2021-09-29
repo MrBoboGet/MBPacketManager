@@ -224,7 +224,8 @@ namespace MBPM
 		
 		std::string GetCurrentDirectory() { return(m_CurrentDirectoryPath); };
 
-		bool operator==(MBPP_DirectoryInfoNode_ConstIterator const& IteratorToCompare);
+		bool operator==(MBPP_DirectoryInfoNode_ConstIterator const& IteratorToCompare) const;
+		bool operator!=(MBPP_DirectoryInfoNode_ConstIterator const& IteratorToCompare) const;
 		MBPP_DirectoryInfoNode_ConstIterator& operator++();
 		MBPP_DirectoryInfoNode_ConstIterator& operator++(int);
 		MBPP_FileInfo const& operator*();
@@ -265,16 +266,16 @@ namespace MBPM
 		static std::vector<std::string> sp_GetPathComponents(std::string const& PathToDecompose);
 		MBPP_DirectoryInfoNode p_ReadDirectoryInfoFromFile(MBUtility::MBOctetInputStream* FileToReadFrom,size_t HashSize);
 		MBPP_FileInfo p_ReadFileInfoFromFile(MBUtility::MBOctetInputStream* FileToReadFrom,size_t HashSize);
-		const MBPP_DirectoryInfoNode* p_GetTargetDirectory(std::vector<std::string> const& PathComponents);
+		const MBPP_DirectoryInfoNode* p_GetTargetDirectory(std::vector<std::string> const& PathComponents) const;
 	
 		void p_UpdateDirectoriesParents(MBPP_DirectoryInfoNode* DirectoryToUpdate);
 	public:
 		MBPP_FileInfoReader() {};
 		MBPP_FileInfoReader(std::string const& FileInfoPath);
 		MBPP_FileInfoReader(const void* DataToRead, size_t DataSize);
-		bool ObjectExists(std::string const& ObjectToSearch);
-		const MBPP_FileInfo* GetFileInfo(std::string const& ObjectToSearch);
-		const MBPP_DirectoryInfoNode * GetDirectoryInfo(std::string const& ObjectToSearch);
+		bool ObjectExists(std::string const& ObjectToSearch) const;
+		const MBPP_FileInfo* GetFileInfo(std::string const& ObjectToSearch) const;
+		const MBPP_DirectoryInfoNode * GetDirectoryInfo(std::string const& ObjectToSearch) const;
 		bool operator==(MBPP_FileInfoReader const& OtherReader) const;
 		
 		//copy grejer

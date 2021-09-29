@@ -130,7 +130,7 @@ namespace MBPM
 		{
 			Excluder = MBPM_FileInfoExcluder(PacketToHashDirectory + "/MBPM_FileInfoIgnore");
 		}
-		Excluder.AddExcludeFile("/MBPM_FileInfo");
+		Excluder.AddExcludeFile("/"+OutputName);
 		h_WriteDirectoryData_Recursive(OutputFile, PacketToHashDirectory, "/", PacketToHashDirectory, Excluder, MBCrypto::HashFunction::SHA1);
 		OutputFile.flush();
 		OutputFile.close();
@@ -499,7 +499,7 @@ namespace MBPM
 	{
 		return(FileVector[Index].FileName);
 	}
-	const MBPP_DirectoryInfoNode* MBPP_FileInfoReader::p_GetTargetDirectory(std::vector<std::string> const& PathComponents)
+	const MBPP_DirectoryInfoNode* MBPP_FileInfoReader::p_GetTargetDirectory(std::vector<std::string> const& PathComponents) const
 	{
 		const MBPP_DirectoryInfoNode* ReturnValue = nullptr;
 		if (PathComponents.size() == 1  || PathComponents.size() == 0)
@@ -530,7 +530,7 @@ namespace MBPM
 		}
 		return(ReturnValue);
 	}
-	bool MBPP_FileInfoReader::ObjectExists(std::string const& ObjectToSearch)
+	bool MBPP_FileInfoReader::ObjectExists(std::string const& ObjectToSearch) const
 	{
 		if (ObjectToSearch == "/")
 		{
@@ -563,7 +563,7 @@ namespace MBPM
 			}
 		}
 	}
-	const MBPP_FileInfo * MBPP_FileInfoReader::GetFileInfo(std::string const& ObjectToSearch)
+	const MBPP_FileInfo * MBPP_FileInfoReader::GetFileInfo(std::string const& ObjectToSearch) const
 	{
 		const MBPP_FileInfo* ReturnValue = nullptr;
 		if (ObjectToSearch == "" || ObjectToSearch.front() != '/')
@@ -586,7 +586,7 @@ namespace MBPM
 		}
 		return(ReturnValue);
 	}
-	const MBPP_DirectoryInfoNode* MBPP_FileInfoReader::GetDirectoryInfo(std::string const& ObjectToSearch)
+	const MBPP_DirectoryInfoNode* MBPP_FileInfoReader::GetDirectoryInfo(std::string const& ObjectToSearch) const
 	{
 		const MBPP_DirectoryInfoNode* ReturnValue = nullptr;
 		if (ObjectToSearch == "" || ObjectToSearch.front() != '/')
@@ -701,9 +701,13 @@ namespace MBPM
 		m_IterationInfo.push(NewInfo); //blir relativt till den här nodens grejer
 		p_Increment();
 	}
-	bool MBPP_DirectoryInfoNode_ConstIterator::operator==(MBPP_DirectoryInfoNode_ConstIterator const& IteratorToCompare)
+	bool MBPP_DirectoryInfoNode_ConstIterator::operator==(MBPP_DirectoryInfoNode_ConstIterator const& IteratorToCompare) const
 	{
 		return(m_Finished == IteratorToCompare.m_Finished);
+	}
+	bool MBPP_DirectoryInfoNode_ConstIterator::operator!=(MBPP_DirectoryInfoNode_ConstIterator const& IteratorToCompare) const
+	{
+		return(!(m_Finished == IteratorToCompare.m_Finished));
 	}
 	MBPP_DirectoryInfoNode_ConstIterator& MBPP_DirectoryInfoNode_ConstIterator::operator++()
 	{
@@ -1463,6 +1467,12 @@ namespace MBPM
 		RecordToSend.RecordData = MBPP_EncodeString(PacketName);
 		RecordToSend.RecordSize = RecordToSend.RecordData.size();
 		m_ServerConnection->SendData(MBPP_GetRecordData(RecordToSend));
+		if (!m_ServerConnection->IsConnected())
+		{
+			*OutError = false;
+			OutError->ErrorMessage = "Not connected to client";
+			return(ReturnValue);
+		}
 		std::string RecievedData = m_ServerConnection->RecieveData();
 		while (m_ServerConnection->IsConnected() && RecievedData.size() < MBPP_GenericRecordHeaderSize)
 		{

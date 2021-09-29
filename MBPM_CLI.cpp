@@ -7,10 +7,110 @@ namespace MBPM
 	{
 		return(std::getenv("MBPM_PACKET_INSTALL_DIRECTORY"));
 	}
+	std::string MBPM_ClI::p_GetInstalledPacketDirectory(std::string const& PacketName)
+	{
+		std::string ReturnValue = p_GetPacketInstallDirectory();
+		if (ReturnValue.back() != '/')
+		{
+			ReturnValue += "/";
+		}
+		if (std::filesystem::exists(ReturnValue + PacketName) && std::filesystem::exists(ReturnValue + PacketName + "/MBPM_PacketInfo"))
+		{
+			ReturnValue = ReturnValue + PacketName + "/";
+		}
+		else
+		{
+			ReturnValue = "";
+		}
+
+		return(ReturnValue);
+	}
 	MBPP_PacketHost MBPM_ClI::p_GetDefaultPacketHost()
 	{
 		MBPP_PacketHost ReturnValue = { "127.0.0.1/MBPM/",MBPP_TransferProtocol::HTTPS,443 };
 		return(ReturnValue);
+	}
+
+	MBPM::MBPP_FileInfoReader MBPM_ClI::p_GetRemoteFileInfo(std::string const& RemoteFile, MBError* OutError)
+	{
+		MBPM::MBPP_Client ClientToUse;
+		ClientToUse.Connect(p_GetDefaultPacketHost());
+		MBPM::MBPP_FileInfoReader ReturnValue = ClientToUse.GetPacketFileInfo(RemoteFile, OutError);
+		return(ReturnValue);
+	}
+	MBPM::MBPP_FileInfoReader MBPM_ClI::p_GetInstalledFileInfo(std::string const& InstalledPacket,MBError* OutError)
+	{
+		MBPM::MBPP_FileInfoReader ReturnValue;
+		std::string PacketDirectory = p_GetInstalledPacketDirectory(InstalledPacket);
+		if (PacketDirectory == "" || !std::filesystem::exists(PacketDirectory + "/MBPM_FileInfo"))
+		{
+			*OutError = false;
+			OutError->ErrorMessage = "Packet not installed or packet FileInfo missing";
+			return(ReturnValue);
+		}
+		ReturnValue = MBPM::MBPP_FileInfoReader(PacketDirectory + "/MBPM_FileInfo");
+		return(ReturnValue);
+	}
+	MBPM::MBPP_FileInfoReader MBPM_ClI::p_GetPathFileInfo(std::string const& PacketPath, MBError* OutError)
+	{
+		MBPM::MBPP_FileInfoReader ReturnValue;
+		if (std::filesystem::exists(PacketPath) && std::filesystem::directory_entry(PacketPath).is_regular_file())
+		{
+			ReturnValue = MBPM::MBPP_FileInfoReader(PacketPath);
+		}
+		else if (std::filesystem::exists(PacketPath + "/MBPM_FileInfo") && std::filesystem::directory_entry(PacketPath + "/MBPM_FileInfo").is_regular_file())
+		{
+			ReturnValue = MBPM::MBPP_FileInfoReader(PacketPath+ "/MBPM_FileInfo");
+		}
+		else
+		{
+			*OutError = false;
+			OutError->ErrorMessage = "Couldnt find MBPM_FileInfo at \"" + PacketPath + "\" or \"" + PacketPath + "/MBPM_FileInfo\"";
+		}
+		return(ReturnValue);
+	}
+
+
+	void MBPM_ClI::p_PrintFileInfo(MBPM::MBPP_FileInfoReader const& InfoToPrint,MBCLI::MBTerminal* AssociatedTerminal)
+	{
+		const MBPM::MBPP_DirectoryInfoNode* InfoTopNode = InfoToPrint.GetDirectoryInfo("/");
+		MBPM::MBPP_DirectoryInfoNode_ConstIterator DirectoryIterator = InfoTopNode->begin();
+		MBPM::MBPP_DirectoryInfoNode_ConstIterator End = InfoTopNode->end();
+		while (DirectoryIterator != End)
+		{
+			AssociatedTerminal->PrintLine(DirectoryIterator.GetCurrentDirectory() + (*DirectoryIterator).FileName+" "+
+				MBUtility::ReplaceAll(MBUtility::HexEncodeString((*DirectoryIterator).FileHash)," ",""));
+			DirectoryIterator++;
+		}
+
+	}
+	void MBPM_ClI::p_PrintFileInfoDiff(MBPM::MBPP_FileInfoDiff const& InfoToPrint,MBCLI::MBTerminal* AssociatedTerminal)
+	{
+		AssociatedTerminal->PrintLine("New directories:");
+		for (auto const& NewDirectories : InfoToPrint.AddedDirectories)
+		{
+			AssociatedTerminal->PrintLine(NewDirectories);
+		}
+		AssociatedTerminal->PrintLine("New files:");
+		for (auto const& NewFiles : InfoToPrint.AddedFiles)
+		{
+			AssociatedTerminal->PrintLine(NewFiles);
+		}
+		AssociatedTerminal->PrintLine("Updated files:");
+		for (auto const& UpdatedFiles : InfoToPrint.UpdatedFiles)
+		{
+			AssociatedTerminal->PrintLine(UpdatedFiles);
+		}
+		AssociatedTerminal->PrintLine("Removed directories:");
+		for (auto const& RemovedDirectories : InfoToPrint.DeletedDirectories)
+		{
+			AssociatedTerminal->PrintLine(RemovedDirectories);
+		}
+		AssociatedTerminal->PrintLine("Removed files:");
+		for (auto const& RemovedFiles : InfoToPrint.RemovedFiles)
+		{
+			AssociatedTerminal->PrintLine(RemovedFiles);
+		}
 	}
 	void MBPM_ClI::p_HandleUpdate(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
 	{
@@ -84,6 +184,11 @@ namespace MBPM
 		std::string ObjectToGet = CommandInput.TopCommandArguments[1];
 		MBPP_Client PacketClient;
 		PacketClient.Connect(p_GetDefaultPacketHost());
+		if (!PacketClient.IsConnected())
+		{
+			AssociatedTerminal->PrintLine("Couldn't establish connection so server");
+			return;
+		}
 		MBError GetPacketError = true;
 		MBPP_FileInfoReader PacketFileInfo = PacketClient.GetPacketFileInfo(PacketName,&GetPacketError);
 		if (!GetPacketError)
@@ -165,6 +270,172 @@ namespace MBPM
 			AssociatedTerminal->PrintLine("Upload packet sucessful");
 		}
 	}
+	void MBPM_ClI::p_HandleInfo(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
+	{
+		if (CommandInput.TopCommandArguments.size() < 1)
+		{
+			AssociatedTerminal->PrintLine("Command \"info\" requires atleast 1 arguments");
+			return;
+		}
+		if (CommandInput.TopCommandArguments[0] == "create")
+		{
+			if (CommandInput.TopCommandArguments.size() < 2)
+			{
+				AssociatedTerminal->PrintLine("no directory path provided");
+				return;
+			}
+			std::string PathToList = CommandInput.TopCommandArguments[1];
+			if (PathToList.back() != '/')
+			{
+				PathToList += "/";
+			}
+			std::string FileInfoName = "MBPM_FileInfo";
+			if (CommandInput.TopCommandArguments.size() >= 3)
+			{
+				FileInfoName = CommandInput.TopCommandArguments[2];
+			}
+			CreatePacketFilesData(PathToList,FileInfoName);
+		}
+		else if (CommandInput.TopCommandArguments[0] == "list")
+		{
+			MBPM::MBPP_FileInfoReader InfoToPrint;
+			if (CommandInput.TopCommandArguments.size() < 2)
+			{
+				AssociatedTerminal->PrintLine("No packet directory given");
+				return;
+			}
+			if (CommandInput.CommandOptions.find("remote") != CommandInput.CommandOptions.end())
+			{
+				MBPM::MBPP_Client NewClient;
+				NewClient.Connect(p_GetDefaultPacketHost());
+				MBError GetFileInfoResult = true;
+				MBPM::MBPP_FileInfoReader ServerInfo = NewClient.GetPacketFileInfo(CommandInput.TopCommandArguments[1], &GetFileInfoResult);
+				if (GetFileInfoResult)
+				{
+					InfoToPrint = std::move(ServerInfo);
+				}
+				else
+				{
+					AssociatedTerminal->PrintLine("Error connectin to remote: "+GetFileInfoResult.ErrorMessage);
+				}
+			}
+			else if (CommandInput.CommandOptions.find("installed") != CommandInput.CommandOptions.end())
+			{
+				std::string PacketDirectory = p_GetInstalledPacketDirectory(CommandInput.TopCommandArguments[1]);
+				if (PacketDirectory == "")
+				{
+					AssociatedTerminal->PrintLine("packet \"" + CommandInput.TopCommandArguments[1] + "\" not intalled");
+					return;
+				}
+				else
+				{
+					std::string FilePath = PacketDirectory + "MBPM_FileInfo";
+					if (std::filesystem::exists(FilePath) && std::filesystem::directory_entry(FilePath).is_regular_file())
+					{
+						InfoToPrint = MBPM::MBPP_FileInfoReader(FilePath);
+					}
+					else
+					{
+						AssociatedTerminal->PrintLine("Couldn't find packet MBPM_FileInfo file");
+						return;
+					}
+				}
+			}
+			else
+			{
+				//vanlig, ta directoryn
+				if (std::filesystem::exists(CommandInput.TopCommandArguments[1]) && std::filesystem::directory_entry(CommandInput.TopCommandArguments[1]).is_regular_file())
+				{
+					InfoToPrint = MBPM::MBPP_FileInfoReader((CommandInput.TopCommandArguments[1]));
+				}
+				else
+				{
+					std::string FolderPath = CommandInput.TopCommandArguments[1];
+					if (FolderPath.back() != '/')
+					{
+						FolderPath += '/';
+					}
+					std::string FilePath = FolderPath + "MBPM_FileInfo";
+					if (std::filesystem::exists(FilePath) && std::filesystem::directory_entry(FilePath).is_regular_file())
+					{
+						InfoToPrint = MBPM::MBPP_FileInfoReader(FilePath);
+					}
+					else
+					{
+						AssociatedTerminal->PrintLine("Couldn't find MBPM_FileInfo file");
+						return;
+					}
+				}
+			}
+			p_PrintFileInfo(InfoToPrint,AssociatedTerminal);
+		}
+		else if (CommandInput.TopCommandArguments[0] == "diff")
+		{
+			//två strängar som båda leder till en MBPM_FileInfo
+			std::vector<size_t> RemoteFiles = (CommandInput.CommandPositionalOptions.find("r") != CommandInput.CommandPositionalOptions.end()) ? CommandInput.CommandPositionalOptions.at("r") : std::vector<size_t>();
+			std::vector<size_t> InstalledFiles = (CommandInput.CommandPositionalOptions.find("i") != CommandInput.CommandPositionalOptions.end()) ? CommandInput.CommandPositionalOptions.at("i") : std::vector<size_t>();
+			std::vector<size_t> PathFiles = (CommandInput.CommandPositionalOptions.find("p") != CommandInput.CommandPositionalOptions.end()) ? CommandInput.CommandPositionalOptions.at("p") : std::vector<size_t>();
+			if (RemoteFiles.size() + InstalledFiles.size() > 2)
+			{
+				AssociatedTerminal->PrintLine("To many files supplied");
+				return;
+			}
+			if (CommandInput.TopCommandArguments.size() != 3)
+			{
+				AssociatedTerminal->PrintLine("Two files are needed to compare");
+				return;
+			}
+			MBPM::MBPP_FileInfoReader ClientFileInfo;
+			MBPM::MBPP_FileInfoReader ServerFileInfo;
+			MBError RetrieveInfoError = true;
+			if (RemoteFiles.size() > 0 && (RemoteFiles[0] == 3 && CommandInput.TotalCommandTokens.size() >= 5))
+			{
+				ClientFileInfo = p_GetRemoteFileInfo(CommandInput.TopCommandArguments[1], &RetrieveInfoError);
+			}
+			else if (InstalledFiles.size() > 0 && (InstalledFiles[0] == 3 && CommandInput.TotalCommandTokens.size() >= 5))
+			{
+				ClientFileInfo = p_GetInstalledFileInfo(CommandInput.TopCommandArguments[1],&RetrieveInfoError);
+			}
+			else if (PathFiles.size() > 0 && (PathFiles[0] == 3 && CommandInput.TotalCommandTokens.size() >= 5))
+			{
+				ClientFileInfo = p_GetPathFileInfo(CommandInput.TopCommandArguments[1],&RetrieveInfoError);
+			}
+			else
+			{
+				AssociatedTerminal->PrintLine("No client file supplied");
+				return;
+			}
+			if (!RetrieveInfoError)
+			{
+				AssociatedTerminal->PrintLine("Error getting FileInfo: " + RetrieveInfoError.ErrorMessage);
+				return;
+			}
+			if (CommandInput.TotalCommandTokens.size() >= 7 && ((RemoteFiles.size() > 0 && (RemoteFiles[0] == 5 || RemoteFiles[1] == 5)) || (RemoteFiles.size() > 2 && RemoteFiles[1] == 5)))
+			{
+				ServerFileInfo = p_GetRemoteFileInfo(CommandInput.TopCommandArguments[2], &RetrieveInfoError);
+			}
+			else if (CommandInput.TotalCommandTokens.size() >= 7 && ((InstalledFiles.size() > 0 && (InstalledFiles[0] == 5 || InstalledFiles[1] == 5)) || (InstalledFiles.size() > 2 && InstalledFiles[1] == 5)))
+			{
+				ServerFileInfo = p_GetInstalledFileInfo(CommandInput.TopCommandArguments[2],&RetrieveInfoError);
+			}
+			else if (CommandInput.TotalCommandTokens.size() >= 7 && ((PathFiles.size() > 0 && (PathFiles[0] == 5 || PathFiles[1] == 5)) || (PathFiles.size() > 2 && PathFiles[1] == 5)))
+			{
+				ServerFileInfo = p_GetPathFileInfo(CommandInput.TopCommandArguments[2],&RetrieveInfoError);
+			}
+			else
+			{
+				AssociatedTerminal->PrintLine("No server file supplied");
+				return;
+			}
+			if (!RetrieveInfoError)
+			{
+				AssociatedTerminal->PrintLine("Error getting FileInfo: " + RetrieveInfoError.ErrorMessage);
+				return;
+			}
+			MBPM::MBPP_FileInfoDiff InfoDiff = MBPM::GetFileInfoDifference(ClientFileInfo, ServerFileInfo);
+			p_PrintFileInfoDiff(InfoDiff,AssociatedTerminal);
+		}
+	}
 	void MBPM_ClI::HandleCommand(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
 	{
 		if (CommandInput.TopCommand == "install")
@@ -182,6 +453,10 @@ namespace MBPM
 		else if (CommandInput.TopCommand == "upload")
 		{
 			p_HandleUpload(CommandInput, AssociatedTerminal);
+		}
+		else if (CommandInput.TopCommand == "index")
+		{
+			p_HandleInfo(CommandInput, AssociatedTerminal);
 		}
 		else
 		{

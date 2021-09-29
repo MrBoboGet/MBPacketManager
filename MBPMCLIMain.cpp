@@ -53,5 +53,17 @@ int main(int argc,char** argv)
 	//TestData[3] = "./TestUploadPacket/";
 	//argc = argr;
 	//argv = TestData;
+
+	//const int argr = 7;
+	//char* TestData[argr];
+	//TestData[0] = "MBPM";
+	//TestData[1] = "index";
+	//TestData[2] = "diff";
+	//TestData[3] = "-p";
+	//TestData[4] = "./";
+	//TestData[5] = "-p";
+	//TestData[6] = "./TestPacket/";
+	//argc = argr;
+	//argv = TestData;
 	return(MBPM::MBCLI_Main(argc, argv));
 }
