@@ -62,6 +62,8 @@ namespace MBPM
 		std::map<MBPM_CompileOption, bool> CompilationOptions = {};
 	};
 
+
+
 	struct MBPM_MakefileGenerationOptions
 	{
 		std::set<MBPM_CompileOutputConfiguration> SupportedLibraryConfigurations = {
@@ -89,7 +91,11 @@ namespace MBPM
 	};
 	std::string GetLibraryName(std::string const& LibrayName,bool Dynamic, bool Debug);
 
+	std::string GetMBPMCmakeFunctions();
+
 	MBError WriteCMakeProjectToFile(MBPM_CmakeProject const& ProjectToWrite, std::string const& OutputFilePath);
+
+	MBError UpdateCmakeMBPMVariables(MBPM_PacketInfo const& PacketInfo, std::string const& CmakeFilepath);
 
 	MBError GenerateCmakeFile(MBPM_PacketInfo const& PacketToConvert, std::string const& PacketDirectory, MBPM_MakefileGenerationOptions const& CompileConfiguration,std::string const& FileName);
 	MBError GenerateCmakeFile(std::string const& PacketPath, MBPM_MakefileGenerationOptions const& CompileConfiguration,std::string const& FileName);

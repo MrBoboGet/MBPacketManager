@@ -20,6 +20,11 @@ namespace MBPM
 	{
 		MBError ReturnValue = true;
 		std::filesystem::recursive_directory_iterator ProjectIterator(ProjectDirectory);
+		MBPM_FileInfoExcluder FileExcluder;
+		if (std::filesystem::exists(ProjectDirectory + "/MBPM_FileInfoIngore") && std::filesystem::directory_entry(ProjectDirectory + "/MBPM_FileInfoIngore").is_regular_file())
+		{
+			FileExcluder = MBPM_FileInfoExcluder(ProjectDirectory + "/MBPM_FileInfoIngore");
+		}
 		for (auto const& Entries : ProjectIterator)
 		{
 			if (Entries.is_regular_file())
@@ -27,9 +32,14 @@ namespace MBPM
 				//Kommer ge fel på windows med paths som har u8, får lägga till den dependancyn
 				std::string TotalFilePath = Entries.path().generic_u8string();
 				std::string RelativePath = TotalFilePath.substr(GetSystemPacketsDirectory().size());
+				std::string FilePacketPath = RelativePath.substr(ProjectName.size()); //ANTAGANDE, alla MBPM packets ligger i en directory som är deras namn
 				std::string Filename = Entries.path().filename().generic_u8string();	
 				std::string FileEnding = "";
 				size_t LastDot = Filename.find_last_of('.');
+				if (FileExcluder.Excludes(FilePacketPath) && !FileExcluder.Includes(FilePacketPath))
+				{
+					continue;
+				}
 				if (LastDot != Filename.npos && LastDot != Filename.size()-1)
 				{
 					FileEnding = Filename.substr(LastDot + 1);
@@ -78,12 +88,26 @@ namespace MBPM
 		{
 			ProjectToPopulate.ProjectName = PacketInfo.PacketName;
 		}
-		for (auto const& Dependancies : PacketInfo.PacketDependancies)
+		std::stack<std::string> TotalDependancies = {};
+		for (size_t i = 0; i < PacketInfo.PacketDependancies.size(); i++)
 		{
+			TotalDependancies.push(PacketInfo.PacketDependancies[i]);
+		}
+		while (TotalDependancies.size() > 0)
+		{
+			std::string Dependancies = TotalDependancies.top();
+			TotalDependancies.pop();
 			if (ProjectToPopulate.ProjectPacketsDepandancies.find(Dependancies) == ProjectToPopulate.ProjectPacketsDepandancies.end())
 			{
 				std::string DependancyPath = GetSystemPacketsDirectory() + Dependancies+"/";
 				MBPM_PacketInfo DependancyInfo = ParseMBPM_PacketInfo(DependancyPath +"MBPM_PacketInfo");
+				for (auto const& NewDependancies : DependancyInfo.PacketDependancies)
+				{
+					if (ProjectToPopulate.ProjectPacketsDepandancies.find(NewDependancies) == ProjectToPopulate.ProjectPacketsDepandancies.end())
+					{
+						TotalDependancies.push(NewDependancies);
+					}
+				}
 				ProjectToPopulate.ProjectPacketsDepandancies.insert(Dependancies);
 				if (CompileConfiguration.SupportedLibraryConfigurations.find(MBPM_CompileOutputConfiguration::Embedded) != CompileConfiguration.SupportedLibraryConfigurations.end())
 				{
@@ -209,7 +233,17 @@ namespace MBPM
 	{
 		return(MBError());
 	}
-
+	std::string GetMBPMCmakeFunctions()
+	{
+		std::string ReturnValue = 			
+			"function(MBPM_UpdateTargetVariables)\n"
+			""
+			"endfunction()\n"
+			"function(MBPM_ApplyTargetConfiguration)\n"
+			""
+			"endfunction()\n";
+		return(ReturnValue);
+	}
 	MBError WriteCMakeProjectToFile(MBPM_CmakeProject const& ProjectToWrite, std::string const& OutputFilePath)
 	{
 		MBError ReturnValue = true;
@@ -217,18 +251,34 @@ namespace MBPM
 		OutputFile << "project("+ProjectToWrite.ProjectName+")\n";
 		OutputFile << "set(PROJECT_NAME \"" + ProjectToWrite.ProjectName + "\")\n";
 		
+		//MBPM variablar
+		OutputFile << "##BEGIN MBPM_VARIABLES\n";
+		OutputFile << "set(MBPM_DEPENDENCIES \n";
+		for (auto const& Packet : ProjectToWrite.ProjectPacketsDepandancies)
+		{
+			OutputFile << "\t" << Packet<<std::endl;
+		}
+		OutputFile << ")\n";
+		OutputFile << "set(MBPM_TARGET_EXTPACKET_LIBRARIES )\n";
+
+		OutputFile << "set(MBPM_TARGET_COMPILE_OPTIONS )\n";
+		OutputFile << "set(MBPM_TARGET_LINK_OPTIONS )\n";
+		OutputFile << "##END MBPM_VARIABLES\n";
+		OutputFile << "##BEGIN MBPM_FUNCTIONS\n";
+		OutputFile << GetMBPMCmakeFunctions();
+		OutputFile << "##END MBPM_FUNCTIONS\n";
 		//write common sources
-		OutputFile << "set(PROJECT_SOURCES \n";
+		OutputFile << "set(PROJECT_SOURCES \n\n";
 		for (std::string const& SourceFiles : ProjectToWrite.CommonSources)
 		{
-			OutputFile <<'\t'<< SourceFiles << std::endl;
+			OutputFile <<"\t\"{CMAKE_CURRENT_SOURCE_DIR}/"<< SourceFiles<<"\"" << std::endl;
 		}
 		OutputFile << ")\n";
 		//write common headers
 		OutputFile << "set(PROJECT_HEADERS \n";
 		for (std::string const& Headers : ProjectToWrite.CommonHeaders)
 		{
-			OutputFile << '\t' <<"    " << Headers << std::endl;
+			OutputFile << "\t\"{CMAKE_CURRENT_SOURCE_DIR}/"<< Headers << std::endl;
 		}
 		OutputFile << ")\n";
 		OutputFile << "set(COMMON_FILES ${PROJECT_SOURCES} ${PROJECT_HEADERS})\n";
@@ -258,83 +308,50 @@ namespace MBPM
 			bool IsStatic = true;
 			if (TargetData.first == MBPM::MBPM_CompileOutputConfiguration::DynamicDebug || TargetData.first == MBPM_CompileOutputConfiguration::DynamicRelease)
 			{
-				CmakeTargetName += "Dynamic";
+				CmakeTargetName += "D";
 				IsStatic = false;
 			}
 			else
 			{
-				CmakeTargetName += "Static";
+				CmakeTargetName += "S";
 			}
 			if (TargetData.first == MBPM_CompileOutputConfiguration::StaticDebug || TargetData.first == MBPM_CompileOutputConfiguration::DynamicDebug)
 			{
-				CmakeTargetName += "Debug";
+				CmakeTargetName += "D";
 				IsDebug = true;
 			}
 			else
 			{
-				CmakeTargetName += "Release";
-			}
-
-			std::string ExtraSourceFiles = "";
-			//skapar target Sources
-			if (TargetData.second.ExplicitSourceFiles.size() > 0)
-			{
-				OutputFile << "set(" + CmakeTargetName + "_Sources \n";
-				for (auto const& Source : TargetData.second.ExplicitSourceFiles)
-				{
-					OutputFile << '\t' << Source + "\n";
-				}
-				OutputFile << ")\n";
-				ExtraSourceFiles += " {" + CmakeTargetName + "_Sources}";
-			}
-			//target headers
-			if(TargetData.second.ExplicitHeaders.size() > 0)
-			{
-				OutputFile << "set(" + CmakeTargetName + "_Headers \n";
-				for (auto const& Header : TargetData.second.ExplicitHeaders)
-				{
-					OutputFile << '\t' << Header << '\n';
-				}
-				ExtraSourceFiles += " {" + CmakeTargetName + "_Headers}";
+				CmakeTargetName += "R";
 			}
 
 			//skapar targeten
 			OutputFile << "add_library(" << CmakeTargetName << " ";
 			if (IsStatic)
 			{
-				OutputFile << "ARCHIVE ";
+				OutputFile << "STATIC ";
 			}
 			else
 			{
 				OutputFile << "SHARED ";
 			}
-			OutputFile << "${COMMON_FILES}"+ExtraSourceFiles+")\n";
+			OutputFile << "${COMMON_FILES})\n";
 			//
 
 			//librarys to link
-			std::string ExtraLibraries = "";
-			if (TargetData.second.StaticLibrarysNeeded.size() > 0)
-			{
-				OutputFile << "set(" << CmakeTargetName << "_NeededStaticLibraries\n";
-				for (auto const& NeededStaticLibrarys : TargetData.second.StaticLibrarysNeeded)
-				{
-					OutputFile << '\t' << NeededStaticLibrarys << '\n';
-				}
-				OutputFile << ")\n";
-				ExtraLibraries += " ${" + CmakeTargetName + "_NeededStaticLibraries}";
-			}
-			if (TargetData.second.DynamicLibrarysNeeded.size() > 0)
-			{
-				OutputFile << "set(" << CmakeTargetName << "_NeededDynamicLibraries\n";
-				for (auto const& NeededDynamicLibrarys : TargetData.second.DynamicLibrarysNeeded)
-				{
-					OutputFile << '\t' << NeededDynamicLibrarys << '\n';
-				}
-				OutputFile << ")\n";
-				ExtraLibraries += " ${" + CmakeTargetName + "_NeededDynamicLibraries}";
-			}
-			OutputFile<<"set("<<CmakeTargetName<<"_NeededLibraries "<<ExtraLibraries<<")\n";
-			OutputFile << "target_link_libraries(" << CmakeTargetName << " ${" << CmakeTargetName << "_NeedLibraries} ${COMMON_LIBRARIES})\n";
+			//OutputFile << "MBPM_UpdateTargetLibraries("; //bara nödvändig om vi ska skapa en executable
+			//OutputFile << IsStatic ? "\"Static\"" : "\"Dynamic\"";
+			//OutputFile << IsDebug ? " \"Debug\")\n" : " \"Release\")\n";
+			//OutputFile << "target_link_libraries(" << CmakeTargetName << " ${MBPM_EXTPACKET_LIBRARIES} ${COMMON_LIBRARIES})\n";
+			OutputFile << "MBPM_ApplyTargetConfiguration(\""+CmakeTargetName+"\" ";
+			OutputFile << IsStatic ? "\"Static\"" : "\"Dynamic\"";
+			OutputFile << IsDebug ? " \"Debug\")\n" : " \"Release\")\n";
+			
+			//OutputFile << "set_target_properties(\"" + CmakeTargetName + "\" PROPERTIES PREFIX \"\")\n";
+			//OutputFile << "set_target_properties(\"" + CmakeTargetName + "\" PROPERTIES SUFFIX \"\")\n";
+			//OutputFile << "set_target_properties(\"" + CmakeTargetName + "\" PROPERTIES OUTPUT_NAME \""+CmakeTargetName+"\")\n";
+			//OutputFile << "target_compile_features(\"" << CmakeTargetName << "\" PRIVATE cxx_std_17)";
+			OutputFile << "target_link_libraries(\""<< CmakeTargetName << "\" ${COMMON_LIBRARIES})\n";
 			
 		}
 		return(ReturnValue);

@@ -23,7 +23,7 @@ set(MBPM_EXTPACKETS_HEADERS
     "${EXTPACKETS_DIR}/BasicChatCmake/MrBoboSockets/MrBoboSockets.h"
 )
 set(MBPM_EXTPACKETS_SOURCES
-    "${EXTPACKETS_DIR}/BasicChatCmake/MrBoboSockets/MrBoboSockets.h"
+    "${EXTPACKETS_DIR}/BasicChatCmake/MrBoboSockets/MrBoboSockets.cpp"
 )
 
 
@@ -81,9 +81,10 @@ set(ALL_FILES
 ################################################################################
 add_executable(${PROJECT_NAME} ${ALL_FILES})
 
+add_library("TestMBPMLibrary" STATIC ${Header_Files} ${Source_Files})
 
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_17)
-
+target_compile_features("TestMBPMLibrary" PRIVATE cxx_std_17)
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
@@ -101,6 +102,12 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/../MrBoboLibrary/;"
 )
 
+target_include_directories("TestMBPMLibrary" PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/../MBExternalDependencies/;"
+    "${CMAKE_CURRENT_SOURCE_DIR}/;"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../BasicChatCmake/;"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../MrBoboLibrary/;"
+)
 if(UNIX)
     set(ADDITIONAL_LIBRARY_DEPENDENCIES 
         "stdc++fs"
@@ -116,8 +123,6 @@ else()
         "Strmiids.lib"
     )
 endif()
-
-
 
 #mina link options
 if(MSVC)
@@ -139,3 +144,4 @@ endif()
 
 
 target_link_libraries(${PROJECT_NAME} PRIVATE "${ADDITIONAL_LIBRARY_DEPENDENCIES}")
+target_link_libraries("TestMBPMLibrary" PRIVATE "${ADDITIONAL_LIBRARY_DEPENDENCIES}")
