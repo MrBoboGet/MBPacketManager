@@ -9,7 +9,49 @@ set(CMAKE_CONFIGURATION_TYPES
     "Release"
     CACHE STRING "" FORCE
 )
+macro(MBPM_UpdateLibraries TargetToUpdate LinkType BuildType)
+	set(MBPM_TARGET_EXTPACKET_LIBRARIES "")
+	foreach(PACKET IN MBPM_DEPENDENCIES)
+		set(NewLibraryToAdd "$ENV{MBPM_PACKETS_INSTALL_DIRECTORY}/${PACKET}/${PACKET}")
+		if(${LinkType} STREQUAL "STATIC")
+			set(NewLibraryToAdd "${NewLibraryToAdd}_S")
+		elseif(${LinkType} STREQUAL "DYNAMIC")
+			set(NewLibraryToAdd "${NewLibraryToAdd}_D")
+		endif()
+		if(${BuildType} STREQUAL "DEBUG")
+			set(NewLibraryToAdd "${NewLibraryToAdd}D")
+		elseif(${BuildType} STREQUAL "RELEASE")
+			set(NewLibraryToAdd "${NewLibraryToAdd}R")
+		endif()
+		list(APPEND MBPM_TARGET_EXTPACKET_LIBRARIES ${NewLibraryToAdd})
+	endforeach()
+endmacro()
 
+macro(MBPM_UpdateTargetVariables TargetToUpdate LinkType BuildType)
+	MBPM_UpdateLibraries(${TargetToUpdate} ${LinkType} ${BuildType})
+endmacro()
+
+macro(MBPM_UpdateOutput TargetToUpdate)
+	set_target_properties(${TargetToUpdate} 
+	PROPERTIES 
+	ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/MBPM_Builds/"
+	LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/MBPM_Builds/"
+	RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/MBPM_Builds/"
+	)
+	set_target_properties(${TargetToUpdate} PROPERTIES PREFIX "")
+	set_target_properties(${TargetToUpdate} PROPERTIES SUFFIX "")
+	set_target_properties(${TargetToUpdate} PROPERTIES OUTPUT_NAME ${TargetToUpdate})
+endmacro()
+
+macro(MBPM_SetTargetCompileOptions TargetToUpdate LinkType BuildType)
+
+endmacro()
+
+macro(MBPM_ApplyTargetConfiguration TargetToUpdate LinkType BuildType)
+	MBPM_UpdateTargetVariables({TargetToUpdate} ${LinkType} ${BuildType})
+	MBPM_UpdateOutput({TargetToUpdate})
+	MBPM_SetTargetCompileOptions(${TargetToUpdate} ${LinkType} ${BuildType})
+endmacro()
 #Global variables
 set(EXTLIBS_DIR
     "${CMAKE_CURRENT_SOURCE_DIR}/../MBExternalDependencies/"

@@ -1,0 +1,11 @@
+{
+	"PacketName":"MBCLI",
+	"Attributes":["Embeddable"],
+	"OutputConfigurations":["StaticDebug","StaticRelease"],
+	"OutputTargetNames": {
+		"StaticRelease": "MBCLI_SR",
+		"StaticDebug": "MBCLI_SD"
+	},
+	"ExportedExecutableTargets":["mbpm"],
+	"Dependancies":["MBUtility"],
+}

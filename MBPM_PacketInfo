@@ -1,8 +1,8 @@
 {
-	"PacketName":"MBPacketManager"
+	"PacketName":"MBPacketManager",
 	"Attributes":["Embeddable"],
 	"OutputConfigurations":["StaticDebug","StaticRelease"],
 	"OutputTargetNames":{"StaticRelease":"MBPacketManager_SR","StaticDebug":"MBPacketManager_SD"},
 	"ExportedExecutableTargets":["mbpm"],
-	"Dependancies":["."],
+	"Dependancies":["MBSockets","MBParsing","MBCrypto","MBUtility","MBUnicode","MBCLI"],
 }

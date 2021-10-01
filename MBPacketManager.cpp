@@ -21,18 +21,17 @@ namespace MBPM
 		MBError ReturnValue = true;
 		std::filesystem::recursive_directory_iterator ProjectIterator(ProjectDirectory);
 		MBPM_FileInfoExcluder FileExcluder;
-		if (std::filesystem::exists(ProjectDirectory + "/MBPM_FileInfoIngore") && std::filesystem::directory_entry(ProjectDirectory + "/MBPM_FileInfoIngore").is_regular_file())
+		if (std::filesystem::exists(ProjectDirectory + "/MBPM_FileInfoIgnore") && std::filesystem::directory_entry(ProjectDirectory + "/MBPM_FileInfoIgnore").is_regular_file())
 		{
-			FileExcluder = MBPM_FileInfoExcluder(ProjectDirectory + "/MBPM_FileInfoIngore");
+			FileExcluder = MBPM_FileInfoExcluder(ProjectDirectory + "/MBPM_FileInfoIgnore");
 		}
 		for (auto const& Entries : ProjectIterator)
 		{
 			if (Entries.is_regular_file())
 			{
 				//Kommer ge fel på windows med paths som har u8, får lägga till den dependancyn
-				std::string TotalFilePath = Entries.path().generic_u8string();
-				std::string RelativePath = TotalFilePath.substr(GetSystemPacketsDirectory().size());
-				std::string FilePacketPath = RelativePath.substr(ProjectName.size()); //ANTAGANDE, alla MBPM packets ligger i en directory som är deras namn
+				std::string RelativeFilePath = std::filesystem::relative(Entries.path(),ProjectDirectory).generic_u8string();
+				std::string FilePacketPath = +"/" + RelativeFilePath;
 				std::string Filename = Entries.path().filename().generic_u8string();	
 				std::string FileEnding = "";
 				size_t LastDot = Filename.find_last_of('.');
@@ -50,7 +49,7 @@ namespace MBPM
 				}
 				if (FileEnding[0] == 'c' || FileEnding == "cpp")
 				{
-					ProjectToPopulate.CommonSources.push_back(ProjectName + "/" + RelativePath);
+					ProjectToPopulate.CommonSources.push_back(ProjectName + "/" + RelativeFilePath);
 				}
 			}
 		}
@@ -92,6 +91,7 @@ namespace MBPM
 		for (size_t i = 0; i < PacketInfo.PacketDependancies.size(); i++)
 		{
 			TotalDependancies.push(PacketInfo.PacketDependancies[i]);
+			//ProjectToPopulate.ProjectPacketsDepandancies.insert(PacketInfo.PacketDependancies[i]);
 		}
 		while (TotalDependancies.size() > 0)
 		{
@@ -154,7 +154,15 @@ namespace MBPM
 
 	std::string GetSystemPacketsDirectory()
 	{
-		return("");
+		char* Result = std::getenv("MBPM_PACKETS_INSTALL_DIRECTORY");
+		if (Result == nullptr)
+		{
+			return("");
+		}
+		else
+		{
+			return(Result);
+		}
 	}
 	MBError SetSystemPacketsDirectory(std::string const& DirectoryPath)
 	{
@@ -189,15 +197,15 @@ namespace MBPM
 		{
 			if (OutputConfigurations.GetStringData() == "StaticDebug")
 			{
-				ReturnValue.SupportedOutputConfigurations.insert(MBPM_CompileOutputConfiguration::StaticRelease);
+				ReturnValue.SupportedOutputConfigurations.insert(MBPM_CompileOutputConfiguration::StaticDebug);
 			}
 			if (OutputConfigurations.GetStringData() == "StaticRelease")
 			{
-				ReturnValue.SupportedOutputConfigurations.insert(MBPM_CompileOutputConfiguration::DynamicDebug);
+				ReturnValue.SupportedOutputConfigurations.insert(MBPM_CompileOutputConfiguration::StaticRelease);
 			}
 			if (OutputConfigurations.GetStringData() == "DynamicDebug")
 			{
-				ReturnValue.SupportedOutputConfigurations.insert(MBPM_CompileOutputConfiguration::DynamicRelease);
+				ReturnValue.SupportedOutputConfigurations.insert(MBPM_CompileOutputConfiguration::DynamicDebug);
 			}
 			if (OutputConfigurations.GetStringData() == "DynamicRelease")
 			{
@@ -235,13 +243,9 @@ namespace MBPM
 	}
 	std::string GetMBPMCmakeFunctions()
 	{
-		std::string ReturnValue = 			
-			"function(MBPM_UpdateTargetVariables)\n"
-			""
-			"endfunction()\n"
-			"function(MBPM_ApplyTargetConfiguration)\n"
-			""
-			"endfunction()\n";
+		std::string ReturnValue =
+#include "MBPM_CMakeFunctions.txt"
+			;
 		return(ReturnValue);
 	}
 	MBError WriteCMakeProjectToFile(MBPM_CmakeProject const& ProjectToWrite, std::string const& OutputFilePath)
@@ -271,14 +275,14 @@ namespace MBPM
 		OutputFile << "set(PROJECT_SOURCES \n\n";
 		for (std::string const& SourceFiles : ProjectToWrite.CommonSources)
 		{
-			OutputFile <<"\t\"{CMAKE_CURRENT_SOURCE_DIR}/"<< SourceFiles<<"\"" << std::endl;
+			OutputFile <<"\t\"${CMAKE_CURRENT_SOURCE_DIR}/"<< SourceFiles<<"\"" << std::endl;
 		}
 		OutputFile << ")\n";
 		//write common headers
 		OutputFile << "set(PROJECT_HEADERS \n";
 		for (std::string const& Headers : ProjectToWrite.CommonHeaders)
 		{
-			OutputFile << "\t\"{CMAKE_CURRENT_SOURCE_DIR}/"<< Headers << std::endl;
+			OutputFile << "\t\"${CMAKE_CURRENT_SOURCE_DIR}/"<< Headers <<"\""<< std::endl;
 		}
 		OutputFile << ")\n";
 		OutputFile << "set(COMMON_FILES ${PROJECT_SOURCES} ${PROJECT_HEADERS})\n";
@@ -344,13 +348,13 @@ namespace MBPM
 			//OutputFile << IsDebug ? " \"Debug\")\n" : " \"Release\")\n";
 			//OutputFile << "target_link_libraries(" << CmakeTargetName << " ${MBPM_EXTPACKET_LIBRARIES} ${COMMON_LIBRARIES})\n";
 			OutputFile << "MBPM_ApplyTargetConfiguration(\""+CmakeTargetName+"\" ";
-			OutputFile << IsStatic ? "\"Static\"" : "\"Dynamic\"";
-			OutputFile << IsDebug ? " \"Debug\")\n" : " \"Release\")\n";
+			OutputFile << (IsStatic ? "\"STATIC\"" : "\"DYNAMIC\"");
+			OutputFile << (IsDebug ? " \"DEBUG\")\n" : " \"RELEASE\")\n");
 			
 			//OutputFile << "set_target_properties(\"" + CmakeTargetName + "\" PROPERTIES PREFIX \"\")\n";
 			//OutputFile << "set_target_properties(\"" + CmakeTargetName + "\" PROPERTIES SUFFIX \"\")\n";
 			//OutputFile << "set_target_properties(\"" + CmakeTargetName + "\" PROPERTIES OUTPUT_NAME \""+CmakeTargetName+"\")\n";
-			//OutputFile << "target_compile_features(\"" << CmakeTargetName << "\" PRIVATE cxx_std_17)";
+			OutputFile << "target_compile_features(\"" << CmakeTargetName << "\" PRIVATE cxx_std_17)\n";
 			OutputFile << "target_link_libraries(\""<< CmakeTargetName << "\" ${COMMON_LIBRARIES})\n";
 			
 		}
@@ -367,7 +371,7 @@ namespace MBPM
 	}
 	MBError GenerateCmakeFile(std::string const& PacketPath, MBPM_MakefileGenerationOptions const& CompileConfiguration,std::string const& OutputName)
 	{
-		MBPM_PacketInfo ProjectToConvert = ParseMBPM_PacketInfo(PacketPath + "MBPM_PacketInfo");
+		MBPM_PacketInfo ProjectToConvert = ParseMBPM_PacketInfo(PacketPath + "/MBPM_PacketInfo");
 		MBError ReturnValue = GenerateCmakeFile(ProjectToConvert, PacketPath, CompileConfiguration, OutputName);
 		return(ReturnValue);
 	}

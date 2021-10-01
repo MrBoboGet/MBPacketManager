@@ -31,7 +31,7 @@ void TestServerFunc()
 int main(int argc,char** argv)
 {
 	//DEBUG GREJER
-	//std::filesystem::current_path("C:/Users/emanu/Desktop/Program/C++/MBPacketManager");
+	std::filesystem::current_path("C:/Users/emanu/Desktop/Program/C++/MBPacketManager");
 	//MBPM::CreatePacketFilesData("./TestUploadPacket/");
 	//MBPM::MBPP_FileInfoReader InfoToIterate("./MBPM_FileInfo");
 	//const MBPM::MBPP_DirectoryInfoNode* TopNode = InfoToIterate.GetDirectoryInfo("/");
@@ -65,5 +65,11 @@ int main(int argc,char** argv)
 	//TestData[6] = "./TestPacket/";
 	//argc = argr;
 	//argv = TestData;
+
+	MBPM::MBPM_MakefileGenerationOptions TestConfig;
+	TestConfig.SupportedLibraryConfigurations = {MBPM::MBPM_CompileOutputConfiguration::StaticDebug,MBPM::MBPM_CompileOutputConfiguration::StaticRelease};
+	MBPM::GenerateCmakeFile("./", TestConfig, "TestCmake2.txt");
+
+	exit(0);
 	return(MBPM::MBCLI_Main(argc, argv));
 }

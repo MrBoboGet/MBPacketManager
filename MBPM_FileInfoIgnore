@@ -9,4 +9,5 @@ Excludes:
 /TestUploadPacket/
 /CMakeSettings.json
 /MBPM_FileInfo
+/MBPM_Builds/
 Includes:
