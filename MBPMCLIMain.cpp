@@ -54,22 +54,38 @@ int main(int argc,char** argv)
 	//argc = argr;
 	//argv = TestData;
 
-	//const int argr = 7;
+	//const int argr = 5;
 	//char* TestData[argr];
 	//TestData[0] = "MBPM";
-	//TestData[1] = "index";
-	//TestData[2] = "diff";
-	//TestData[3] = "-p";
-	//TestData[4] = "./";
-	//TestData[5] = "-p";
-	//TestData[6] = "./TestPacket/";
+	//TestData[1] = "compile";
+	//TestData[2] = "--allinstalled";
+	//TestData[3] = "--cmake";
+	//TestData[4] = "--create";
 	//argc = argr;
 	//argv = TestData;
 
-	MBPM::MBPM_MakefileGenerationOptions TestConfig;
-	TestConfig.SupportedLibraryConfigurations = {MBPM::MBPM_CompileOutputConfiguration::StaticDebug,MBPM::MBPM_CompileOutputConfiguration::StaticRelease};
-	MBPM::GenerateCmakeFile("./", TestConfig, "TestCmake2.txt");
+	const int argr = 4;
+	char* TestData[argr];
+	TestData[0] = "MBPM";
+	TestData[1] = "compile";
+	TestData[2] = "MrBoboSockets";
+	TestData[3] = "MBPacketManager";
+	argc = argr;
+	argv = TestData;
 
-	exit(0);
+	//const int argr = 5;
+	//char* TestData[argr];
+	//TestData[0] = "MBPM";
+	//TestData[1] = "compile";
+	//TestData[2] = "MrBoboSockets";
+	//TestData[3] = "--cmake";
+	//TestData[4] = "--create";
+	//argc = argr;
+	//argv = TestData;
+
+	//MBPM::MBPM_MakefileGenerationOptions TestConfig;
+	//TestConfig.SupportedLibraryConfigurations = {MBPM::MBPM_CompileOutputConfiguration::StaticDebug,MBPM::MBPM_CompileOutputConfiguration::StaticRelease};
+	//MBPM::GenerateCmakeFile("./", TestConfig, "TestCmake2.txt");
+
 	return(MBPM::MBCLI_Main(argc, argv));
 }

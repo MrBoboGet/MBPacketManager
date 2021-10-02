@@ -1,11 +1,97 @@
 #include "MBPM_CLI.h"
 #include <filesystem>
+#include <map>
+#include <MBUnicode/MBUnicode.h>
 namespace MBPM
 {
 	//BEGIN MBPM_CLI
 	std::string MBPM_ClI::p_GetPacketInstallDirectory()
 	{
-		return(std::getenv("MBPM_PACKET_INSTALL_DIRECTORY"));
+		return(std::getenv("MBPM_PACKETS_INSTALL_DIRECTORY"));
+	}
+	struct MBPM_PacketDependancyRankInfo
+	{
+		size_t DependancyDepth = -1;
+		std::string PacketName = "";
+		std::vector<std::string> PacketDependancies = {};
+		bool operator<(MBPM_PacketDependancyRankInfo const& PacketToCompare) const
+		{
+			bool ReturnValue = DependancyDepth < PacketToCompare.DependancyDepth;
+			if (DependancyDepth == PacketToCompare.DependancyDepth)
+			{
+				ReturnValue = PacketName < PacketToCompare.PacketName;
+			}
+			return(ReturnValue);
+		}
+	};
+	size_t h_GetPacketDepth(std::map<std::string, MBPM_PacketDependancyRankInfo>& PacketInfoToUpdate,std::string const& PacketName)
+	{
+		MBPM_PacketDependancyRankInfo& PacketToEvaluate = PacketInfoToUpdate[PacketName];
+		if (PacketToEvaluate.DependancyDepth != -1)
+		{
+			return(PacketToEvaluate.DependancyDepth);
+		}
+		else
+		{
+			std::vector<std::string>& PacketDependancies = PacketToEvaluate.PacketDependancies;
+			if (PacketDependancies.size() == 0)
+			{
+				PacketToEvaluate.DependancyDepth = 0;
+				return(0);
+			}
+			else
+			{
+				size_t DeepestDepth = 0;
+				for (size_t i = 0; i < PacketDependancies.size(); i++)
+				{
+					size_t NewDepth = h_GetPacketDepth(PacketInfoToUpdate,PacketDependancies[i]) + 1;
+					if (NewDepth > DeepestDepth)
+					{
+						DeepestDepth = NewDepth;
+					}
+				}
+				PacketToEvaluate.DependancyDepth = DeepestDepth;
+				return(DeepestDepth);
+			}
+		}
+	}
+	std::vector<std::string> MBPM_ClI::p_GetInstalledPacketsDependancyOrder()
+	{
+		std::map<std::string, MBPM_PacketDependancyRankInfo> Packets = {};
+		std::vector<std::string> InstalledPackets = {};
+		std::filesystem::directory_iterator PacketDirectoryIterator = std::filesystem::directory_iterator(p_GetPacketInstallDirectory());
+		for (auto const& Entries : PacketDirectoryIterator)
+		{
+			if (Entries.is_directory())
+			{
+				std::string InfoPath = MBUnicode::PathToUTF8(Entries.path()) + "/MBPM_PacketInfo";
+				if (std::filesystem::exists(InfoPath))
+				{
+					MBPM::MBPM_PacketInfo PacketInfo = MBPM::ParseMBPM_PacketInfo(InfoPath);
+					if (PacketInfo.PacketName == "") //kanske också borde asserta att packetens folder är samma som dess namn
+					{
+						continue;
+					}
+					MBPM_PacketDependancyRankInfo InfoToAdd;
+					InfoToAdd.PacketName = PacketInfo.PacketName;
+					InfoToAdd.PacketDependancies = PacketInfo.PacketDependancies;
+					InstalledPackets.push_back(InfoToAdd.PacketName);
+					Packets[PacketInfo.PacketName] = InfoToAdd;
+				}
+			}
+		}
+		std::set<MBPM_PacketDependancyRankInfo> OrderedPackets = {};
+		for (auto const& Packet : InstalledPackets)
+		{
+			Packets[Packet].DependancyDepth = h_GetPacketDepth(Packets, Packet);
+			OrderedPackets.insert(Packets[Packet]);
+		}
+		std::vector<std::string> ReturnValue = {};
+		for (auto const& Packet : OrderedPackets)
+		{
+			ReturnValue.push_back(Packet.PacketName);
+		}
+		return(ReturnValue);
 	}
 	std::string MBPM_ClI::p_GetInstalledPacketDirectory(std::string const& PacketName)
 	{
@@ -436,6 +522,135 @@ namespace MBPM
 			p_PrintFileInfoDiff(InfoDiff,AssociatedTerminal);
 		}
 	}
+	void MBPM_ClI::p_HandleCompile(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
+	{
+		std::vector<std::string> PacketDirectories = {};
+		//skapar packet directoriesen
+		bool UpdateInstalled = false;
+		if (CommandInput.CommandOptions.find("allinstalled") != CommandInput.CommandOptions.end())
+		{
+			PacketDirectories = p_GetInstalledPacketsDependancyOrder(); // ska den göra något om vi inte har alla packet dependancys?
+			for (size_t i = 0; i < PacketDirectories.size(); i++)
+			{
+				PacketDirectories[i] = p_GetInstalledPacketDirectory(PacketDirectories[i]);
+			}
+		}
+		//kanske blir att vi uppdaterar pakcets dubbelt, men är ju användarsen ansvar
+		for (size_t i = 0; i < CommandInput.TopCommandArguments.size(); i++)
+		{
+			std::string CurrentInput = CommandInput.TopCommandArguments[i];
+			size_t DotPosition = CurrentInput.find('.');
+			size_t SlashPosition = CurrentInput.find('/');
+			size_t BackslashPosition = CurrentInput.find('\\');
+			if (p_GetInstalledPacketDirectory(CurrentInput) != "" && (SlashPosition == CurrentInput.npos && DotPosition == CurrentInput.npos && BackslashPosition == CurrentInput.npos))
+			{
+				PacketDirectories.push_back(p_GetInstalledPacketDirectory(CurrentInput));
+			}
+			else
+			{
+				PacketDirectories.push_back(CurrentInput);
+			}
+		}
+
+		//allinstalled är incompatible med att uppdatera packets manuellt, eftersom den gör det i dependancy ordning
+		if (CommandInput.CommandOptions.find("cmake") != CommandInput.CommandOptions.end())
+		{
+			bool UpdateCmake = true;
+			bool CompileCmake = false;
+			bool OverwriteAll = false;
+			if (CommandInput.CommandOptions.find("create") != CommandInput.CommandOptions.end())
+			{
+				CompileCmake = true;
+			}
+			//börjar med compile sen update
+			for (size_t i = 0; i < PacketDirectories.size(); i++)
+			{
+				std::string CurrentDirectory = PacketDirectories[i];
+				if (CompileCmake)
+				{
+					bool OverWrite = true;
+					if (std::filesystem::exists(CurrentDirectory + "/CMakeLists.txt") && !OverwriteAll)
+					{
+						AssociatedTerminal->PrintLine("Packet at location " + CurrentDirectory + " already has a CMakeLists.txt. Do you want to overwrite it? [y/n/overwriteall]");
+						std::string UserResponse = "";
+						while (true)
+						{
+							AssociatedTerminal->GetLine(UserResponse);
+							if (UserResponse == "y")
+							{
+								OverWrite = true;
+								break;
+							}
+							else if (UserResponse == "n")
+							{
+								OverWrite = false;
+								break;
+							}
+							else if (UserResponse == "overwriteall")
+							{
+								OverwriteAll = true;
+								break;
+							}
+							else
+							{
+								AssociatedTerminal->PrintLine("Invalid response \"" + UserResponse + "\"");
+							}
+						}
+					}
+					if (OverWrite || OverwriteAll)
+					{
+						p_CreateCmake(CurrentDirectory);
+					}
+				}
+				if (UpdateCmake)
+				{
+					p_UpdateCmake(CurrentDirectory);//ska om packetet följer MBPM standard inte påverka packetet
+				}
+			}
+		}
+		else
+		{
+			//nu ska vi faktiskt ta och kompilera packetsen
+			std::vector<std::string> FailedCompiles = {};
+			for (size_t i = 0; i < PacketDirectories.size(); i++)
+			{
+				MBError CompilationError = true;
+				CompilationError = p_UpdateCmake(PacketDirectories[i]);
+				if (CompilationError)
+				{
+				 	CompilationError = p_CompilePacket(PacketDirectories[i]);
+				}
+				if (!CompilationError)
+				{
+					FailedCompiles.push_back(PacketDirectories[i]);
+				}
+			}
+			if (FailedCompiles.size() > 0)
+			{
+				AssociatedTerminal->PrintLine("Failed building following packets:");
+				for (size_t i = 0; i < FailedCompiles.size(); i++)
+				{
+					AssociatedTerminal->PrintLine(FailedCompiles[i]);
+				}
+			}
+			else
+			{
+				AssociatedTerminal->PrintLine("All builds successful!");
+			}
+		}
+	}
+	MBError MBPM_ClI::p_UpdateCmake(std::string const& PacketDirectory)
+	{
+		return(MBPM::UpdateCmakeMBPMVariables(PacketDirectory));
+	}
+	MBError MBPM_ClI::p_CreateCmake(std::string const& PacketDirectory)
+	{
+		return(MBPM::GenerateCmakeFile(PacketDirectory));
+	}
+	MBError MBPM_ClI::p_CompilePacket(std::string const& PacketDirectory)
+	{
+		return(MBPM::CompileAndInstallPacket(PacketDirectory));
+	}
 	void MBPM_ClI::HandleCommand(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
 	{
 		if (CommandInput.TopCommand == "install")
@@ -457,6 +672,10 @@ namespace MBPM
 		else if (CommandInput.TopCommand == "index")
 		{
 			p_HandleInfo(CommandInput, AssociatedTerminal);
+		}
+		else if(CommandInput.TopCommand == "compile")
+		{
+			p_HandleCompile(CommandInput, AssociatedTerminal);
 		}
 		else
 		{

@@ -45,7 +45,7 @@ namespace MBPM
 				}
 				if (FileEnding[0] == 'h' || FileEnding == "hpp")
 				{
-					ProjectToPopulate.CommonHeaders.push_back(ProjectName + "/" + Filename);
+					ProjectToPopulate.CommonHeaders.push_back(ProjectName + "/" + RelativeFilePath);
 				}
 				if (FileEnding[0] == 'c' || FileEnding == "cpp")
 				{
@@ -270,7 +270,7 @@ namespace MBPM
 		OutputFile << "##END MBPM_VARIABLES\n";
 		OutputFile << "##BEGIN MBPM_FUNCTIONS\n";
 		OutputFile << GetMBPMCmakeFunctions();
-		OutputFile << "##END MBPM_FUNCTIONS\n";
+		OutputFile << "\n##END MBPM_FUNCTIONS\n";
 		//write common sources
 		OutputFile << "set(PROJECT_SOURCES \n\n";
 		for (std::string const& SourceFiles : ProjectToWrite.CommonSources)
@@ -360,13 +360,22 @@ namespace MBPM
 		}
 		return(ReturnValue);
 	}
+	MBError UpdateCmakeMBPMVariables(std::string const& PacketPath)
+	{
+		//assert(false);
+		return(MBError(true));
+	}
 
 	MBError GenerateCmakeFile(MBPM_PacketInfo const& PacketToConvert, std::string const& PacketDirectory, MBPM_MakefileGenerationOptions const& CompileConfiguration,std::string const& OutputName)
 	{
 		MBError ReturnValue = true;
 		MBPM_CmakeProject GeneratedProject;
 		ReturnValue = h_GenerateCmakeFile(GeneratedProject, CompileConfiguration, PacketToConvert, PacketDirectory);
-		WriteCMakeProjectToFile(GeneratedProject, OutputName);
+		for(auto const& OutputOption : CompileConfiguration.SupportedLibraryConfigurations)
+		{
+			GeneratedProject.TargetsData[OutputOption];
+		}
+		WriteCMakeProjectToFile(GeneratedProject, PacketDirectory+"/"+OutputName);
 		return(ReturnValue);
 	}
 	MBError GenerateCmakeFile(std::string const& PacketPath, MBPM_MakefileGenerationOptions const& CompileConfiguration,std::string const& OutputName)
@@ -375,7 +384,13 @@ namespace MBPM
 		MBError ReturnValue = GenerateCmakeFile(ProjectToConvert, PacketPath, CompileConfiguration, OutputName);
 		return(ReturnValue);
 	}
-
+	MBError GenerateCmakeFile(std::string const& PacketPath, std::string const& CmakeName)
+	{
+		MBPM_PacketInfo PacketToConvert = ParseMBPM_PacketInfo(PacketPath + "/MBPM_PacketInfo");
+		MBPM_MakefileGenerationOptions OptionsToUse;
+		OptionsToUse.SupportedLibraryConfigurations = PacketToConvert.SupportedOutputConfigurations;
+		return(GenerateCmakeFile(PacketToConvert, PacketPath, OptionsToUse, CmakeName));
+	}
 
 	MBError EmbeddDependancies(std::string const& PacketDirectory, MBPM_MakefileGenerationOptions const& CompileConfiguration, std::string const& TargetFilepath)
 	{
@@ -395,14 +410,47 @@ namespace MBPM
 		return(ReturnValue);
 	}
 
+	MBError CompilePacket(std::string const& PacketDirectory)
+	{
+		MBError ReturnValue = true;
+		MBPM_PacketInfo PacketInfo = ParseMBPM_PacketInfo(PacketDirectory + "/MBPM_PacketInfo");
+		int CommandReturnValue = 0;
+		if (PacketInfo.Attributes.find(MBPM_PacketAttribute::Embedabble) != PacketInfo.Attributes.end() || PacketInfo.Attributes.find(MBPM_PacketAttribute::TriviallyCompilable) != PacketInfo.Attributes.end())
+		{
+			CommandReturnValue = std::system(("cmake -S " + PacketDirectory + " -B " + PacketDirectory + "/MBPM_BuildFiles/").c_str());
+			CommandReturnValue = std::system(("cmake --build " + PacketDirectory + "/MBPM_BuildFiles/").c_str());
+		}
+		if (CommandReturnValue != 0)
+		{
+			ReturnValue = false;
+		}
+		else
+		{
+#ifdef _WIN32
+			std::string BuildDirectory = PacketDirectory + "/MBPM_Builds/";
+			std::filesystem::copy_options Overwrite = std::filesystem::copy_options::overwrite_existing;
+			if (std::filesystem::exists(BuildDirectory + "Debug"))
+			{
+				std::filesystem::copy(BuildDirectory + "Debug",BuildDirectory,Overwrite);
+			}
+#endif // 
 
+		}
+		return(ReturnValue);
+	}
+	MBError InstallCompiledPacket(std::string const& PacketDirectory)
+	{
+		MBError ReturnValue = true;
+
+		return(ReturnValue);
+	}
 	MBError CompileAndInstallPacket(std::string const& PacketToCompileDirectory)
 	{
-		return(MBError());
-	}
-
-	MBError DownloadPacket(std::string const& DestinationDirectory, std::string const& URI)
-	{
-		return(MBError());
+		MBError ReturnValue = CompilePacket(PacketToCompileDirectory);
+		if (ReturnValue)
+		{
+			ReturnValue = InstallCompiledPacket(PacketToCompileDirectory);
+		}
+		return(ReturnValue);
 	}
 };

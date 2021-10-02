@@ -4,5 +4,5 @@
 	"OutputConfigurations":["StaticDebug","StaticRelease"],
 	"OutputTargetNames":{"StaticRelease":"MBPacketManager_SR","StaticDebug":"MBPacketManager_SD"},
 	"ExportedExecutableTargets":["mbpm"],
-	"Dependancies":["MBSockets","MBParsing","MBCrypto","MBUtility","MBUnicode","MBCLI"],
+	"Dependancies":["MrBoboSockets","MBParsing","MBCrypto","MBUtility","MBUnicode","MBCLI"],
 }

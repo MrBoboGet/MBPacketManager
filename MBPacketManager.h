@@ -89,25 +89,25 @@ namespace MBPM
 		std::map<MBPM_CompileOutputConfiguration, MBPM_CmakeProject_TargetData> TargetsData = {};
 		std::unordered_set<std::string> ProjectPacketsDepandancies;
 	};
-	std::string GetLibraryName(std::string const& LibrayName,bool Dynamic, bool Debug);
 
 	std::string GetMBPMCmakeFunctions();
 
 	MBError WriteCMakeProjectToFile(MBPM_CmakeProject const& ProjectToWrite, std::string const& OutputFilePath);
 
-	MBError UpdateCmakeMBPMVariables(MBPM_PacketInfo const& PacketInfo, std::string const& CmakeFilepath);
+	MBError UpdateCmakeMBPMVariables(std::string const& PacketPath);
 
 	MBError GenerateCmakeFile(MBPM_PacketInfo const& PacketToConvert, std::string const& PacketDirectory, MBPM_MakefileGenerationOptions const& CompileConfiguration,std::string const& FileName);
 	MBError GenerateCmakeFile(std::string const& PacketPath, MBPM_MakefileGenerationOptions const& CompileConfiguration,std::string const& FileName);
+	MBError GenerateCmakeFile(std::string const& PacketPath, std::string const& CmakeName = "CMakeLists.txt");
 
 
 	MBError EmbeddDependancies(std::string const& PacketDirectory, MBPM_MakefileGenerationOptions const& CompileConfiguration, std::string const& TargetFilepath);
 	MBError EmbeddDependancies(MBPM_PacketInfo const& PacketInfo,std::string const& PacketDirectory, MBPM_MakefileGenerationOptions const& CompileConfiguration, std::string const& TargetFilepath);
 
+	MBError CompilePacket(std::string const& PacketDirectory);
+	MBError InstallCompiledPacket(std::string const& PacketDirectory);
 
 	MBError CompileAndInstallPacket(std::string const& PacketToCompileDirectory);
-
-	//MBError DownloadPacket(std::string const& DestinationDirectory, std::string const& URI);
 
 	std::string GetSystemPacketsDirectory();
 	MBError SetSystemPacketsDirectory(std::string const& DirectoryPath);

@@ -15,6 +15,12 @@ namespace MBPM
 		void p_HandleInfo(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
 
 
+		void p_HandleCompile(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
+	
+		MBError p_UpdateCmake(std::string const& PacketDirectory);//fyller bara i MBPM variablar och skriver inte över filen
+		MBError p_CreateCmake(std::string const& PacketDirectory);
+		MBError p_CompilePacket(std::string const& PacketDirectory);
+		std::vector<std::string> p_GetInstalledPacketsDependancyOrder();
 		std::string p_GetPacketInstallDirectory();
 		MBPP_PacketHost p_GetDefaultPacketHost();
 
