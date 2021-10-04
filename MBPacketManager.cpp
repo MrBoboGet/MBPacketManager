@@ -170,7 +170,7 @@ namespace MBPM
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
 		_putenv_s("MBPM_PACKETS_DIRECTORY", DirectoryPath.c_str());
 #else
-		setenv("MBPM_PACKETS_DIRECTORY", DirectoryPath.c_str());
+		setenv("MBPM_PACKETS_DIRECTORY", DirectoryPath.c_str(),true);
 #endif // 
 		return(ReturnValue);
 	}
