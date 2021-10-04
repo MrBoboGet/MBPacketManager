@@ -73,16 +73,37 @@ int main(int argc,char** argv)
 	//argc = argr;
 	//argv = TestData;
 
-	const int argr = 5;
+	//const int argr = 4;
+	//char* TestData[argr];
+	//TestData[0] = "MBPM";
+	//TestData[1] = "upload";
+	//TestData[2] = "TestPacket";
+	//TestData[3] = "./TestPacket/";
+	//argc = argr;
+	//argv = TestData;
+	
+	MBPM::CreatePacketFilesData("./TestPacket/");
+	
+	const int argr2 = 5;
+	char* TestData2[argr2];
+	TestData2[0] = "MBPM";
+	TestData2[1] = "index";
+	TestData2[2] = "list";
+	TestData2[3] = "TestPacket";
+	TestData2[4] = "--remote";
+	argc = argr2;
+	argv = TestData2;
+	MBPM::MBCLI_Main(argc, argv);
+	std::cout << "-----Delimiter-----" << std::endl;
+	const int argr = 4;
 	char* TestData[argr];
 	TestData[0] = "MBPM";
-	TestData[1] = "compile";
-	TestData[2] = "--allinstalled";
-	TestData[3] = "--cmake";
-	TestData[4] = "--create";
+	TestData[1] = "index";
+	TestData[2] = "list";
+	TestData[3] = "./TestPacket/";
 	argc = argr;
 	argv = TestData;
-
+	
 	//MBPM::MBPM_MakefileGenerationOptions TestConfig;
 	//TestConfig.SupportedLibraryConfigurations = {MBPM::MBPM_CompileOutputConfiguration::StaticDebug,MBPM::MBPM_CompileOutputConfiguration::StaticRelease};
 	//MBPM::GenerateCmakeFile("./", TestConfig, "TestCmake2.txt");

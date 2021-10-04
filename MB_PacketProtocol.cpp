@@ -770,7 +770,7 @@ namespace MBPM
 		MBError ReturnValue = true;
 		std::string FileOutputPath = m_OutputDirectory + FileToDownloadName;
 		std::filesystem::create_directories(std::filesystem::path(FileOutputPath).parent_path());
-		m_FileHandle.open(FileOutputPath);
+		m_FileHandle.open(FileOutputPath,std::ios::binary|std::ios::out);
 		if (!m_FileHandle.is_open())
 		{
 			ReturnValue = false;
