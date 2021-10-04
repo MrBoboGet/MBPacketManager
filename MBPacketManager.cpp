@@ -248,6 +248,23 @@ namespace MBPM
 			;
 		return(ReturnValue);
 	}
+	void h_WriteMBPMCmakeValues(std::vector<std::string> const& Dependancies, std::ofstream& OutputFile)
+	{
+		OutputFile << "##BEGIN MBPM_VARIABLES\n";
+		OutputFile << "set(MBPM_DEPENDENCIES \n";
+		for (auto const& Packet : Dependancies)
+		{
+			OutputFile << "\t" << Packet << std::endl;
+		}
+		OutputFile << ")\n";
+		OutputFile << "set(MBPM_TARGET_EXTPACKET_LIBRARIES )\n";
+
+		OutputFile << "set(MBPM_TARGET_COMPILE_OPTIONS )\n";
+		OutputFile << "set(MBPM_TARGET_LINK_OPTIONS )\n";
+		OutputFile << "#MBPM_Functions";
+		OutputFile << GetMBPMCmakeFunctions();
+		OutputFile << "##END MBPM_VARIABLES\n";
+	}
 	MBError WriteCMakeProjectToFile(MBPM_CmakeProject const& ProjectToWrite, std::string const& OutputFilePath)
 	{
 		MBError ReturnValue = true;
@@ -256,22 +273,14 @@ namespace MBPM
 		OutputFile << "set(PROJECT_NAME \"" + ProjectToWrite.ProjectName + "\")\n";
 		
 		//MBPM variablar
-		OutputFile << "##BEGIN MBPM_VARIABLES\n";
-		OutputFile << "set(MBPM_DEPENDENCIES \n";
-		for (auto const& Packet : ProjectToWrite.ProjectPacketsDepandancies)
+		std::vector<std::string> Dependancies = {};
+		for (auto const& Packets : ProjectToWrite.ProjectPacketsDepandancies)
 		{
-			OutputFile << "\t" << Packet<<std::endl;
+			Dependancies.push_back(Packets);
 		}
-		OutputFile << ")\n";
-		OutputFile << "set(MBPM_TARGET_EXTPACKET_LIBRARIES )\n";
-
-		OutputFile << "set(MBPM_TARGET_COMPILE_OPTIONS )\n";
-		OutputFile << "set(MBPM_TARGET_LINK_OPTIONS )\n";
-		OutputFile << "##END MBPM_VARIABLES\n";
-		OutputFile << "##BEGIN MBPM_FUNCTIONS\n";
-		OutputFile << GetMBPMCmakeFunctions();
-		OutputFile << "\n##END MBPM_FUNCTIONS\n";
+		h_WriteMBPMCmakeValues(Dependancies, OutputFile);
 		//write common sources
+
 		OutputFile << "set(PROJECT_SOURCES \n\n";
 		for (std::string const& SourceFiles : ProjectToWrite.CommonSources)
 		{
@@ -362,8 +371,60 @@ namespace MBPM
 	}
 	MBError UpdateCmakeMBPMVariables(std::string const& PacketPath)
 	{
-		//assert(false);
-		return(MBError(true));
+		MBError ReturnValue = true;
+		if (!std::filesystem::exists(PacketPath + "/MBPM_PacketInfo") || !std::filesystem::exists(PacketPath+"/CMakeLists.txt"))
+		{
+			ReturnValue = false;
+			ReturnValue.ErrorMessage = "MBPM_PacketInfo or CMakeLists.txt doesn't exist";
+			return(ReturnValue);
+		}
+		std::ifstream InputFile = std::ifstream(PacketPath + "/CMakeLists.txt",std::ios::in);
+		std::string CurrentLine = "";
+		std::vector<std::string> FileLines = {};
+		while (std::getline(InputFile,CurrentLine))
+		{
+			FileLines.push_back(CurrentLine);
+		}
+		InputFile.close();
+		bool ContainsBegin = false;
+		bool ContainsEnd = false;
+		for (size_t i = 0; i < FileLines.size(); i++)
+		{
+			if (FileLines[i] == "##BEGIN MBPM_VARIABLES")
+			{
+				ContainsBegin = true;
+			}
+			if (ContainsBegin == true && FileLines[i] == "##END MBPM_VARIABLES")
+			{
+				ContainsEnd = true;
+			}
+		}
+		if (!(ContainsBegin && ContainsEnd))
+		{
+			ReturnValue = false;
+			ReturnValue.ErrorMessage = "File doesn't contain valid MBPM_Variables";
+			return(ReturnValue);
+		}
+		std::ofstream OutputFile = std::ofstream(PacketPath + "/CMakeLists.txt", std::ios::out);
+		bool InMBPMVariables = false;
+		MBPM_PacketInfo PacketInfo = ParseMBPM_PacketInfo(PacketPath + "/MBPM_PacketInfo");
+		for (size_t i = 0; i < FileLines.size(); i++)
+		{
+			if (FileLines[i] == "##BEGIN MBPM_VARIABLES")
+			{
+				InMBPMVariables = true;
+				h_WriteMBPMCmakeValues(PacketInfo.PacketDependancies, OutputFile);
+			}
+			if (!InMBPMVariables)
+			{
+				OutputFile << FileLines[i] << std::endl;
+			}
+			if (InMBPMVariables && FileLines[i] == "##END MBPM_VARIABLES")
+			{
+				InMBPMVariables = false;
+			}
+		}
+		return(ReturnValue);
 	}
 
 	MBError GenerateCmakeFile(MBPM_PacketInfo const& PacketToConvert, std::string const& PacketDirectory, MBPM_MakefileGenerationOptions const& CompileConfiguration,std::string const& OutputName)

@@ -430,6 +430,7 @@ namespace MBPM
 		//	return(m_AssociatedServer->p_GetResponseData<T>());
 		//}
 		std::string p_GetPacketDirectory(std::string const& PacketName);
+		std::string p_GetTopPacketsDirectory();
 	public:
 		std::string& operator*()
 		{
@@ -578,6 +579,10 @@ namespace MBPM
 		
 		std::vector<MBPP_UserCredentialsType> m_SupportedCredentials = { MBPP_UserCredentialsType::Plain };
 
+		bool m_PacketUpdated = false;
+		std::string m_UpdatedPacket = "";
+
+
 		template<typename T> T& p_GetResponseData()
 		{
 			return(*(T*)m_RequestResponseData);
@@ -599,6 +604,8 @@ namespace MBPM
 
 		std::string p_GetPacketDirectory(std::string const& PacketName);
 		std::string p_GetPacketDomain(std::string const& PacketName);
+		std::string p_GetTopPacketsDirectory();
+
 		MBPP_ErrorCode p_VerifyPlainLogin(std::string const& PacketName);
 		MBPP_ErrorCode p_VerifyRequest(std::string const& PacketName);
 	public:
@@ -615,6 +622,9 @@ namespace MBPM
 		MBPP_ServerResponseIterator* GetResponseIterator();
 		void FreeResponseIterator(MBPP_ServerResponseIterator* IteratorToFree);
 		MBPP_FileInfoReader GetPacketFileInfo(std::string const& PacketName);
+
+		bool PacketUpdated();
+		std::string GetUpdatedPacket();
 		//MBError SendResponse(MBSockets::ConnectSocket* SocketToUse);
 	};
 

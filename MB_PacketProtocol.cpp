@@ -131,6 +131,8 @@ namespace MBPM
 			Excluder = MBPM_FileInfoExcluder(PacketToHashDirectory + "/MBPM_FileInfoIgnore");
 		}
 		Excluder.AddExcludeFile("/"+OutputName);
+		Excluder.AddExcludeFile("/MBPM_UploadedChanges/");
+		Excluder.AddExcludeFile("/MBPM_BuildFiles/");
 		h_WriteDirectoryData_Recursive(OutputFile, PacketToHashDirectory, "/", PacketToHashDirectory, Excluder, MBCrypto::HashFunction::SHA1);
 		OutputFile.flush();
 		OutputFile.close();
@@ -1804,6 +1806,15 @@ namespace MBPM
 	{
 		return(MBPP_FileInfoReader(p_GetPacketDirectory(PacketName) + "/MBPM_FileInfo"));
 	}
+	std::string MBPP_Server::p_GetTopPacketsDirectory()
+	{
+		std::string ReturnValue = "";
+		if (m_PacketSearchDirectories.size() > 0)
+		{
+			ReturnValue = m_PacketSearchDirectories[0];
+		}
+		return(ReturnValue);
+	}
 	std::string MBPP_Server::p_GetPacketDirectory(std::string const& PacketName)
 	{
 		//går igenom packet search directorisen och ser om packeten existerar
@@ -1983,6 +1994,11 @@ namespace MBPM
 			}
 			if (CurrentResponseData.FilesToDownloadParsed && CurrentResponseData.ObjectsToDeleteParsed)
 			{
+				std::string PacketDirectory = p_GetPacketDirectory(CurrentResponseData.PacketName);
+				if (!std::filesystem::exists(PacketDirectory+"/MBPM_UploadedChanges/"))
+				{
+					std::filesystem::create_directories(PacketDirectory + "/MBPM_UploadedChanges/");
+				}
 				CurrentResponseData.Downloader = std::unique_ptr<MBPP_FileListDownloader>(new MBPP_FileListDownloader(p_GetPacketDirectory(CurrentResponseData.PacketName) + "/MBPM_UploadedChanges/"));
 				CurrentResponseData.DownloadState.FileNames = CurrentResponseData.FilesToDownload.Files;
 			}
@@ -1990,6 +2006,16 @@ namespace MBPM
 		if (CurrentResponseData.PacketName != "" && CurrentResponseData.FilesToDownloadParsed && CurrentResponseData.ObjectsToDeleteParsed)
 		{
 			ReturnValue = p_DownloadClientFileList(&CurrentResponseData.DownloadState, CurrentResponseData.Downloader.get());
+			if (ReturnValue)
+			{
+				m_PacketUpdated = true;
+				m_UpdatedPacket = CurrentResponseData.PacketName;
+			}
+			else
+			{
+				m_PacketUpdated = false;
+				m_UpdatedPacket = "";
+			}
 		}
 		return(ReturnValue);
 	}
@@ -1998,6 +2024,14 @@ namespace MBPM
 		m_PacketSearchDirectories.push_back(PacketSearchDirectoryToAdd);
 	}
 	//Upload/Remove metoder
+	bool MBPP_Server::PacketUpdated()
+	{
+		return(m_PacketUpdated);
+	}
+	std::string MBPP_Server::GetUpdatedPacket()
+	{
+		return(m_UpdatedPacket);
+	}
 	MBError MBPP_Server::InsertClientData(const void* Data, size_t DataSize)
 	{
 		MBError ReturnValue = true;
@@ -2016,6 +2050,9 @@ namespace MBPM
 				else
 				{
 					m_RecievedDataOffset = MBPP_GenericRecordHeaderSize;
+					//resettar tidigare packet data vi fått
+					m_PacketUpdated = false;
+					m_UpdatedPacket = "";
 				}
 			}
 		}
@@ -2129,7 +2166,10 @@ namespace MBPM
 	{
 		return(m_AssociatedServer->p_GetPacketDirectory(PacketName));
 	}
-
+	std::string MBPP_ServerResponseIterator::p_GetTopPacketsDirectory()
+	{
+		return(m_AssociatedServer->p_GetTopPacketsDirectory());
+	}
 	//END MBPP_ServerResponseIterator
 	
 	//Specifika iterators
@@ -2253,6 +2293,27 @@ namespace MBPM
 	{
 		m_AssociatedServer = AssociatedServer;
 		m_HeaderToSend.Type = MBPP_RecordType::FilesData;
+		//för att supporta att man upploadar till packets som inte än existerar, vilket vi kanske inte vill supporta men är ju bara för mina grejer, så skapar vi en tom directory när man
+		//begär från ett packet som ej existerar
+		if (p_GetPacketDirectory(ResponseData.PacketName) == "")
+		{
+			//packetet finns inte, vi skapar det, och checkar först att namnet är valid, annars bara skiter vi i
+			if (MBPP_PathIsValid(ResponseData.PacketName))
+			{
+				std::string TopPacketDirectory = p_GetTopPacketsDirectory();
+				std::filesystem::create_directories(TopPacketDirectory + ResponseData.PacketName);
+				std::string PacketDirectory = TopPacketDirectory + ResponseData.PacketName + "/";
+				std::ofstream NewPacketInfo = std::ofstream(PacketDirectory + "MBPM_PacketInfo", std::ios::out | std::ios::binary);
+				NewPacketInfo <<
+#include "MBPM_EmptyPacketInfo.txt"
+					;
+				CreatePacketFilesData(PacketDirectory);
+			}
+			else
+			{
+				m_FilesToSend = {};
+			}
+		}
 		m_HeaderToSend.RecordSize = h_CalculateFileListResponseSize(m_FilesToSend, p_GetPacketDirectory(ResponseData.PacketName));
 		Increment();
 	}

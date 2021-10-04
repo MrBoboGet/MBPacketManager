@@ -562,6 +562,10 @@ namespace MBPM
 			{
 				CompileCmake = true;
 			}
+			if (CommandInput.CommandOptions.find("update") != CommandInput.CommandOptions.end())
+			{
+				UpdateCmake = true;
+			}
 			//börjar med compile sen update
 			for (size_t i = 0; i < PacketDirectories.size(); i++)
 			{

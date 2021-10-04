@@ -1,0 +1,11 @@
+R"1337xd({
+  "PacketName": "",
+  "Attributes": [],
+  "OutputConfigurations": [],
+  "OutputTargetNames": {
+    "StaticRelease": "",
+    "StaticDebug": ""
+  },
+  "ExportedExecutableTargets": [],
+  "Dependancies": []
+})1337xd"

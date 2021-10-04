@@ -64,24 +64,24 @@ int main(int argc,char** argv)
 	//argc = argr;
 	//argv = TestData;
 
-	const int argr = 4;
-	char* TestData[argr];
-	TestData[0] = "MBPM";
-	TestData[1] = "compile";
-	TestData[2] = "MrBoboSockets";
-	TestData[3] = "MBPacketManager";
-	argc = argr;
-	argv = TestData;
-
-	//const int argr = 5;
+	//const int argr = 4;
 	//char* TestData[argr];
 	//TestData[0] = "MBPM";
 	//TestData[1] = "compile";
 	//TestData[2] = "MrBoboSockets";
-	//TestData[3] = "--cmake";
-	//TestData[4] = "--create";
+	//TestData[3] = "MBPacketManager";
 	//argc = argr;
 	//argv = TestData;
+
+	const int argr = 5;
+	char* TestData[argr];
+	TestData[0] = "MBPM";
+	TestData[1] = "compile";
+	TestData[2] = "--allinstalled";
+	TestData[3] = "--cmake";
+	TestData[4] = "--create";
+	argc = argr;
+	argv = TestData;
 
 	//MBPM::MBPM_MakefileGenerationOptions TestConfig;
 	//TestConfig.SupportedLibraryConfigurations = {MBPM::MBPM_CompileOutputConfiguration::StaticDebug,MBPM::MBPM_CompileOutputConfiguration::StaticRelease};
