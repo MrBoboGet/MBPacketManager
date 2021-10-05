@@ -1999,7 +1999,7 @@ namespace MBPM
 				{
 					std::filesystem::create_directories(PacketDirectory + "/MBPM_UploadedChanges/");
 				}
-				CurrentResponseData.Downloader = std::unique_ptr<MBPP_FileListDownloader>(new MBPP_FileListDownloader(p_GetPacketDirectory(CurrentResponseData.PacketName) + "/MBPM_UploadedChanges/"));
+				CurrentResponseData.Downloader = std::unique_ptr<MBPP_FileListDownloader>(new MBPP_FileListDownloader(PacketDirectory + "/MBPM_UploadedChanges/"));
 				CurrentResponseData.DownloadState.FileNames = CurrentResponseData.FilesToDownload.Files;
 			}
 		}

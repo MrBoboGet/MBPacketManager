@@ -28,6 +28,8 @@ namespace MBPM
 		MBPM::MBPP_FileInfoReader p_GetInstalledFileInfo(std::string const& InstalledPacket, MBError* OutError);
 		MBPM::MBPP_FileInfoReader p_GetPathFileInfo(std::string const& InstalledPacket, MBError* OutError);
 
+		std::vector<std::pair<std::string, std::string>> p_GetUserUploadPackets();
+
 		std::string p_GetInstalledPacketDirectory(std::string const& PacketName);
 		void p_PrintFileInfo(MBPM::MBPP_FileInfoReader const& InfoToPrint,MBCLI::MBTerminal* AssociatedTerminal);
 		void p_PrintFileInfoDiff(MBPM::MBPP_FileInfoDiff const& InfoToPrint,MBCLI::MBTerminal* AssociatedTerminal);

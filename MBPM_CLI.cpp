@@ -93,6 +93,43 @@ namespace MBPM
 		}
 		return(ReturnValue);
 	}
+	std::vector<std::pair<std::string, std::string>> MBPM_ClI::p_GetUserUploadPackets()
+	{
+		std::vector<std::pair<std::string, std::string>> ReturnValue = {};
+		std::set<std::string> SearchDirectories = {};
+		std::string PacketInstallDirectory = p_GetPacketInstallDirectory();
+		//läser in config filen
+		if (std::filesystem::exists(PacketInstallDirectory + "/LocalUploadPackets.txt"))
+		{
+			std::ifstream UploadPacketsFile = std::ifstream(PacketInstallDirectory + "/LocalUploadPackets.txt",std::ios::in);
+			std::string CurrentLine = "";
+			while (std::getline(UploadPacketsFile,CurrentLine))
+			{
+				SearchDirectories.insert(CurrentLine);
+			}
+		}
+		for (std::string const& Directories : SearchDirectories)
+		{
+			std::filesystem::directory_iterator CurrentDirectoryIterator = std::filesystem::directory_iterator(Directories);
+			for (auto const& Entries : CurrentDirectoryIterator)
+			{
+				if (Entries.is_directory())
+				{
+					std::string EntryPath = MBUnicode::PathToUTF8(Entries.path())+"/";
+					if (std::filesystem::exists(EntryPath+"/MBPM_PacketInfo"))
+					{
+						MBPM::MBPM_PacketInfo CurrentPacket = MBPM::ParseMBPM_PacketInfo(EntryPath + "/MBPM_PacketInfo");
+						if (CurrentPacket.PacketName != "")
+						{
+							ReturnValue.push_back(std::pair<std::string, std::string>(CurrentPacket.PacketName, EntryPath));
+						}
+					}
+				}
+			}
+		}
+
+		return(ReturnValue);
+	}
 	std::string MBPM_ClI::p_GetInstalledPacketDirectory(std::string const& PacketName)
 	{
 		std::string ReturnValue = p_GetPacketInstallDirectory();
@@ -113,7 +150,7 @@ namespace MBPM
 	}
 	MBPP_PacketHost MBPM_ClI::p_GetDefaultPacketHost()
 	{
-		MBPP_PacketHost ReturnValue = { "127.0.0.1/MBPM/",MBPP_TransferProtocol::HTTPS,443 };
+		MBPP_PacketHost ReturnValue = { "mrboboget.se/MBPM/",MBPP_TransferProtocol::HTTPS,443 };
 		return(ReturnValue);
 	}
 
@@ -203,20 +240,7 @@ namespace MBPM
 		std::vector<std::string> PacketsToUpdate = {};
 		if (CommandInput.CommandOptions.find("all") != CommandInput.CommandOptions.end())
 		{
-			std::string DirectoryToIterate = p_GetPacketInstallDirectory();
-			std::filesystem::directory_iterator InstallDirectoryIterator = std::filesystem::directory_iterator(DirectoryToIterate);
-			//alla packets måste innehålla MBPM_PacketInfo på toppen, annars är det inte ett giltig packet
-			for (auto const& Entries : InstallDirectoryIterator)
-			{
-				if (Entries.is_directory())
-				{
-					
-					if (std::filesystem::exists(MBUnicode::PathToUTF8(Entries.path()) + "/MBPM_PacketInfo"))
-					{
-						PacketsToUpdate.push_back(MBUnicode::PathToUTF8(std::filesystem::relative(Entries.path(), DirectoryToIterate)));
-					}
-				}
-			}
+			PacketsToUpdate = p_GetInstalledPacketsDependancyOrder();
 		}
 		else
 		{
@@ -244,19 +268,58 @@ namespace MBPM
 	}
 	void MBPM_ClI::p_HandleInstall(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
 	{
-		std::vector<std::string> PacketsToInstall = CommandInput.TopCommandArguments;
 		std::string InstallDirectory = p_GetPacketInstallDirectory();
-		std::vector<std::string> AlreadyInstalledPacktes = {};
-		for(size_t i = 0; i < PacketsToInstall.size();i++)
+		std::stack<std::string> PacketsToInstall = {};
+		for (size_t i = 0; i < CommandInput.TopCommandArguments.size(); i++)
 		{
-			if (std::filesystem::exists(InstallDirectory + PacketsToInstall[i]))
+			PacketsToInstall.push(CommandInput.TopCommandArguments[i]);
+		}
+		std::unordered_set<std::string> AlreadyInstalledPackets = {};
+		std::stack<std::string> NewPacketsToCompile = {};
+		while(PacketsToInstall.size() > 0)
+		{
+			std::string CurrentPacket = PacketsToInstall.top();
+			PacketsToInstall.pop();
+			if (std::filesystem::exists(InstallDirectory + CurrentPacket) || AlreadyInstalledPackets.find(CurrentPacket) != AlreadyInstalledPackets.end())
 			{
-				AlreadyInstalledPacktes.push_back(PacketsToInstall[i]);
+				AlreadyInstalledPackets.insert(CurrentPacket);
 				continue;
 			}
 			MBPP_Client PacketClient;
-			PacketClient.Connect(p_GetDefaultPacketHost());
-			PacketClient.DownloadPacket(InstallDirectory + PacketsToInstall[i]+"/", PacketsToInstall[i]);
+			MBError DownloadStatus = PacketClient.Connect(p_GetDefaultPacketHost());
+			if (DownloadStatus)
+			{
+				DownloadStatus = PacketClient.DownloadPacket(InstallDirectory + CurrentPacket + "/", CurrentPacket);
+			}
+			if (DownloadStatus)
+			{
+				MBPM::CreatePacketFilesData(InstallDirectory + CurrentPacket + "/");
+				if (std::filesystem::exists(InstallDirectory + CurrentPacket + "/MBPM_PacketInfo"))
+				{
+					MBPM::MBPM_PacketInfo InstalledPacketInfo = MBPM::ParseMBPM_PacketInfo(InstallDirectory + CurrentPacket + "/MBPM_PacketInfo");
+					if (InstalledPacketInfo.PacketName != "")
+					{
+						if (InstalledPacketInfo.Attributes.find(MBPM::MBPM_PacketAttribute::Precompiled) == InstalledPacketInfo.Attributes.end())
+						{
+							NewPacketsToCompile.push(CurrentPacket);
+						}
+						for (size_t i = 0; i < InstalledPacketInfo.PacketDependancies.size(); i++)
+						{
+							if (AlreadyInstalledPackets.find(CurrentPacket) != AlreadyInstalledPackets.end())
+							{
+								PacketsToInstall.push(CurrentPacket);
+							}
+						}
+					}
+				}
+			}
+			AlreadyInstalledPackets.insert(CurrentPacket);
+		}
+		while (NewPacketsToCompile.size() > 0)
+		{
+			std::string CurrentPacket = NewPacketsToCompile.top();
+			NewPacketsToCompile.pop();
+			MBPM::CompileAndInstallPacket(InstallDirectory + CurrentPacket + "/");
 		}
 	}
 	void MBPM_ClI::p_HandleGet(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
@@ -317,44 +380,88 @@ namespace MBPM
 	void MBPM_ClI::p_HandleUpload(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
 	{
 		//först så behöver vi skicka data för att se login typen
-		if (CommandInput.TopCommandArguments.size() < 2)
+		if (CommandInput.TopCommandArguments.size() < 2 && CommandInput.CommandOptions.find("all") == CommandInput.CommandOptions.end())
 		{
-			AssociatedTerminal->PrintLine("Command \"upload\" requires arguments");
+			AssociatedTerminal->PrintLine("Invalid \"upload\" arguments, requires packet to upload and packet directory");
+		}
+		std::vector<std::pair<std::string, std::string>> PacketsToUpload = {};//packet name + packet directory
+		if (CommandInput.CommandOptions.find("all") != CommandInput.CommandOptions.end())
+		{
+			PacketsToUpload = p_GetUserUploadPackets();
+		}
+		if (CommandInput.TopCommandArguments.size() == 2)
+		{
+			PacketsToUpload.push_back(std::pair<std::string, std::string>(CommandInput.TopCommandArguments[0], CommandInput.TopCommandArguments[1]));
+		}
+		//kollar att alla packets har unika namn
+		std::unordered_set<std::string> PacketNames = {};
+		bool NameClashes = false;
+		for (size_t i = 0; i < PacketsToUpload.size(); i++)
+		{
+			if (PacketNames.find(PacketsToUpload[i].first) != PacketNames.end())
+			{
+				NameClashes = true;
+				break;
+			}
+			PacketNames.insert(PacketsToUpload[i].first);
+		}
+		if (NameClashes)
+		{
+			AssociatedTerminal->PrintLine("Error: you are trying to upload multiple packets with the same name");
 			return;
 		}
 		MBPP_UploadRequest_Response RequestResponse;
 		MBPP_Client ClientToUse;
 		ClientToUse.Connect(p_GetDefaultPacketHost());
-		std::string PacketToUploadDirectory = CommandInput.TopCommandArguments[1];
-		std::cout << "Packet to upload directory: " << PacketToUploadDirectory << std::endl;
-		MBError UploadError = ClientToUse.UploadPacket(PacketToUploadDirectory, CommandInput.TopCommandArguments[0], MBPP_UserCredentialsType::Request, "",&RequestResponse);
-		if (RequestResponse.Result != MBPP_ErrorCode::Ok || !UploadError)
+		std::string VerificationData = "";
+		MBPP_UserCredentialsType CurrentCredentialType = MBPP_UserCredentialsType::Plain;
+		for (size_t i = 0; i < PacketsToUpload.size(); i++)
 		{
-			AssociatedTerminal->PrintLine("Need verification for " + RequestResponse.DomainToLogin + ":");
-			//Borde egentligen kolla vilka typer den stödjer
-			AssociatedTerminal->Print("Username: ");
-			std::string Username;
-			AssociatedTerminal->GetLine(Username);
-			std::string Password;
-			AssociatedTerminal->Print("Password: ");
-			AssociatedTerminal->GetLine(Password);
-			std::string VerificationData = MBPP_EncodeString(Username) + MBPP_EncodeString(Password);
-			ClientToUse.Connect(p_GetDefaultPacketHost());
-			UploadError = ClientToUse.UploadPacket(PacketToUploadDirectory, CommandInput.TopCommandArguments[0], MBPP_UserCredentialsType::Plain, VerificationData, &RequestResponse);
-			if (!UploadError)
+			std::string PacketName = PacketsToUpload[i].first;
+			std::string PacketToUploadDirectory = PacketsToUpload[i].second;
+			MBPM::CreatePacketFilesData(PacketToUploadDirectory);
+			MBError UploadError = true;
+			if (VerificationData == "")
 			{
-				AssociatedTerminal->PrintLine("Error uploading file: " + UploadError.ErrorMessage);
+				UploadError = ClientToUse.UploadPacket(PacketToUploadDirectory, PacketName, MBPP_UserCredentialsType::Request, "", &RequestResponse);
 			}
 			else
 			{
-				AssociatedTerminal->PrintLine("Sucessfully uploaded packet");
+				UploadError = ClientToUse.UploadPacket(PacketToUploadDirectory, PacketName, CurrentCredentialType, VerificationData, &RequestResponse);
+				if (UploadError)
+				{
+					AssociatedTerminal->PrintLine("Sucessfully uploaded " + PacketName);
+				}
 			}
-			
+			if (RequestResponse.Result != MBPP_ErrorCode::Ok || !UploadError)
+			{
+				AssociatedTerminal->PrintLine("Need verification for " + RequestResponse.DomainToLogin + ":");
+				//Borde egentligen kolla vilka typer den stödjer
+				AssociatedTerminal->Print("Username: ");
+				std::string Username;
+				AssociatedTerminal->GetLine(Username);
+				std::string Password;
+				AssociatedTerminal->Print("Password: ");
+				AssociatedTerminal->GetLine(Password);
+				VerificationData = MBPP_EncodeString(Username) + MBPP_EncodeString(Password);
+				ClientToUse.Connect(p_GetDefaultPacketHost());
+				UploadError = ClientToUse.UploadPacket(PacketToUploadDirectory, PacketName, MBPP_UserCredentialsType::Plain, VerificationData, &RequestResponse);
+				if (!UploadError)
+				{
+					AssociatedTerminal->PrintLine("Error uploading "+PacketName+": " + UploadError.ErrorMessage);
+					VerificationData = "";
+				}
+				else
+				{
+					AssociatedTerminal->PrintLine("Sucessfully uploaded "+PacketName);
+				}
+
+			}
 		}
-		else
-		{
-			AssociatedTerminal->PrintLine("Upload packet sucessful");
-		}
+		//else
+		//{
+		//	AssociatedTerminal->PrintLine("Upload packet sucessful");
+		//}
 	}
 	void MBPM_ClI::p_HandleInfo(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
 	{
