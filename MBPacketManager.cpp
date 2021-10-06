@@ -192,6 +192,10 @@ namespace MBPM
 			{
 				ReturnValue.Attributes.insert(MBPM_PacketAttribute::Embedabble);
 			}
+			if (Attribute.GetStringData() == "NonMBBuild")
+			{
+				ReturnValue.Attributes.insert(MBPM_PacketAttribute::Embedabble);
+			}
 		}
 		for (auto const& OutputConfigurations : ParsedJson.GetAttribute("OutputConfigurations").GetArrayData())
 		{
