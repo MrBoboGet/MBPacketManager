@@ -32,7 +32,7 @@ int main(int argc,char** argv)
 {
 	//DEBUG GREJER
 	std::filesystem::current_path("C:/Users/emanu/Desktop/Program/C++/MBPacketManager");
-	//MBPM::CreatePacketFilesData("./TestUploadPacket/");
+	MBPM::CreatePacketFilesData("./");
 	//MBPM::MBPP_FileInfoReader InfoToIterate("./MBPM_FileInfo");
 	//const MBPM::MBPP_DirectoryInfoNode* TopNode = InfoToIterate.GetDirectoryInfo("/");
 	//MBPM::MBPP_DirectoryInfoNode_ConstIterator TestIterator = TopNode->begin();
@@ -45,15 +45,12 @@ int main(int argc,char** argv)
 
 	//return(MBPM::MBCLI_Main(argc, argv));
 
-	const int argr = 7;
+	const int argr = 4;
 	char* TestData[argr];
 	TestData[0] = "mbpm";
 	TestData[1] = "index";
-	TestData[2] = "diff";
-	TestData[3] = "-p";
-	TestData[4] = "./";
-	TestData[5] = "-r";
-	TestData[6] = "MBPacketManager";
+	TestData[2] = "list";
+	TestData[3] = "./";
 	argc = argr;
 	argv = TestData;
 

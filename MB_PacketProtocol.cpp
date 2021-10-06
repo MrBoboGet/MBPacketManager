@@ -57,7 +57,7 @@ namespace MBPM
 		}
 		return(ReturnValue);
 	}
-	std::string h_WriteFileData(std::ofstream& FileToWriteTo, std::filesystem::path const& FilePath,MBCrypto::HashFunction HashFunctionToUse)
+	std::string h_WriteFileData(std::ofstream& FileToWriteTo, std::filesystem::path const& FilePath,MBCrypto::HashFunction HashFunctionToUse,uint64_t* OutFileSize)
 	{
 		//TODO fixa så det itne blir fel på windows
 		std::string FileName = FilePath.filename().generic_u8string();
@@ -65,10 +65,16 @@ namespace MBPM
 		FileToWriteTo.write(FileName.data(), FileName.size());
 		std::string FileHash = MBCrypto::GetFileHash(FilePath.generic_u8string(),HashFunctionToUse);
 		FileToWriteTo.write(FileHash.data(), FileHash.size());
+		uint64_t FileSize = std::filesystem::file_size(FilePath);
+		h_WriteBigEndianInteger(FileToWriteTo, FileSize, 8);
+		if (OutFileSize != nullptr)
+		{
+			*OutFileSize = FileSize;
+		}
 		return(FileHash);
 	}
 	std::string h_WriteDirectoryData_Recursive(std::ofstream& FileToWriteTo, std::string const& TopPacketDirectory, std::string const& DirectoryName, std::string const& SubPathToIterate,
-		MBPM_FileInfoExcluder& FileInfoExcluder,MBCrypto::HashFunction HashFunctionToUse)
+		MBPM_FileInfoExcluder& FileInfoExcluder,MBCrypto::HashFunction HashFunctionToUse,uint64_t* OutFileSize)
 	{
 		std::set<std::string> DirectoriesToWrite = {};
 		std::set<std::filesystem::path> FilesToWrite = {};
@@ -95,6 +101,10 @@ namespace MBPM
 		char EmptyHashData[20]; //TODO hardcoda inte hash längden...
 		FileToWriteTo.write(EmptyHashData, 20);
 
+		//här har vi även directory sizen
+		uint64_t TotalDirectorySize = 0;
+		h_WriteBigEndianInteger(FileToWriteTo, 0, 8);
+
 		//ANTAGANDE pathen är inte på formen /något/hej/ utan /något/hej
 		h_WriteBigEndianInteger(FileToWriteTo, DirectoryName.size(), 2);
 		FileToWriteTo.write(DirectoryName.data(), DirectoryName.size());
@@ -102,19 +112,29 @@ namespace MBPM
 		std::string DataToHash = "";
 		for (auto const& Files : FilesToWrite)
 		{
-			DataToHash += h_WriteFileData(FileToWriteTo, Files, HashFunctionToUse);
+			uint64_t NewSize = 0;
+			DataToHash += h_WriteFileData(FileToWriteTo, Files, HashFunctionToUse,&NewSize);
+			TotalDirectorySize += NewSize;
 		}
 		h_WriteBigEndianInteger(FileToWriteTo, DirectoriesToWrite.size(), 4);
 		for (auto const& Directories : DirectoriesToWrite)
 		{
-			DataToHash += h_WriteDirectoryData_Recursive(FileToWriteTo, TopPacketDirectory,std::filesystem::path(Directories).filename().generic_u8string(), Directories, FileInfoExcluder, HashFunctionToUse);
+			uint64_t NewSize = 0;
+			DataToHash += h_WriteDirectoryData_Recursive(FileToWriteTo, TopPacketDirectory,std::filesystem::path(Directories).filename().generic_u8string(), Directories, FileInfoExcluder, HashFunctionToUse,&NewSize);
+			TotalDirectorySize += NewSize;
 		}
 		uint64_t DirectoryEndPosition = FileToWriteTo.tellp();
 		FileToWriteTo.seekp(SkipPointerPosition);
 		h_WriteBigEndianInteger(FileToWriteTo, DirectoryEndPosition, 8);
 		std::string DirectoryHash = MBCrypto::HashData(DataToHash, HashFunctionToUse);
 		FileToWriteTo.write(DirectoryHash.data(), DirectoryHash.size());
+		//skriver även storleken här
+		h_WriteBigEndianInteger(FileToWriteTo, TotalDirectorySize, 8);
 		FileToWriteTo.seekp(DirectoryEndPosition);
+		if (OutFileSize != nullptr)
+		{
+			*OutFileSize = TotalDirectorySize;
+		}
 		return(DirectoryHash);
 	}
 	
@@ -123,7 +143,7 @@ namespace MBPM
 		std::ofstream OutputFile = std::ofstream(PacketToHashDirectory + OutputName,std::ios::out|std::ios::binary);
 		if (!OutputFile.is_open())
 		{
-			assert(false);
+			return;
 		}
 		MBPM_FileInfoExcluder Excluder;
 		if (std::filesystem::exists(PacketToHashDirectory + "/MBPM_FileInfoIgnore"))
@@ -133,7 +153,7 @@ namespace MBPM
 		Excluder.AddExcludeFile("/"+OutputName);
 		Excluder.AddExcludeFile("/MBPM_UploadedChanges/");
 		Excluder.AddExcludeFile("/MBPM_BuildFiles/");
-		h_WriteDirectoryData_Recursive(OutputFile, PacketToHashDirectory, "/", PacketToHashDirectory, Excluder, MBCrypto::HashFunction::SHA1);
+		h_WriteDirectoryData_Recursive(OutputFile, PacketToHashDirectory, "/", PacketToHashDirectory, Excluder, MBCrypto::HashFunction::SHA1,nullptr);
 		OutputFile.flush();
 		OutputFile.close();
 	}
@@ -338,6 +358,8 @@ namespace MBPM
 		MBPP_DirectoryInfoNode ReturnValue;
 		h_ReadBigEndianInteger(FileToReadFrom, 8);//filepointer
 		std::string DirectoryHash = std::string(HashSize, 0);
+		//vi läser även in storleken
+		uint64_t DirectorySize = h_ReadBigEndianInteger(FileToReadFrom, 8);
 		FileToReadFrom->Read(DirectoryHash.data(), HashSize);
 		size_t NameSize = h_ReadBigEndianInteger(FileToReadFrom, 2);
 		std::string DirectoryName = std::string(NameSize, 0);
@@ -354,6 +376,7 @@ namespace MBPM
 		}
 		ReturnValue.DirectoryHash = std::move(DirectoryHash);
 		ReturnValue.DirectoryName = std::move(DirectoryName);
+		ReturnValue.Size = DirectorySize;
 		return(ReturnValue);
 	}
 	MBPP_FileInfo MBPP_FileInfoReader::p_ReadFileInfoFromFile(MBUtility::MBOctetInputStream* InputStream,size_t HashSize)
@@ -364,6 +387,7 @@ namespace MBPM
 		InputStream->Read(ReturnValue.FileName.data(), FileNameSize);
 		ReturnValue.FileHash = std::string(HashSize, 0);
 		InputStream->Read(ReturnValue.FileHash.data(), HashSize);
+		ReturnValue.FileSize = h_ReadBigEndianInteger(InputStream, 8);
 		return(ReturnValue);
 	}
 	MBPP_FileInfoReader::MBPP_FileInfoReader(std::string const& FileInfoPath)

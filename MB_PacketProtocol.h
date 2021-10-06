@@ -198,6 +198,7 @@ namespace MBPM
 	{
 		std::string FileName = "";
 		std::string FileHash = "";
+		uint64_t FileSize = 0;
 		bool operator<(MBPP_FileInfo const& OtherFileInfo) const
 		{
 			return(FileName < OtherFileInfo.FileName);
@@ -240,6 +241,7 @@ namespace MBPM
 	public:
 		std::string DirectoryName = "";
 		std::string DirectoryHash = "";
+		uint64_t Size = 0;
 		std::vector<MBPP_FileInfo> Files = {};
 		std::vector<MBPP_DirectoryInfoNode> Directories = {};
 		bool operator<(MBPP_DirectoryInfoNode const& OtherDirectory) const

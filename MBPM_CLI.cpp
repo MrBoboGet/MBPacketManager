@@ -201,8 +201,28 @@ namespace MBPM
 		MBPM::MBPP_DirectoryInfoNode_ConstIterator End = InfoTopNode->end();
 		while (DirectoryIterator != End)
 		{
-			AssociatedTerminal->PrintLine(DirectoryIterator.GetCurrentDirectory() + (*DirectoryIterator).FileName+" "+
-				MBUtility::ReplaceAll(MBUtility::HexEncodeString((*DirectoryIterator).FileHash)," ",""));
+			std::string Filename = DirectoryIterator.GetCurrentDirectory() + (*DirectoryIterator).FileName;
+			std::string FileHash = MBUtility::ReplaceAll(MBUtility::HexEncodeString((*DirectoryIterator).FileHash), " ", "");
+			std::string FileSizeString = "";
+			uint64_t FileSize = (*DirectoryIterator).FileSize;
+			uint8_t FileSizeLog = std::log10(FileSize);
+			if (FileSizeLog < 3)
+			{
+				FileSizeString = std::to_string(FileSize) + " B";
+			}
+			else if (FileSizeLog >= 3 && FileSizeLog < 6)
+			{
+				FileSizeString = std::to_string(FileSize / 1000) + " KB";
+			}
+			else if (FileSizeLog >= 6 && FileSizeLog < 9)
+			{
+				FileSizeString = std::to_string(FileSize / 1000000) + " MB";
+			}
+			else
+			{
+				FileSizeString = std::to_string(FileSize / 1000000000) + " GB";
+			}
+			AssociatedTerminal->PrintLine(Filename+"\t\t\t\t"+FileSizeString+"\t"+ FileHash);
 			DirectoryIterator++;
 		}
 
@@ -305,9 +325,9 @@ namespace MBPM
 						}
 						for (size_t i = 0; i < InstalledPacketInfo.PacketDependancies.size(); i++)
 						{
-							if (AlreadyInstalledPackets.find(CurrentPacket) != AlreadyInstalledPackets.end())
+							if (AlreadyInstalledPackets.find(InstalledPacketInfo.PacketDependancies[i]) == AlreadyInstalledPackets.end())
 							{
-								PacketsToInstall.push(CurrentPacket);
+								PacketsToInstall.push(InstalledPacketInfo.PacketDependancies[i]);
 							}
 						}
 					}
@@ -472,22 +492,33 @@ namespace MBPM
 		}
 		if (CommandInput.TopCommandArguments[0] == "create")
 		{
-			if (CommandInput.TopCommandArguments.size() < 2)
+			if (CommandInput.TopCommandArguments.size() < 2 && CommandInput.CommandOptions.find("alluser") == CommandInput.CommandOptions.end())
 			{
 				AssociatedTerminal->PrintLine("no directory path provided");
 				return;
 			}
-			std::string PathToList = CommandInput.TopCommandArguments[1];
-			if (PathToList.back() != '/')
+			std::vector<std::string> DirectoriesToProcess = {};
+			if (CommandInput.TopCommandArguments.size() > 2)
 			{
-				PathToList += "/";
+				DirectoriesToProcess.push_back(CommandInput.TopCommandArguments[1]+"/");
+			}
+			if (CommandInput.CommandOptions.find("alluser") != CommandInput.CommandOptions.end())
+			{
+				std::vector<std::pair<std::string, std::string>> UserPackets = p_GetUserUploadPackets();
+				for (size_t i = 0; i < UserPackets.size(); i++)
+				{
+					DirectoriesToProcess.push_back(UserPackets[i].second);
+				}
 			}
 			std::string FileInfoName = "MBPM_FileInfo";
 			if (CommandInput.TopCommandArguments.size() >= 3)
 			{
 				FileInfoName = CommandInput.TopCommandArguments[2];
 			}
-			CreatePacketFilesData(PathToList,FileInfoName);
+			for (size_t i = 0; i < DirectoriesToProcess.size(); i++)
+			{
+				CreatePacketFilesData(DirectoriesToProcess[i], FileInfoName);
+			}
 		}
 		else if (CommandInput.TopCommandArguments[0] == "list")
 		{
@@ -642,6 +673,14 @@ namespace MBPM
 				PacketDirectories[i] = p_GetInstalledPacketDirectory(PacketDirectories[i]);
 			}
 		}
+		if (CommandInput.CommandOptions.find("alluser") != CommandInput.CommandOptions.end())
+		{
+			std::vector<std::pair<std::string, std::string>> UserPackets = p_GetUserUploadPackets();
+			for (size_t i = 0; i < UserPackets.size(); i++)
+			{
+				PacketDirectories.push_back(UserPackets[i].second);
+			}
+		}
 		//kanske blir att vi uppdaterar pakcets dubbelt, men är ju användarsen ansvar
 		for (size_t i = 0; i < CommandInput.TopCommandArguments.size(); i++)
 		{
@@ -677,6 +716,15 @@ namespace MBPM
 			for (size_t i = 0; i < PacketDirectories.size(); i++)
 			{
 				std::string CurrentDirectory = PacketDirectories[i];
+				if (std::filesystem::exists(CurrentDirectory + "MBPM_PacketInfo"))
+				{
+					MBPM::MBPM_PacketInfo CurrentPacket = MBPM::ParseMBPM_PacketInfo(CurrentDirectory + "MBPM_PacketInfo");
+					if (CurrentPacket.Attributes.find(MBPM::MBPM_PacketAttribute::NonMBBuild) != CurrentPacket.Attributes.end())
+					{
+						//icke mb builds borde varken uppdateras eller skapas
+						continue;
+					}
+				}
 				if (CompileCmake)
 				{
 					bool OverWrite = true;
@@ -725,6 +773,15 @@ namespace MBPM
 			std::vector<std::string> FailedCompiles = {};
 			for (size_t i = 0; i < PacketDirectories.size(); i++)
 			{
+				if (std::filesystem::exists(PacketDirectories[i] + "MBPM_PacketInfo"))
+				{
+					MBPM::MBPM_PacketInfo CurrentPacket = MBPM::ParseMBPM_PacketInfo(PacketDirectories[i] + "MBPM_PacketInfo");
+					if (CurrentPacket.Attributes.find(MBPM::MBPM_PacketAttribute::NonMBBuild) != CurrentPacket.Attributes.end())
+					{
+						//icke mb builds borde varken uppdateras eller skapas
+						continue;
+					}
+				}
 				MBError CompilationError = true;
 				CompilationError = p_UpdateCmake(PacketDirectories[i]);
 				if (CompilationError)

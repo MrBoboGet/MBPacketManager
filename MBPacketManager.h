@@ -28,6 +28,7 @@ namespace MBPM
 		TriviallyEmbedabble,
 		NoSource,
 		Precompiled,
+		NonMBBuild,
 		Null
 	};
 	struct MBPM_PacketInfo
