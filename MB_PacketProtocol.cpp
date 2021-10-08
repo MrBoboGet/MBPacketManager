@@ -2,7 +2,7 @@
 #include <MBParsing/MBParsing.h>
 #include <set>
 #include <MBCrypto/MBCrypto.h>
-#include <MBAlgorithms.h>
+#include <MBUtility/MBAlgorithms.h>
 
 namespace MBPM
 {

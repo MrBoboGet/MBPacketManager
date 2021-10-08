@@ -10,4 +10,5 @@ Excludes:
 /CMakeSettings.json
 /MBPM_FileInfo
 /MBPM_Builds/
+/CMakeSettings.json/
 Includes:

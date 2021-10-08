@@ -498,7 +498,7 @@ namespace MBPM
 				return;
 			}
 			std::vector<std::string> DirectoriesToProcess = {};
-			if (CommandInput.TopCommandArguments.size() > 2)
+			if (CommandInput.TopCommandArguments.size() >= 2)
 			{
 				DirectoriesToProcess.push_back(CommandInput.TopCommandArguments[1]+"/");
 			}

@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
+#include <MBUtility/MBCompileDefinitions.h>
 
 //magiska namn macros
 #define MBPM_PACKETINFO_FILENAME "MBPM_PacketInfo";
@@ -506,7 +507,60 @@ namespace MBPM
 	MBError InstallCompiledPacket(std::string const& PacketDirectory)
 	{
 		MBError ReturnValue = true;
-
+		MBPM_PacketInfo PacketInfo = ParseMBPM_PacketInfo(PacketDirectory + "/MBPM_PacketInfo");
+		if (PacketInfo.PacketName != "")
+		{
+			std::string PacketInstallDirectory = GetSystemPacketsDirectory();
+			for (auto const& Configurations : PacketInfo.OutputConfigurationTargetNames)
+			{
+				std::string NewLibraryName = "";
+				if (!std::filesystem::exists(PacketInstallDirectory + "/MBPM_CompiledLibraries"))
+				{
+					std::filesystem::create_directories(PacketInstallDirectory + "/MBPM_CompiledLibraries");
+				}
+				if (Configurations.first == MBPM_CompileOutputConfiguration::StaticDebug || Configurations.first == MBPM_CompileOutputConfiguration::StaticRelease)
+				{
+					if (MBUtility::IsWindows())
+					{
+						std::string LibraryName = Configurations.second + ".lib";
+					}
+					else
+					{
+						std::string LibraryName = "lib"+Configurations.second + ".a";
+					}
+				}
+				else if (Configurations.first == MBPM_CompileOutputConfiguration::DynamicDebug || Configurations.first == MBPM_CompileOutputConfiguration::DynamicRelease)
+				{
+					if (MBUtility::IsWindows())
+					{
+						std::string LibraryName = Configurations.second + ".dll";
+					}
+					else
+					{
+						std::string LibraryName = "lib" + Configurations.second + ".so";
+					}
+				}
+				std::filesystem::create_symlink(PacketDirectory + "/MBPM_Builds/" + NewLibraryName, PacketInstallDirectory + "/MBPM_CompiledLibraries/" + NewLibraryName);
+			}
+			for (auto const& ExportedExecutables : PacketInfo.ExportedTargets)
+			{
+				std::string NewExecutableName = ExportedExecutables;
+				if (MBUtility::IsWindows())
+				{
+					NewExecutableName += ".exe";
+				}
+				if (!std::filesystem::exists(PacketInstallDirectory + "/MBPM_ExportedExecutables"))
+				{
+					std::filesystem::create_directories(PacketInstallDirectory + "/MBPM_ExportedExecutables");
+				}
+				std::filesystem::create_symlink(PacketDirectory + "/MBPM_Builds/" + NewExecutableName, PacketInstallDirectory + "/MBPM_ExportedExecutables/" + NewExecutableName);
+			}
+		}
+		else
+		{
+			ReturnValue = false;
+			ReturnValue.ErrorMessage = "No packet in packet directory";
+		}
 		return(ReturnValue);
 	}
 	MBError CompileAndInstallPacket(std::string const& PacketToCompileDirectory)

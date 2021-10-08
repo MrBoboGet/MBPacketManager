@@ -1,13 +1,13 @@
 #pragma once
 #include <string>
-#include <MBErrorHandling.h>
+#include <MBUtility/MBErrorHandling.h>
 #include <cstdint>
 #include <MrBoboSockets/MrBoboSockets.h>
 #include <memory>
 #include <vector>
 #include <stack>
 
-#include <MBInterfaces.h>
+#include <MBUtility/MBInterfaces.h>
 
 namespace MBPM
 {

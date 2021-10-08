@@ -86,9 +86,10 @@ set(EXTLIBS_SOURCE_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/../BasicChatCmake/MrBoboSockets/MrBoboSockets.cpp;"
     "${CMAKE_CURRENT_SOURCE_DIR}/../BasicChatCmake/MrBoboSockets/TLSHandler.cpp;"
     "${CMAKE_CURRENT_SOURCE_DIR}/../BasicChatCmake/MBCrypto/MBCrypto.cpp;"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../BasicChatCmake/MBErrorHandling.cpp;"
     "${CMAKE_CURRENT_SOURCE_DIR}/../BasicChatCmake/MBParsing/MBParsing.cpp;"
     "${CMAKE_CURRENT_SOURCE_DIR}/../BasicChatCmake/MBUnicode/MBUnicode.cpp;"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../BasicChatCmake/MrBigInt/MrBigInt.cpp;"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../MBUtility/MBErrorHandling.cpp;"
 )
 
 set(Header_Files
@@ -103,6 +104,8 @@ set(Source_Files
     "${CMAKE_CURRENT_SOURCE_DIR}/MBPMCLIMain.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/MBPM_CLI.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/MBCLI/MBCLI.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../MBUtility/MBCompileDefinitions.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../MBUtility/MBErrorHandling.cpp"
 )
 message(${Source_Files})
 source_group("Source Files" FILES ${Source_Files})
@@ -142,13 +145,14 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/;"
     "${CMAKE_CURRENT_SOURCE_DIR}/../BasicChatCmake/;"
     "${CMAKE_CURRENT_SOURCE_DIR}/../MrBoboLibrary/;"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../"
 )
 
 target_include_directories("TestMBPMLibrary" PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/../MBExternalDependencies/;"
     "${CMAKE_CURRENT_SOURCE_DIR}/;"
     "${CMAKE_CURRENT_SOURCE_DIR}/../BasicChatCmake/;"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../MrBoboLibrary/;"
+    #"${CMAKE_CURRENT_SOURCE_DIR}/../MrBoboLibrary/;"
 )
 if(UNIX)
     set(ADDITIONAL_LIBRARY_DEPENDENCIES 
