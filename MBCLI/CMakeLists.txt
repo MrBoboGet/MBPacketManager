@@ -1,15 +1,8 @@
-project(MBPacketManager)
-set(PROJECT_NAME "MBPacketManager")
+project(MBCLI)
+set(PROJECT_NAME "MBCLI")
 ##BEGIN MBPM_VARIABLES
 set(MBPM_DEPENDENCIES 
-	MrBoboSockets
-	MBParsing
-	MrBigInt
-	MBCrypto
 	MBUtility
-	MBUnicode
-	cryptopp
-	MBCLI
 )
 set(MBPM_TARGET_EXTPACKET_LIBRARIES )
 set(MBPM_TARGET_COMPILE_OPTIONS )
@@ -102,41 +95,24 @@ endmacro()
 ##END MBPM_VARIABLES
 set(PROJECT_SOURCES 
 
-	"${CMAKE_CURRENT_SOURCE_DIR}//MBPacketManager.cpp"
-	"${CMAKE_CURRENT_SOURCE_DIR}//MBPM_CLI.cpp"
-	"${CMAKE_CURRENT_SOURCE_DIR}//MB_PacketProtocol.cpp"
+	"${CMAKE_CURRENT_SOURCE_DIR}//MBCLI.cpp"
 )
 set(PROJECT_HEADERS 
-	"${CMAKE_CURRENT_SOURCE_DIR}//MBPacketManager.h"
-	"${CMAKE_CURRENT_SOURCE_DIR}//MBPM_CLI.h"
-	"${CMAKE_CURRENT_SOURCE_DIR}//MB_PacketProtocol.h"
+	"${CMAKE_CURRENT_SOURCE_DIR}//MBCLI.h"
 )
 set(COMMON_FILES ${PROJECT_SOURCES} ${PROJECT_HEADERS})
 set(COMMON_DYNAMIC_LIBRARIES 
 )
-set(COMMON_STATIC_LIBRARIES
+set(COMMON_STATIC_LIBRARIES 
 )
-set(EXECUTABLE_FILES "${CMAKE_CURRENT_SOURCE_DIR}//MBPMCLIMain.cpp")
-if(WIN32)
-	list(APPEND "COMMON_STATIC_LIBRARIES" "Ws2_32")
-else()
-	list(APPEND "COMMON_STATIC_LIBRARIES" "stdc++fs")
-endif()
 set(COMMON_LIBRARIES ${COMMON_STATIC_LIBRARIES} ${COMMON_DYNAMIC_LIBRARIES})
 
-add_library(MBPacketManager_SD STATIC ${COMMON_FILES})
-MBPM_ApplyTargetConfiguration("MBPacketManager_SD" "STATIC" "DEBUG")
-target_compile_features("MBPacketManager_SD" PRIVATE cxx_std_17)
-target_link_libraries("MBPacketManager_SD" ${COMMON_LIBRARIES})
+add_library(MBCLI_SD STATIC ${COMMON_FILES})
+MBPM_ApplyTargetConfiguration("MBCLI_SD" "STATIC" "DEBUG")
+target_compile_features("MBCLI_SD" PRIVATE cxx_std_17)
+target_link_libraries("MBCLI_SD" ${COMMON_LIBRARIES})
 
-add_library(MBPacketManager_SR STATIC ${COMMON_FILES})
-MBPM_ApplyTargetConfiguration("MBPacketManager_SR" "STATIC" "RELEASE")
-target_compile_features("MBPacketManager_SR" PRIVATE cxx_std_17)
-target_link_libraries("MBPacketManager_SR" ${COMMON_LIBRARIES})
-
-add_executable("MBPM" ${COMMON_FILES} ${EXECUTABLE_FILES})
-MBPM_ApplyTargetConfiguration("MBPM" "STATIC" "RELEASE")
-target_compile_features("MBPM" PRIVATE cxx_std_17)
-message(MBPM_TARGET_EXTPACKET_LIBRARIES)
-MBPM_LinkTargetPacketLibraries("MBPM")
-target_link_libraries("MBPM" ${COMMON_LIBRARIES})
+add_library(MBCLI_SR STATIC ${COMMON_FILES})
+MBPM_ApplyTargetConfiguration("MBCLI_SR" "STATIC" "RELEASE")
+target_compile_features("MBCLI_SR" PRIVATE cxx_std_17)
+target_link_libraries("MBCLI_SR" ${COMMON_LIBRARIES})

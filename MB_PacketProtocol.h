@@ -257,6 +257,8 @@ namespace MBPM
 		uint32_t FileListSize = -1;
 		std::vector<std::string> Files = {};
 	};
+	MBPP_FileInfoDiff GetFileInfoDifference(MBPP_FileInfoReader const& ClientInfo, MBPP_FileInfoReader const& ServerInfo);
+
 	class MBPP_FileInfoReader
 	{
 

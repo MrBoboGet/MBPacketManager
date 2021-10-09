@@ -22,6 +22,13 @@ int main(int argc,char** argv)
 
 	//return(MBPM::MBCLI_Main(argc, argv));
 
+	//const int argc2 = 3;
+	//char* argv2[argc2];
+	//argv2[0] = "mbpm";
+	//argv2[1] = "compile";
+	//argv2[2] = "MBUtility";
+	//argc = argc2;
+	//argv = argv2;
 
 	return(MBPM::MBCLI_Main(argc, argv));
 }

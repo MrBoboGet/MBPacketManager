@@ -101,7 +101,17 @@ namespace MBPM
 			if (ProjectToPopulate.ProjectPacketsDepandancies.find(Dependancies) == ProjectToPopulate.ProjectPacketsDepandancies.end())
 			{
 				std::string DependancyPath = GetSystemPacketsDirectory() + Dependancies+"/";
-				MBPM_PacketInfo DependancyInfo = ParseMBPM_PacketInfo(DependancyPath +"MBPM_PacketInfo");
+				MBPM_PacketInfo DependancyInfo;
+				if (std::filesystem::exists(DependancyPath + "MBPM_PacketInfo"))
+				{
+					DependancyInfo = ParseMBPM_PacketInfo(DependancyPath + "MBPM_PacketInfo");
+				}
+				else
+				{
+					GenerationError = false;
+					GenerationError.ErrorMessage = "Missing Dependancy \""+Dependancies+"\"";
+					return(GenerationError);
+				}
 				for (auto const& NewDependancies : DependancyInfo.PacketDependancies)
 				{
 					if (ProjectToPopulate.ProjectPacketsDepandancies.find(NewDependancies) == ProjectToPopulate.ProjectPacketsDepandancies.end())
@@ -195,7 +205,7 @@ namespace MBPM
 			}
 			if (Attribute.GetStringData() == "NonMBBuild")
 			{
-				ReturnValue.Attributes.insert(MBPM_PacketAttribute::Embedabble);
+				ReturnValue.Attributes.insert(MBPM_PacketAttribute::NonMBBuild);
 			}
 		}
 		for (auto const& OutputConfigurations : ParsedJson.GetAttribute("OutputConfigurations").GetArrayData())
@@ -267,7 +277,7 @@ namespace MBPM
 		OutputFile << "set(MBPM_TARGET_COMPILE_OPTIONS )\n";
 		OutputFile << "set(MBPM_TARGET_LINK_OPTIONS )\n";
 		OutputFile << "#MBPM_Functions";
-		OutputFile << GetMBPMCmakeFunctions();
+		OutputFile << GetMBPMCmakeFunctions()<<'\n';
 		OutputFile << "##END MBPM_VARIABLES\n";
 	}
 	MBError WriteCMakeProjectToFile(MBPM_CmakeProject const& ProjectToWrite, std::string const& OutputFilePath)
@@ -441,7 +451,10 @@ namespace MBPM
 		{
 			GeneratedProject.TargetsData[OutputOption];
 		}
-		WriteCMakeProjectToFile(GeneratedProject, PacketDirectory+"/"+OutputName);
+		if (ReturnValue)
+		{
+			WriteCMakeProjectToFile(GeneratedProject, PacketDirectory + "/" + OutputName);
+		}
 		return(ReturnValue);
 	}
 	MBError GenerateCmakeFile(std::string const& PacketPath, MBPM_MakefileGenerationOptions const& CompileConfiguration,std::string const& OutputName)
@@ -522,25 +535,32 @@ namespace MBPM
 				{
 					if (MBUtility::IsWindows())
 					{
-						std::string LibraryName = Configurations.second + ".lib";
+						NewLibraryName = Configurations.second + ".lib";
 					}
 					else
 					{
-						std::string LibraryName = "lib"+Configurations.second + ".a";
+						NewLibraryName = "lib"+Configurations.second + ".a";
 					}
 				}
 				else if (Configurations.first == MBPM_CompileOutputConfiguration::DynamicDebug || Configurations.first == MBPM_CompileOutputConfiguration::DynamicRelease)
 				{
 					if (MBUtility::IsWindows())
 					{
-						std::string LibraryName = Configurations.second + ".dll";
+						NewLibraryName = Configurations.second + ".dll";
 					}
 					else
 					{
-						std::string LibraryName = "lib" + Configurations.second + ".so";
+						NewLibraryName = "lib" + Configurations.second + ".so";
 					}
 				}
-				std::filesystem::create_symlink(PacketDirectory + "/MBPM_Builds/" + NewLibraryName, PacketInstallDirectory + "/MBPM_CompiledLibraries/" + NewLibraryName);
+				try
+				{
+					std::filesystem::create_symlink(PacketDirectory + "/MBPM_Builds/" + NewLibraryName, PacketInstallDirectory + "/MBPM_CompiledLibraries/" + NewLibraryName);
+				}
+				catch (const std::exception& e)
+				{
+					std::cout << e.what() << std::endl;
+				}
 			}
 			for (auto const& ExportedExecutables : PacketInfo.ExportedTargets)
 			{

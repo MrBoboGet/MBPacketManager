@@ -758,12 +758,20 @@ namespace MBPM
 					}
 					if (OverWrite || OverwriteAll)
 					{
-						p_CreateCmake(CurrentDirectory);
+						MBError CreateResult = p_CreateCmake(CurrentDirectory);
+						if (!CreateResult)
+						{
+							AssociatedTerminal->PrintLine("Failed creating CMake for \"" + CurrentDirectory + "\": " + CreateResult.ErrorMessage);
+						}
 					}
 				}
 				if (UpdateCmake)
 				{
-					p_UpdateCmake(CurrentDirectory);//ska om packetet följer MBPM standard inte påverka packetet
+					MBError UpdateResult = p_UpdateCmake(CurrentDirectory);//ska om packetet följer MBPM standard inte påverka packetet
+					if (!UpdateResult)
+					{
+						AssociatedTerminal->PrintLine("Failed updating CMake for \"" + CurrentDirectory + "\": " + UpdateResult.ErrorMessage);
+					}
 				}
 			}
 		}

@@ -140,7 +140,7 @@ namespace MBPM
 	
 	void CreatePacketFilesData(std::string const& PacketToHashDirectory,std::string const& OutputName)
 	{
-		std::ofstream OutputFile = std::ofstream(PacketToHashDirectory + OutputName,std::ios::out|std::ios::binary);
+		std::ofstream OutputFile = std::ofstream(PacketToHashDirectory +"/"+ OutputName,std::ios::out|std::ios::binary);
 		if (!OutputFile.is_open())
 		{
 			return;
@@ -1280,13 +1280,18 @@ namespace MBPM
 	MBError MBPP_Client::UpdatePacket(std::string const& OutputDirectory, std::string const& PacketName)
 	{
 		//kollar om att ladda ner packet infon är tillräckligt litet och skapar en diff fil, eller gör det genom att manuellt be om directory info för varje fil och se om hashen skiljer
-		MBError UpdateError = p_DownloadServerFilesInfo(PacketName, OutputDirectory, { "MBPM_ServerPacketInfo","MBPM_ServerFileInfo" });
+		MBError UpdateError = true;
+		MBPP_FileInfoReader ServerFiles = GetPacketFileInfo(PacketName, &UpdateError);
 		if(!UpdateError)
 		{
 			return(UpdateError);
 		}
 		//ANTAGANDE vi antar här att PacketFilesData är uppdaterad
-		MBPP_FileInfoDiff FileInfoDifferance = GetFileInfoDifference(MBPP_FileInfoReader(OutputDirectory + "/MBPM_FileInfo"), MBPP_FileInfoReader(OutputDirectory + "/MBPM_ServerFileInfo"));
+		if (!std::filesystem::exists(OutputDirectory + "/MBPM_FileInfo"))
+		{
+			MBPM::CreatePacketFilesData(OutputDirectory);
+		}
+		MBPP_FileInfoDiff FileInfoDifferance = GetFileInfoDifference(MBPP_FileInfoReader(OutputDirectory + "/MBPM_FileInfo"), ServerFiles);
 		std::vector<std::string> FilesToGet = {};
 		std::vector<std::string> DirectoriesToGet = {};
 		for (auto const& UpdatedFile : FileInfoDifferance.UpdatedFiles)
@@ -1317,6 +1322,37 @@ namespace MBPM
 				return(UpdateError);
 			}
 		}
+		//deletar sedan filerna som är över
+		for (auto const& FileToRemove : FileInfoDifferance.RemovedFiles)
+		{
+			if (MBPP_PathIsValid(FileToRemove))
+			{
+				std::string AbsolutePath = OutputDirectory + FileToRemove;
+				if (std::filesystem::exists(AbsolutePath))
+				{
+					std::filesystem::remove_all(AbsolutePath);
+				}
+			}
+		}
+		for (auto const& DirectoryToRemove : FileInfoDifferance.DeletedDirectories)
+		{
+			if (MBPP_PathIsValid(DirectoryToRemove))
+			{
+				std::string AbsolutePath = OutputDirectory + DirectoryToRemove;
+				if (std::filesystem::exists(AbsolutePath))
+				{
+					try
+					{
+						std::filesystem::remove_all(AbsolutePath);
+					}
+					catch (const std::exception& e)
+					{
+						std::cout << e.what() << std::endl;
+					}
+				}
+			}
+		}
+		MBPM::CreatePacketFilesData(OutputDirectory);
 		return(UpdateError);
 	}
 	MBError MBPP_Client::UploadPacket(std::string const& PacketDirectory, std::string const& PacketName, MBPP_UserCredentialsType CredentialsType, std::string const& CredentialsData, 
