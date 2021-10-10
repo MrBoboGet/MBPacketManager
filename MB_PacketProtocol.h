@@ -585,7 +585,7 @@ namespace MBPM
 
 		bool m_PacketUpdated = false;
 		std::string m_UpdatedPacket = "";
-
+		std::vector<std::string> m_UpdateRemovedObjects = {};
 
 		template<typename T> T& p_GetResponseData()
 		{
@@ -629,6 +629,7 @@ namespace MBPM
 
 		bool PacketUpdated();
 		std::string GetUpdatedPacket();
+		std::vector<std::string> GetPacketRemovedFiles();
 		//MBError SendResponse(MBSockets::ConnectSocket* SocketToUse);
 	};
 

@@ -2072,11 +2072,13 @@ namespace MBPM
 			{
 				m_PacketUpdated = true;
 				m_UpdatedPacket = CurrentResponseData.PacketName;
+				m_UpdateRemovedObjects = CurrentResponseData.ObjectsToDelete.Files;
 			}
 			else
 			{
 				m_PacketUpdated = false;
 				m_UpdatedPacket = "";
+				m_UpdateRemovedObjects = {};
 			}
 		}
 		return(ReturnValue);
@@ -2093,6 +2095,10 @@ namespace MBPM
 	std::string MBPP_Server::GetUpdatedPacket()
 	{
 		return(m_UpdatedPacket);
+	}
+	std::vector<std::string> MBPP_Server::GetPacketRemovedFiles()
+	{
+		return(m_UpdateRemovedObjects);
 	}
 	MBError MBPP_Server::InsertClientData(const void* Data, size_t DataSize)
 	{
