@@ -22,11 +22,12 @@ int main(int argc,char** argv)
 
 	//return(MBPM::MBCLI_Main(argc, argv));
 
-	//const int argc2 = 3;
+	//const int argc2 = 4;
 	//char* argv2[argc2];
 	//argv2[0] = "mbpm";
-	//argv2[1] = "compile";
-	//argv2[2] = "MBUtility";
+	//argv2[1] = "upload";
+	//argv2[2] = "MBPacketManager";
+	//argv2[3] = "./";
 	//argc = argc2;
 	//argv = argv2;
 

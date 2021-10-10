@@ -2,14 +2,14 @@ project(MBPacketManager)
 set(PROJECT_NAME "MBPacketManager")
 ##BEGIN MBPM_VARIABLES
 set(MBPM_DEPENDENCIES 
-	MrBoboSockets
-	MBParsing
-	MrBigInt
-	MBCrypto
+	MBCLI
 	MBUtility
 	MBUnicode
+	MBCrypto
 	cryptopp
-	MBCLI
+	MrBigInt
+	MBParsing
+	MrBoboSockets
 )
 set(MBPM_TARGET_EXTPACKET_LIBRARIES )
 set(MBPM_TARGET_COMPILE_OPTIONS )

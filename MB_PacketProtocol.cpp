@@ -153,6 +153,7 @@ namespace MBPM
 		Excluder.AddExcludeFile("/"+OutputName);
 		Excluder.AddExcludeFile("/MBPM_UploadedChanges/");
 		Excluder.AddExcludeFile("/MBPM_BuildFiles/");
+		Excluder.AddExcludeFile("/MBPM_Builds/");
 		h_WriteDirectoryData_Recursive(OutputFile, PacketToHashDirectory, "/", PacketToHashDirectory, Excluder, MBCrypto::HashFunction::SHA1,nullptr);
 		OutputFile.flush();
 		OutputFile.close();
@@ -1547,6 +1548,7 @@ namespace MBPM
 		}
 		else
 		{
+			MBPP_GenericRecord ServerRecord = MBPP_ParseRecordHeader(RecievedData.data(), RecievedData.size(), 0, nullptr);
 			GetPacketError = p_DownloadFileList(RecievedData, MBPP_GenericRecordHeaderSize, m_ServerConnection.get(), &MemoryMapper);
 		}
 		if (GetPacketError)

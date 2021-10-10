@@ -263,6 +263,54 @@ namespace MBPM
 			;
 		return(ReturnValue);
 	}
+	std::vector<std::string> h_GetTotalPacketDependancies(MBPM_PacketInfo const& PacketInfo, MBError* OutError)
+	{
+		std::vector<std::string> ReturnValue = {};
+		std::unordered_set<std::string> VisitedPackets = {};
+		std::stack<std::string> DependanciesToTraverse = {};
+		std::string PacketsDirectory = GetSystemPacketsDirectory();
+		for (size_t i = 0; i < PacketInfo.PacketDependancies.size(); i++)
+		{
+			DependanciesToTraverse.push(PacketInfo.PacketDependancies[i]);
+		}
+		while (DependanciesToTraverse.size() > 0)
+		{
+			std::string CurrentPacket = DependanciesToTraverse.top();
+			DependanciesToTraverse.pop();
+			if (VisitedPackets.find(CurrentPacket) == VisitedPackets.end())
+			{
+				ReturnValue.push_back(CurrentPacket);
+				VisitedPackets.insert(CurrentPacket);
+				if (std::filesystem::exists(PacketsDirectory + "/" + CurrentPacket + "/MBPM_PacketInfo"))
+				{
+					MBPM_PacketInfo DependancyPacket = ParseMBPM_PacketInfo(PacketsDirectory + "/" + CurrentPacket + "/MBPM_PacketInfo");
+					if (DependancyPacket.PacketName != "")
+					{
+						for (size_t i = 0; i < DependancyPacket.PacketDependancies.size(); i++)
+						{
+							if (VisitedPackets.find(DependancyPacket.PacketDependancies[i]) == VisitedPackets.end())
+							{
+								DependanciesToTraverse.push(DependancyPacket.PacketDependancies[i]);
+							}
+						}
+					}
+					else
+					{
+						*OutError = false;
+						OutError->ErrorMessage = "Missing dependancy MBPM_PacketInfo \"" + CurrentPacket + "\"";
+						return(ReturnValue);
+					}
+				}
+				else
+				{
+					*OutError = false;
+					OutError->ErrorMessage = "Missing dependancy \"" + CurrentPacket + "\"";
+					return(ReturnValue);
+				}
+			}
+		}
+		return(ReturnValue);
+	}
 	void h_WriteMBPMCmakeValues(std::vector<std::string> const& Dependancies, std::ofstream& OutputFile)
 	{
 		OutputFile << "##BEGIN MBPM_VARIABLES\n";
@@ -398,6 +446,10 @@ namespace MBPM
 		std::vector<std::string> FileLines = {};
 		while (std::getline(InputFile,CurrentLine))
 		{
+			if (CurrentLine != "" && CurrentLine.back() == '\r')
+			{
+				CurrentLine.resize(CurrentLine.size() - 1);
+			}
 			FileLines.push_back(CurrentLine);
 		}
 		InputFile.close();
@@ -420,15 +472,20 @@ namespace MBPM
 			ReturnValue.ErrorMessage = "File doesn't contain valid MBPM_Variables";
 			return(ReturnValue);
 		}
+		MBPM_PacketInfo PacketInfo = ParseMBPM_PacketInfo(PacketPath + "/MBPM_PacketInfo");
+		std::vector<std::string> TotalPacketDependancies = h_GetTotalPacketDependancies(PacketInfo,&ReturnValue);
+		if (!ReturnValue)
+		{
+			return(ReturnValue);
+		}
 		std::ofstream OutputFile = std::ofstream(PacketPath + "/CMakeLists.txt", std::ios::out);
 		bool InMBPMVariables = false;
-		MBPM_PacketInfo PacketInfo = ParseMBPM_PacketInfo(PacketPath + "/MBPM_PacketInfo");
 		for (size_t i = 0; i < FileLines.size(); i++)
 		{
 			if (FileLines[i] == "##BEGIN MBPM_VARIABLES")
 			{
 				InMBPMVariables = true;
-				h_WriteMBPMCmakeValues(PacketInfo.PacketDependancies, OutputFile);
+				h_WriteMBPMCmakeValues(TotalPacketDependancies, OutputFile);
 			}
 			if (!InMBPMVariables)
 			{
