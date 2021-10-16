@@ -229,31 +229,42 @@ namespace MBPM
 	}
 	void MBPM_ClI::p_PrintFileInfoDiff(MBPM::MBPP_FileInfoDiff const& InfoToPrint,MBCLI::MBTerminal* AssociatedTerminal)
 	{
+		AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::Yellow);
 		AssociatedTerminal->PrintLine("New directories:");
+		AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::Green);
 		for (auto const& NewDirectories : InfoToPrint.AddedDirectories)
 		{
 			AssociatedTerminal->PrintLine(NewDirectories);
 		}
+		AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::Yellow);
 		AssociatedTerminal->PrintLine("New files:");
+		AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::Green);
 		for (auto const& NewFiles : InfoToPrint.AddedFiles)
 		{
 			AssociatedTerminal->PrintLine(NewFiles);
 		}
+		AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::Yellow);
 		AssociatedTerminal->PrintLine("Updated files:");
+		AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::Cyan);
 		for (auto const& UpdatedFiles : InfoToPrint.UpdatedFiles)
 		{
 			AssociatedTerminal->PrintLine(UpdatedFiles);
 		}
+		AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::Yellow);
 		AssociatedTerminal->PrintLine("Removed directories:");
+		AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::Red);
 		for (auto const& RemovedDirectories : InfoToPrint.DeletedDirectories)
 		{
 			AssociatedTerminal->PrintLine(RemovedDirectories);
 		}
+		AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::Yellow);
 		AssociatedTerminal->PrintLine("Removed files:");
+		AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::Red);
 		for (auto const& RemovedFiles : InfoToPrint.RemovedFiles)
 		{
 			AssociatedTerminal->PrintLine(RemovedFiles);
 		}
+		AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::White);
 	}
 	void MBPM_ClI::p_HandleUpdate(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
 	{
@@ -462,7 +473,9 @@ namespace MBPM
 				AssociatedTerminal->GetLine(Username);
 				std::string Password;
 				AssociatedTerminal->Print("Password: ");
+				AssociatedTerminal->SetPasswordInput(true);
 				AssociatedTerminal->GetLine(Password);
+				AssociatedTerminal->SetPasswordInput(false);
 				VerificationData = MBPP_EncodeString(Username) + MBPP_EncodeString(Password);
 				ClientToUse.Connect(p_GetDefaultPacketHost());
 				UploadError = ClientToUse.UploadPacket(PacketToUploadDirectory, PacketName, MBPP_UserCredentialsType::Plain, VerificationData, &RequestResponse);

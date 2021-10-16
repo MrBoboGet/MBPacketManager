@@ -192,10 +192,13 @@ namespace MBPM
 		std::string JsonData = std::string(std::filesystem::file_size(PacketPath), 0);
 		std::ifstream PacketFile = std::ifstream(PacketPath, std::ios::in | std::ios::binary);
 		PacketFile.read(JsonData.data(), JsonData.size());
-		MBParsing::JSONObject ParsedJson = MBParsing::ParseJSONObject(JsonData,0,nullptr,nullptr);
-
-
+		MBError ParseError = true;
+		MBParsing::JSONObject ParsedJson = MBParsing::ParseJSONObject(JsonData,0,nullptr,&ParseError);
 		MBPM_PacketInfo ReturnValue;
+		//if (!ParseError)
+		//{
+		//	return(ReturnValue);
+		//}
 		ReturnValue.PacketName = ParsedJson.GetAttribute("PacketName").GetStringData();
 		for (auto const& Attribute : ParsedJson.GetAttribute("Attributes").GetArrayData())
 		{
@@ -225,6 +228,22 @@ namespace MBPM
 			if (OutputConfigurations.GetStringData() == "DynamicRelease")
 			{
 				ReturnValue.SupportedOutputConfigurations.insert(MBPM_CompileOutputConfiguration::DynamicRelease);
+			}
+		}
+		//ExportedExecutableTargets
+		if (ParsedJson.HasAttribute("ExportedExecutableTargets"))
+		{
+			MBParsing::JSONObject& ExecutableTargets = ParsedJson.GetAttribute("ExportedExecutableTargets");
+			if (ExecutableTargets.GetType() == MBParsing::JSONObjectType::Array)
+			{
+				std::vector<MBParsing::JSONObject>& Targets = ExecutableTargets.GetArrayData();
+				for (size_t i = 0; i < Targets.size(); i++)
+				{
+					if (Targets[i].GetType() == MBParsing::JSONObjectType::String)
+					{
+						ReturnValue.ExportedTargets.push_back(Targets[i].GetStringData());
+					}
+				}
 			}
 		}
 		//för outout configuratuions
@@ -612,7 +631,13 @@ namespace MBPM
 				}
 				try
 				{
-					std::filesystem::create_symlink(PacketDirectory + "/MBPM_Builds/" + NewLibraryName, PacketInstallDirectory + "/MBPM_CompiledLibraries/" + NewLibraryName);
+					std::string SymlinkName = PacketInstallDirectory + "/MBPM_CompiledLibraries/" + NewLibraryName;
+					std::string TargetName = PacketDirectory + "/MBPM_Builds/";
+					if (std::filesystem::is_symlink(SymlinkName))
+					{
+						std::filesystem::remove(SymlinkName);
+					}
+					std::filesystem::create_symlink(TargetName, SymlinkName);
 				}
 				catch (const std::exception& e)
 				{
@@ -630,7 +655,21 @@ namespace MBPM
 				{
 					std::filesystem::create_directories(PacketInstallDirectory + "/MBPM_ExportedExecutables");
 				}
-				std::filesystem::create_symlink(PacketDirectory + "/MBPM_Builds/" + NewExecutableName, PacketInstallDirectory + "/MBPM_ExportedExecutables/" + NewExecutableName);
+				try
+				{
+					std::string SymlinkName = PacketInstallDirectory + "/MBPM_ExportedExecutables/" + NewExecutableName;
+					std::string TargetName = PacketDirectory + "/MBPM_Builds/" + NewExecutableName;
+					if (std::filesystem::is_symlink(SymlinkName))
+					{
+						std::filesystem::remove(SymlinkName);
+					}
+					std::filesystem::create_symlink(TargetName, SymlinkName);
+				}
+				catch (const std::exception& e)
+				{
+					std::cout << e.what() << std::endl;
+				}
+
 			}
 		}
 		else

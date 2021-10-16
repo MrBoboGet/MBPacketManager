@@ -103,6 +103,7 @@ endmacro()
 set(PROJECT_SOURCES 
 
 	"${CMAKE_CURRENT_SOURCE_DIR}//MBPacketManager.cpp"
+	#"${CMAKE_CURRENT_SOURCE_DIR}/MBCLI/MBCLI.cpp"
 	"${CMAKE_CURRENT_SOURCE_DIR}//MBPM_CLI.cpp"
 	"${CMAKE_CURRENT_SOURCE_DIR}//MB_PacketProtocol.cpp"
 )
@@ -134,9 +135,9 @@ MBPM_ApplyTargetConfiguration("MBPacketManager_SR" "STATIC" "RELEASE")
 target_compile_features("MBPacketManager_SR" PRIVATE cxx_std_17)
 target_link_libraries("MBPacketManager_SR" ${COMMON_LIBRARIES})
 
-add_executable("MBPM" ${COMMON_FILES} ${EXECUTABLE_FILES})
-MBPM_ApplyTargetConfiguration("MBPM" "STATIC" "RELEASE")
-target_compile_features("MBPM" PRIVATE cxx_std_17)
+add_executable("mbpm" ${COMMON_FILES} ${EXECUTABLE_FILES})
+MBPM_ApplyTargetConfiguration("mbpm" "STATIC" "RELEASE")
+target_compile_features("mbpm" PRIVATE cxx_std_17)
 message(MBPM_TARGET_EXTPACKET_LIBRARIES)
-MBPM_LinkTargetPacketLibraries("MBPM")
-target_link_libraries("MBPM" ${COMMON_LIBRARIES})
+MBPM_LinkTargetPacketLibraries("mbpm")
+target_link_libraries("mbpm" ${COMMON_LIBRARIES})
