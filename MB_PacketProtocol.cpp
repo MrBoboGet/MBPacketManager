@@ -3,7 +3,7 @@
 #include <set>
 #include <MBCrypto/MBCrypto.h>
 #include <MBUtility/MBAlgorithms.h>
-
+#include <algorithm>
 namespace MBPM
 {
 	std::string h_PathToUTF8(std::filesystem::path const& PathToConvert)
@@ -26,6 +26,15 @@ namespace MBPM
 		{
 			CharData[i] = (IntegerToWrite >> ((IntegerSize * 8) - ((i + 1) * 8)));		
 		}
+	}
+	void h_WriteBigEndianInteger(MBUtility::MBOctetOutputStream* OutputStream, uintmax_t IntegerToWrite, uint8_t IntegerSize)
+	{
+		char BigEndianData[sizeof(uintmax_t)];
+		for (size_t i = 0; i < IntegerSize; i++)
+		{
+			BigEndianData[i] = (IntegerToWrite >> ((IntegerSize * 8) - ((i + 1) * 8)));
+		}
+		OutputStream->Write(BigEndianData, IntegerSize);
 	}
 	std::string h_GetBigEndianInteger(uintmax_t IntegerToConvert, uint8_t IntegerSize)
 	{
@@ -57,23 +66,24 @@ namespace MBPM
 		}
 		return(ReturnValue);
 	}
-	std::string h_WriteFileData(std::ofstream& FileToWriteTo, std::filesystem::path const& FilePath,MBCrypto::HashFunction HashFunctionToUse,uint64_t* OutFileSize)
+	std::string h_WriteFileData(MBUtility::MBSearchableOutputStream* OutputStream, std::filesystem::path const& FilePath,MBCrypto::HashFunction HashFunctionToUse,uint64_t* OutFileSize)
 	{
 		//TODO fixa så det itne blir fel på windows
 		std::string FileName = FilePath.filename().generic_u8string();
-		h_WriteBigEndianInteger(FileToWriteTo, FileName.size(), 2);
-		FileToWriteTo.write(FileName.data(), FileName.size());
+		h_WriteBigEndianInteger(OutputStream, FileName.size(), 2);
+		OutputStream->Write(FileName.data(), FileName.size());
 		std::string FileHash = MBCrypto::GetFileHash(FilePath.generic_u8string(),HashFunctionToUse);
-		FileToWriteTo.write(FileHash.data(), FileHash.size());
+		OutputStream->Write(FileHash.data(), FileHash.size());
 		uint64_t FileSize = std::filesystem::file_size(FilePath);
-		h_WriteBigEndianInteger(FileToWriteTo, FileSize, 8);
+		h_WriteBigEndianInteger(OutputStream, FileSize, 8);
 		if (OutFileSize != nullptr)
 		{
 			*OutFileSize = FileSize;
 		}
 		return(FileHash);
 	}
-	std::string h_WriteDirectoryData_Recursive(std::ofstream& FileToWriteTo, std::string const& TopPacketDirectory, std::string const& DirectoryName, std::string const& SubPathToIterate,
+
+	MBPP_DirectoryHashData h_WriteDirectoryData_Recursive(MBUtility::MBSearchableOutputStream* FileToWriteTo, std::string const& TopPacketDirectory, std::string const& DirectoryName, std::string const& SubPathToIterate,
 		MBPM_FileInfoExcluder& FileInfoExcluder,MBCrypto::HashFunction HashFunctionToUse,uint64_t* OutFileSize)
 	{
 		std::set<std::string> DirectoriesToWrite = {};
@@ -95,11 +105,13 @@ namespace MBPM
 				DirectoriesToWrite.insert(Entries.path().generic_u8string());
 			}
 		}
-		uint64_t SkipPointerPosition = FileToWriteTo.tellp();
+		uint64_t SkipPointerPosition = FileToWriteTo->GetOutputPosition();
 		h_WriteBigEndianInteger(FileToWriteTo, 0, 8); //offset innan vi en läst filen
 		//plats för directory hashet
-		char EmptyHashData[20]; //TODO hardcoda inte hash längden...
-		FileToWriteTo.write(EmptyHashData, 20);
+		char StructureHash[20]; //TODO hardcoda inte hash längden...
+		FileToWriteTo->Write(StructureHash, 20);
+		char ContentHash[20]; //TODO hardcoda inte hash längden...
+		FileToWriteTo->Write(ContentHash, 20);
 
 		//här har vi även directory sizen
 		uint64_t TotalDirectorySize = 0;
@@ -107,37 +119,100 @@ namespace MBPM
 
 		//ANTAGANDE pathen är inte på formen /något/hej/ utan /något/hej
 		h_WriteBigEndianInteger(FileToWriteTo, DirectoryName.size(), 2);
-		FileToWriteTo.write(DirectoryName.data(), DirectoryName.size());
+		FileToWriteTo->Write(DirectoryName.data(), DirectoryName.size());
 		h_WriteBigEndianInteger(FileToWriteTo, FilesToWrite.size(), 4);
-		std::string DataToHash = "";
+		//std::string DataToHash = "";
+		std::string StructureHashData = "";
+		std::vector<std::string> ContentHashes = {};
 		for (auto const& Files : FilesToWrite)
 		{
 			uint64_t NewSize = 0;
-			DataToHash += h_WriteFileData(FileToWriteTo, Files, HashFunctionToUse,&NewSize);
+			std::string FileHash = h_WriteFileData(FileToWriteTo, Files, HashFunctionToUse, &NewSize);
+			std::string FileName = h_PathToUTF8(Files.filename());
+			StructureHashData += FileName+FileHash; //sorterat på filordning
+			ContentHashes.push_back(FileHash);
 			TotalDirectorySize += NewSize;
 		}
 		h_WriteBigEndianInteger(FileToWriteTo, DirectoriesToWrite.size(), 4);
 		for (auto const& Directories : DirectoriesToWrite)
 		{
 			uint64_t NewSize = 0;
-			DataToHash += h_WriteDirectoryData_Recursive(FileToWriteTo, TopPacketDirectory,std::filesystem::path(Directories).filename().generic_u8string(), Directories, FileInfoExcluder, HashFunctionToUse,&NewSize);
+			MBPP_DirectoryHashData CurrentDirectoryHashData = h_WriteDirectoryData_Recursive(FileToWriteTo, TopPacketDirectory, std::filesystem::path(Directories).filename().generic_u8string(), Directories, FileInfoExcluder, HashFunctionToUse, &NewSize);
+			
+			std::string DirectoryName = "";
+			size_t LastSlashPosition = Directories.find('/');
+			if (LastSlashPosition == Directories.npos)
+			{
+				LastSlashPosition = 0;
+			}
+			else
+			{
+				LastSlashPosition += 1;
+			}
+			DirectoryName = Directories.substr(LastSlashPosition);
+			StructureHashData += DirectoryName + CurrentDirectoryHashData.StructureHash;
+			ContentHashes.push_back(CurrentDirectoryHashData.ContentHash);
 			TotalDirectorySize += NewSize;
 		}
-		uint64_t DirectoryEndPosition = FileToWriteTo.tellp();
-		FileToWriteTo.seekp(SkipPointerPosition);
+		uint64_t DirectoryEndPosition = FileToWriteTo->GetOutputPosition();
+		FileToWriteTo->SetOutputPosition(SkipPointerPosition);
 		h_WriteBigEndianInteger(FileToWriteTo, DirectoryEndPosition, 8);
-		std::string DirectoryHash = MBCrypto::HashData(DataToHash, HashFunctionToUse);
-		FileToWriteTo.write(DirectoryHash.data(), DirectoryHash.size());
+		std::string DirectoryStructureHash = MBCrypto::HashData(StructureHashData, HashFunctionToUse);
+		FileToWriteTo->Write(DirectoryStructureHash.data(), DirectoryStructureHash.size());
+		std::string DirectoryContentHashToHash = "";
+		std::sort(ContentHashes.begin(),ContentHashes.end());
+		for (auto const& Hashes : ContentHashes)
+		{
+			DirectoryContentHashToHash += Hashes;
+		}
+		std::string DirectoryContentHash = MBCrypto::HashData(DirectoryContentHashToHash, HashFunctionToUse);
+		FileToWriteTo->Write(DirectoryContentHash.data(), DirectoryContentHash.size());
+		MBPP_DirectoryHashData ReturnValue;
+		ReturnValue.ContentHash = DirectoryContentHash;
+		ReturnValue.StructureHash = DirectoryStructureHash;
+
 		//skriver även storleken här
 		h_WriteBigEndianInteger(FileToWriteTo, TotalDirectorySize, 8);
-		FileToWriteTo.seekp(DirectoryEndPosition);
+		FileToWriteTo->SetOutputPosition(DirectoryEndPosition);
 		if (OutFileSize != nullptr)
 		{
 			*OutFileSize = TotalDirectorySize;
 		}
-		return(DirectoryHash);
+		return(ReturnValue);
 	}
-	
+	void h_WriteFileInfoHeader(MBPP_FileInfoHeader const& HeaderToWrite,MBUtility::MBOctetOutputStream* StreamToWriteTo)
+	{
+		size_t WrittenBytes = StreamToWriteTo->Write(HeaderToWrite.ArbitrarySniffData.data(), HeaderToWrite.ArbitrarySniffData.size());
+		//borde ha att h_writeBigEndianInteger skriver 
+		for (size_t i = 0; i < 3; i++)
+		{
+			h_WriteBigEndianInteger(StreamToWriteTo, HeaderToWrite.Version[i], 2);
+		}
+		h_WriteBigEndianInteger(StreamToWriteTo,uint32_t(HeaderToWrite.HashFunction), 4);
+		h_WriteBigEndianInteger(StreamToWriteTo,HeaderToWrite.ExtensionDataSize, 4);
+	}
+	MBPP_FileInfoHeader h_ReadFileInfoHeader(MBUtility::MBOctetInputStream* StreamToReadFrom,MBError* OutError)
+	{
+		MBPP_FileInfoHeader ReturnValue;
+		char InitialData[MBPP_FileInfoHeaderStaticSize+1];
+		InitialData[MBPP_FileInfoHeaderStaticSize] = 0;
+		size_t ReadBytes = StreamToReadFrom->Read(InitialData, MBPP_FileInfoHeaderStaticSize);
+		size_t ParseOffset = 0;
+		if (ReturnValue.ArbitrarySniffData != InitialData)
+		{
+			*OutError = false;
+			OutError->ErrorMessage = "Invalid header bytes";
+			return(ReturnValue);
+		}
+		ParseOffset += ReturnValue.ArbitrarySniffData.size();
+		for (size_t i = 0; i < 3; i++)
+		{
+			ReturnValue.Version[i] = MBParsing::ParseBigEndianInteger(InitialData, 2, ParseOffset, &ParseOffset);
+		}
+		ReturnValue.HashFunction = MBCrypto::HashFunction(MBParsing::ParseBigEndianInteger(InitialData, 4, ParseOffset, &ParseOffset));
+		ReturnValue.ExtensionDataSize = MBParsing::ParseBigEndianInteger(InitialData, 4, ParseOffset, &ParseOffset);
+		return(ReturnValue);
+	}
 	void CreatePacketFilesData(std::string const& PacketToHashDirectory,std::string const& OutputName)
 	{
 		std::ofstream OutputFile = std::ofstream(PacketToHashDirectory +"/"+ OutputName,std::ios::out|std::ios::binary);
@@ -153,8 +228,16 @@ namespace MBPM
 		Excluder.AddExcludeFile("/"+OutputName);
 		Excluder.AddExcludeFile("/MBPM_UploadedChanges/");
 		Excluder.AddExcludeFile("/MBPM_BuildFiles/");
-		Excluder.AddExcludeFile("/MBPM_Builds/");
-		h_WriteDirectoryData_Recursive(OutputFile, PacketToHashDirectory, "/", PacketToHashDirectory, Excluder, MBCrypto::HashFunction::SHA1,nullptr);
+		//Excluder.AddExcludeFile("/MBPM_Builds/");
+		Excluder.AddExcludeFile("/.mbpm/");
+		MBUtility::MBFileOutputStream OutputStream = MBUtility::MBFileOutputStream(&OutputFile);
+		h_WriteFileInfoHeader(MBPP_FileInfoHeader(), &OutputStream);
+		//DEBUG
+		//std::cout << bool(OutputFile.is_open() && OutputFile.good()) << std::endl;
+		//OutputFile.flush();
+		//OutputFile.close();
+		//return;
+		h_WriteDirectoryData_Recursive(&OutputStream, PacketToHashDirectory, "/", PacketToHashDirectory, Excluder, MBCrypto::HashFunction::SHA1,nullptr);
 		OutputFile.flush();
 		OutputFile.close();
 	}
@@ -356,12 +439,21 @@ namespace MBPM
 	//BEGIN MBPP_FileInfoReader
 	MBPP_DirectoryInfoNode MBPP_FileInfoReader::p_ReadDirectoryInfoFromFile(MBUtility::MBOctetInputStream* FileToReadFrom,size_t HashSize)
 	{
+		//Skippointer 8 bytes
+		//StructureHash
+		//ContentHash
+		//Namn, 2 bytes längd + längd bytes namn data
+		//Number of files 4 bytes, följt av fil bytes
+		//number of directories 4 bytes, följt av directoriesen
+		//skip poointer pekar till slutet av directory datan
 		MBPP_DirectoryInfoNode ReturnValue;
 		h_ReadBigEndianInteger(FileToReadFrom, 8);//filepointer
 		std::string DirectoryHash = std::string(HashSize, 0);
+		std::string ContentHash = std::string(HashSize, 0);
 		//vi läser även in storleken
-		uint64_t DirectorySize = h_ReadBigEndianInteger(FileToReadFrom, 8);
 		FileToReadFrom->Read(DirectoryHash.data(), HashSize);
+		FileToReadFrom->Read(ContentHash.data(), HashSize);
+		uint64_t DirectorySize = h_ReadBigEndianInteger(FileToReadFrom, 8);
 		size_t NameSize = h_ReadBigEndianInteger(FileToReadFrom, 2);
 		std::string DirectoryName = std::string(NameSize, 0);
 		FileToReadFrom->Read(DirectoryName.data(), NameSize);
@@ -375,7 +467,8 @@ namespace MBPM
 		{
 			ReturnValue.Directories.push_back(p_ReadDirectoryInfoFromFile(FileToReadFrom, HashSize));
 		}
-		ReturnValue.DirectoryHash = std::move(DirectoryHash);
+		ReturnValue.StructureHash = std::move(DirectoryHash);
+		ReturnValue.ContentHash = std::move(ContentHash);
 		ReturnValue.DirectoryName = std::move(DirectoryName);
 		ReturnValue.Size = DirectorySize;
 		return(ReturnValue);
@@ -401,7 +494,12 @@ namespace MBPM
 		MBUtility::MBFileInputStream FileReader(&PacketFileInfo);
 		try
 		{
-			m_TopNode = p_ReadDirectoryInfoFromFile(&FileReader, 20);//sha1 diges size
+			MBError ParseError = true;
+			m_InfoHeader = h_ReadFileInfoHeader(&FileReader, &ParseError);
+			if (ParseError)
+			{
+				m_TopNode = p_ReadDirectoryInfoFromFile(&FileReader, 20);//sha1 diges size
+			}
 		}
 		catch (const std::exception&)
 		{
@@ -412,7 +510,12 @@ namespace MBPM
 	MBPP_FileInfoReader::MBPP_FileInfoReader(const void* DataToRead, size_t DataSize)
 	{
 		MBUtility::MBBufferInputStream BufferReader(DataToRead,DataSize);
-		m_TopNode = p_ReadDirectoryInfoFromFile(&BufferReader, 20);//sha1 diges size
+		MBError ParseError = true;
+		m_InfoHeader = h_ReadFileInfoHeader(&BufferReader, &ParseError);
+		if (ParseError)
+		{
+			m_TopNode = p_ReadDirectoryInfoFromFile(&BufferReader, 20);//sha1 diges size
+		}
 	}
 	void h_UpdateDiffDirectoryFiles(MBPP_FileInfoDiff& DiffToUpdate, MBPP_DirectoryInfoNode const& ClientDirectory, MBPP_DirectoryInfoNode const& ServerDirectory, std::string const& CurrentPath)
 	{
@@ -478,7 +581,7 @@ namespace MBPM
 			else
 			{
 				//dem är lika
-				if (ClientIterator->DirectoryHash != ServerIterator->DirectoryHash)
+				if (ClientIterator->StructureHash != ServerIterator->StructureHash)
 				{
 					h_UpdateDiffOverDirectory(DiffToUpdate, *ClientIterator, *ServerIterator, CurrentPath + ClientIterator->DirectoryName + "/");
 				}
@@ -528,7 +631,12 @@ namespace MBPM
 	}
 	const MBPP_DirectoryInfoNode* MBPP_FileInfoReader::p_GetTargetDirectory(std::vector<std::string> const& PathComponents) const
 	{
-		const MBPP_DirectoryInfoNode* ReturnValue = nullptr;
+		return(p_GetTargetDirectory(PathComponents));
+	}
+
+	MBPP_DirectoryInfoNode* MBPP_FileInfoReader::p_GetTargetDirectory(std::vector<std::string> const& PathComponents)
+	{
+		MBPP_DirectoryInfoNode* ReturnValue = nullptr;
 		if (PathComponents.size() == 1  || PathComponents.size() == 0)
 		{
 			ReturnValue = &m_TopNode;
@@ -536,7 +644,7 @@ namespace MBPM
 		else
 		{
 			bool FileExists = true;
-			const MBPP_DirectoryInfoNode* CurrentNode = &m_TopNode;
+			MBPP_DirectoryInfoNode* CurrentNode = &m_TopNode;
 			for (size_t i = 0; i < PathComponents.size() - 1; i++)
 			{
 				int DirectoryPosition = MBAlgorithms::BinarySearch(CurrentNode->Directories, PathComponents[i], h_GetDirectoryName, std::less<std::string>());
@@ -640,7 +748,7 @@ namespace MBPM
 	{
 		bool ReturnValue = true;
 		//snabb som kanske inte alltid är sann, men går på hash
-		if (m_TopNode.DirectoryName != OtherReader.m_TopNode.DirectoryName || m_TopNode.DirectoryHash != OtherReader.m_TopNode.DirectoryHash) 
+		if (m_TopNode.DirectoryName != OtherReader.m_TopNode.DirectoryName || m_TopNode.StructureHash != OtherReader.m_TopNode.StructureHash) 
 		{
 			ReturnValue = false;
 		}
@@ -675,6 +783,226 @@ namespace MBPM
 		swap(*this, ReaderToCopy);
 		return(*this);
 	}
+	std::string MBPP_FileInfoReader::GetBinaryString()
+	{
+		std::string ReturnValue = "";
+		MBUtility::MBStringOutputStream OutputStream = MBUtility::MBStringOutputStream(ReturnValue);
+		WriteData(&OutputStream);
+		return(ReturnValue);
+	}
+	void MBPP_FileInfoReader::p_WriteHeader(MBPP_FileInfoHeader const& HeaderToWrite, MBUtility::MBOctetOutputStream* OutputStream)
+	{
+		h_WriteFileInfoHeader(HeaderToWrite, OutputStream);
+	}
+	void MBPP_FileInfoReader::p_WriteFileInfo(MBPP_FileInfo const& InfoToWrite, MBUtility::MBOctetOutputStream* OutputStream)
+	{
+		h_WriteBigEndianInteger(OutputStream, InfoToWrite.FileName.size(), 2);
+		OutputStream->Write(InfoToWrite.FileName.data(), InfoToWrite.FileName.size());
+		OutputStream->Write(InfoToWrite.FileHash.data(), InfoToWrite.FileHash.size());
+		h_WriteBigEndianInteger(OutputStream, InfoToWrite.FileSize, 8);
+	}
+	void MBPP_FileInfoReader::p_WriteDirectoryInfo(MBPP_DirectoryInfoNode const& InfoToWrite, MBUtility::MBSearchableOutputStream* OutputStream)
+	{
+		//Skippointer 8 bytes
+		//StructureHash
+		//ContentHash
+		//Namn, 2 bytes längd + längd bytes namn data
+		//Number of files 4 bytes, följt av fil bytes
+		//number of directories 4 bytes, följt av directoriesen
+		//skip poointer pekar till slutet av directory datan
+		uint64_t DirectoryHeaderPosition = OutputStream->GetOutputPosition();
+		h_WriteBigEndianInteger(OutputStream, 0, 8);
+		OutputStream->Write(InfoToWrite.StructureHash.data(), InfoToWrite.StructureHash.size());
+		OutputStream->Write(InfoToWrite.ContentHash.data(), InfoToWrite.ContentHash.size());
+		h_WriteBigEndianInteger(OutputStream, InfoToWrite.Size, 8);
+
+		h_WriteBigEndianInteger(OutputStream, InfoToWrite.DirectoryName.size(), 2);
+		OutputStream->Write(InfoToWrite.DirectoryName.data(), InfoToWrite.DirectoryName.size());
+		h_WriteBigEndianInteger(OutputStream, InfoToWrite.Files.size(), 4);
+		for (size_t i = 0; i < InfoToWrite.Files.size(); i++)
+		{
+			p_WriteFileInfo(InfoToWrite.Files[i], OutputStream);
+		}
+		h_WriteBigEndianInteger(OutputStream, InfoToWrite.Directories.size(), 4);
+		for (size_t i = 0; i < InfoToWrite.Directories.size(); i++)
+		{
+			p_WriteDirectoryInfo(InfoToWrite.Directories[i],OutputStream);
+		}
+		uint64_t EndSkip = OutputStream->GetOutputPosition();
+		OutputStream->SetOutputPosition(DirectoryHeaderPosition);
+		h_WriteBigEndianInteger(OutputStream, EndSkip, 8);
+		OutputStream->SetOutputPosition(EndSkip);
+	}
+	void MBPP_FileInfoReader::WriteData(MBUtility::MBSearchableOutputStream* OutputStream)
+	{
+		p_WriteHeader(MBPP_FileInfoHeader(), OutputStream);
+		p_WriteDirectoryInfo(m_TopNode, OutputStream);
+	}
+
+	void MBPP_FileInfoReader::p_UpdateDirectoryInfo(MBPP_DirectoryInfoNode& NodeToUpdate, MBPP_DirectoryInfoNode const& UpdatedNode)
+	{
+		std::vector<MBPP_FileInfo>::iterator ThisNodeFiles = NodeToUpdate.Files.begin();
+		std::vector<MBPP_FileInfo>::iterator ThisNodeFilesEnd = NodeToUpdate.Files.end();
+		std::vector<MBPP_FileInfo>::const_iterator OtherNodeFiles = UpdatedNode.Files.begin();
+		std::vector<MBPP_FileInfo>::const_iterator OtherNodeFilesEnd = UpdatedNode.Files.end();
+		
+		std::vector<MBPP_FileInfo> NewFileList = {};
+		NewFileList.reserve(NodeToUpdate.Files.size() + UpdatedNode.Files.size());
+		while (ThisNodeFiles != ThisNodeFilesEnd && OtherNodeFiles != OtherNodeFilesEnd)
+		{
+			if (ThisNodeFiles->FileName < OtherNodeFiles->FileName)
+			{
+				//innebär egentligen bara att vi har mer lokala filer än filer vi uppdaterar, inget problem vi bara fortsätter
+				NewFileList.push_back(std::move(*ThisNodeFiles));
+				ThisNodeFiles++;
+			}
+			else if (ThisNodeFiles->FileName > OtherNodeFiles->FileName)
+			{
+				NewFileList.push_back(*OtherNodeFiles);
+				OtherNodeFiles++;
+			}
+			else
+			{
+				NewFileList.push_back(*OtherNodeFiles);
+				ThisNodeFiles++;
+				OtherNodeFiles++;
+			}
+		}
+		while (ThisNodeFiles != ThisNodeFilesEnd)
+		{
+			NewFileList.push_back(std::move(*ThisNodeFiles));
+			ThisNodeFiles++;
+		}
+		while (OtherNodeFiles != OtherNodeFilesEnd)
+		{
+			NewFileList.push_back(std::move(*OtherNodeFiles));
+			OtherNodeFiles++;
+		}
+		NodeToUpdate.Files = std::move(NewFileList);
+
+
+		std::vector<MBPP_DirectoryInfoNode>::iterator ThisNodeDirectories = NodeToUpdate.Directories.begin();
+		std::vector<MBPP_DirectoryInfoNode>::iterator ThisNodeDirectoriesEnd = NodeToUpdate.Directories.end();
+		std::vector<MBPP_DirectoryInfoNode>::const_iterator OtherNodeDirectories = UpdatedNode.Directories.begin();
+		std::vector<MBPP_DirectoryInfoNode>::const_iterator OtherNodeDirectoriesEnd = UpdatedNode.Directories.end();
+
+		std::vector<MBPP_DirectoryInfoNode> NewDirectoryList = {};
+		NewFileList.reserve(NodeToUpdate.Files.size() + UpdatedNode.Files.size());
+		while (ThisNodeDirectories != ThisNodeDirectoriesEnd && OtherNodeDirectories != OtherNodeDirectoriesEnd)
+		{
+			if (ThisNodeDirectories->DirectoryName < OtherNodeDirectories->DirectoryName)
+			{
+				//innebär egentligen bara att vi har mer lokala filer än filer vi uppdaterar, inget problem vi bara fortsätter
+				NewDirectoryList.push_back(std::move(*ThisNodeDirectories));
+				ThisNodeDirectories++;
+			}
+			else if (ThisNodeDirectories->DirectoryName > OtherNodeDirectories->DirectoryName)
+			{
+				//om det är en ny directory lägger vi helt enkelt till den
+				NewDirectoryList.push_back(*OtherNodeDirectories);
+				OtherNodeDirectories++;
+			}
+			else
+			{
+				//NewDirectoryList.push_back(*OtherNodeDirectories);
+				p_UpdateDirectoryInfo(*ThisNodeDirectories, *OtherNodeDirectories);
+				NewDirectoryList.push_back(std::move(*ThisNodeDirectories));
+				ThisNodeDirectories++;
+				OtherNodeDirectories++;
+			}
+		}
+		while (ThisNodeDirectories != ThisNodeDirectoriesEnd)
+		{
+			NewDirectoryList.push_back(std::move(*ThisNodeDirectories));
+			ThisNodeDirectories++;
+		}
+		while (OtherNodeDirectories != OtherNodeDirectoriesEnd)
+		{
+			NewDirectoryList.push_back(*OtherNodeDirectories);
+			OtherNodeDirectories++;
+		}
+		NodeToUpdate.Directories = std::move(NewDirectoryList);
+
+		NodeToUpdate.Size = 0;
+		for (size_t i = 0; i < NodeToUpdate.Files.size(); i++)
+		{
+			NodeToUpdate.Size += NodeToUpdate.Files[i].FileSize;
+		}
+		for (size_t i = 0; i < NodeToUpdate.Directories.size(); i++)
+		{
+			NodeToUpdate.Size += NodeToUpdate.Directories[i].Size;
+		}
+		//for (size_t i = 0; i < UpdatedNode.Files.size(); i++)
+		//{
+		//	int FilePosition = MBAlgorithms::BinarySearch(NodeToUpdate.Files, UpdatedNode.Files[i], h_GetFileName, std::less<std::string>());
+		//	if (FilePosition != -1)
+		//	{
+		//		NodeToUpdate.Files[FilePosition] = UpdatedNode.Files[i];
+		//	}
+		//	else
+		//	{
+		//		//vi ska alltså lägga till filen
+		//		NodeToUpdate.Files.insert()
+		//	}
+		//}
+	}
+	void MBPP_FileInfoReader::p_DeleteObject(std::string const& ObjectPath)
+	{
+		std::vector<std::string> TargetComponents = sp_GetPathComponents(ObjectPath);
+		MBPP_DirectoryInfoNode* TargetDirectory = p_GetTargetDirectory(TargetComponents);
+		int TargetIndex = MBAlgorithms::BinarySearch(TargetDirectory->Directories, TargetComponents.back(), h_GetDirectoryName, std::less<std::string>());
+		if (TargetIndex != -1)
+		{
+			TargetDirectory->Directories.erase(TargetDirectory->Directories.begin() + TargetIndex);
+		}
+		int FilePosition = MBAlgorithms::BinarySearch(TargetDirectory->Files, TargetComponents.back(), h_GetFileName, std::less<std::string>());
+		if (TargetIndex != -1)
+		{
+			TargetDirectory->Files.erase(TargetDirectory->Files.begin() + FilePosition);
+		}
+	}
+	MBPP_DirectoryHashData MBPP_FileInfoReader::p_UpdateDirectoryStructureHash(MBPP_DirectoryInfoNode& NodeToUpdate)
+	{
+		//antar att directoryn är sorterad
+		std::vector<std::string> ContentHashes = {};
+		std::string StructureHashData = "";
+		for(size_t i = 0; i < NodeToUpdate.Files.size();i++)
+		{
+			StructureHashData += NodeToUpdate.Files[i].FileName+ NodeToUpdate.Files[i].FileHash;
+			ContentHashes.push_back(NodeToUpdate.Files[i].FileHash);
+		}
+		for (size_t i = 0; i < NodeToUpdate.Directories.size(); i++)
+		{
+			MBPP_DirectoryHashData DirectoryHash = p_UpdateDirectoryStructureHash(NodeToUpdate.Directories[i]);
+			StructureHashData += NodeToUpdate.Directories[i].DirectoryName + DirectoryHash.StructureHash;
+			ContentHashes.push_back(DirectoryHash.ContentHash);
+		}
+		MBPP_DirectoryHashData ReturnValue;
+		ReturnValue.StructureHash = MBCrypto::HashData(StructureHashData, m_InfoHeader.HashFunction);
+		std::sort(ContentHashes.begin(), ContentHashes.end());
+		std::string TotalContentHash = "";
+		for (std::string const& Hashes : ContentHashes)
+		{
+			TotalContentHash += Hashes;
+		}
+		ReturnValue.ContentHash = MBCrypto::HashData(TotalContentHash,m_InfoHeader.HashFunction);
+		NodeToUpdate.ContentHash = ReturnValue.ContentHash;
+		NodeToUpdate.StructureHash = ReturnValue.StructureHash;
+		return(ReturnValue);
+	}
+	void MBPP_FileInfoReader::p_UpdateHashes()
+	{
+		p_UpdateDirectoryStructureHash(m_TopNode);
+	}
+	void MBPP_FileInfoReader::UpdateInfo(MBPP_FileInfoReader const& NewInfo)
+	{
+		//hej
+		p_UpdateDirectoryInfo(m_TopNode, NewInfo.m_TopNode);
+		p_UpdateHashes();
+		p_UpdateDirectoriesParents(&m_TopNode);
+	}
+
+
 	//END MBPP_FileInfoReader
 
 	//BEGIN MBPP_DirectoryInfoNode_ConstIterator

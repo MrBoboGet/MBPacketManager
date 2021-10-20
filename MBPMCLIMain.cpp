@@ -8,18 +8,38 @@
 int main(int argc,char** argv)
 {
 	//DEBUG GREJER
-	//std::filesystem::current_path("C:/Users/emanu/Desktop/Program/C++/MBPacketManager");
-	//MBPM::CreatePacketFilesData("./");
-	//MBPM::MBPP_FileInfoReader InfoToIterate("./MBPM_FileInfo");
-	//const MBPM::MBPP_DirectoryInfoNode* TopNode = InfoToIterate.GetDirectoryInfo("/");
-	//MBPM::MBPP_DirectoryInfoNode_ConstIterator TestIterator = TopNode->begin();
-	//MBPM::MBPP_DirectoryInfoNode_ConstIterator EndIterator = TopNode->end();
-	//while(!(TestIterator == EndIterator))
-	//{
-	//	std::cout << TestIterator.GetCurrentDirectory() + (*TestIterator).FileName << std::endl;
-	//	TestIterator++;
-	//}
+	std::filesystem::current_path("C:/Users/emanu/Desktop/Program/C++/MBPacketManager");
+	//MBParsing::ParseJSONObject(;
+	
+	MBPM::CreatePacketFilesData("./","MBPM_FileInfo2");
+	MBPM::MBPP_FileInfoReader InfoToIterate("./MBPM_FileInfo2");
+	std::string TestOutputString = "";
+	MBUtility::MBStringOutputStream TestOutputStream(TestOutputString);
+	InfoToIterate.WriteData(&TestOutputStream);
+	MBPM::MBPP_FileInfoReader StringReader(TestOutputString.data(), TestOutputString.size());
 
+	std::cout << bool(StringReader == InfoToIterate) << std::endl;
+
+	const MBPM::MBPP_DirectoryInfoNode* TopNode = InfoToIterate.GetDirectoryInfo("/");
+	MBPM::MBPP_DirectoryInfoNode_ConstIterator TestIterator = TopNode->begin();
+	MBPM::MBPP_DirectoryInfoNode_ConstIterator EndIterator = TopNode->end();
+	while(!(TestIterator == EndIterator))
+	{
+		std::cout << TestIterator.GetCurrentDirectory() + (*TestIterator).FileName << std::endl;
+		TestIterator++;
+	}
+	std::cout << "Nu med mergad" << std::endl;
+	//MBPM::CreatePacketFilesData("./.mbpm/Windows_x86-64/Data/", "MBPM_UpdatedFileInfo");
+	MBPM::MBPP_FileInfoReader InfoToMerge = MBPM::MBPP_FileInfoReader("./.mbpm/Windows_x86-64/MBPM_UpdatedFileInfo");
+	StringReader.UpdateInfo(InfoToMerge);
+	const MBPM::MBPP_DirectoryInfoNode* MergedTopNode = StringReader.GetDirectoryInfo("/");
+	MBPM::MBPP_DirectoryInfoNode_ConstIterator MergedIterator = MergedTopNode->begin();
+	MBPM::MBPP_DirectoryInfoNode_ConstIterator MergedEnd = MergedTopNode->end();
+	while (!(MergedIterator == MergedEnd))
+	{
+		std::cout << MergedIterator.GetCurrentDirectory() + (*MergedIterator).FileName << std::endl;
+		MergedIterator++;
+	}
 	//return(MBPM::MBCLI_Main(argc, argv));
 
 	//const int argc2 = 3;

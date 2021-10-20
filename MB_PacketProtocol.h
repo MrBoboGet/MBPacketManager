@@ -11,7 +11,7 @@
 
 namespace MBPM
 {
-
+	
 	//protocol antagande: Request Response, varje client skick måste efterväntas av ett svar 
 	//
 	enum class MBPP_TransferProtocol
@@ -68,6 +68,7 @@ namespace MBPM
 		x86,
 		x86_64,
 		ARM,
+		Any,
 		Null,
 	};
 	enum class MBPP_OSType : uint32_t
@@ -76,6 +77,7 @@ namespace MBPM
 		Windows_10,
 		Windows_7,
 		MacOS,
+		Any,
 		Null,
 	};
 	struct MBPP_ComputerInfo
@@ -240,7 +242,8 @@ namespace MBPM
 		MBPP_DirectoryInfoNode* m_ParentDirectory = nullptr;//enbart till för att kunna iterera enkelt över filler/directories
 	public:
 		std::string DirectoryName = "";
-		std::string DirectoryHash = "";
+		std::string StructureHash = "";
+		std::string ContentHash = "";
 		uint64_t Size = 0;
 		std::vector<MBPP_FileInfo> Files = {};
 		std::vector<MBPP_DirectoryInfoNode> Directories = {};
@@ -259,6 +262,38 @@ namespace MBPM
 	};
 	MBPP_FileInfoDiff GetFileInfoDifference(MBPP_FileInfoReader const& ClientInfo, MBPP_FileInfoReader const& ServerInfo);
 
+	struct MBPP_ComputerDiffRule
+	{
+		MBPP_OSType OSMatch = MBPP_OSType::Null;
+		MBPP_ProcessorType ProcessorMatch = MBPP_ProcessorType::Null;
+		std::string InfoDirectory = "";
+	};
+	class MBPP_ComputerDiffInfo
+	{
+	private:
+		std::vector<MBPP_ComputerDiffRule> m_Rules = {};
+	public:
+		MBError ReadInfo(std::string const& InfoPath);
+		std::string Match(MBPP_ComputerInfo const& InfoToMatch);
+	};
+
+	constexpr uint16_t MBPP_FileInfoHeaderStaticSize = 23 + 6 + 4 + 4;
+	struct MBPP_FileInfoHeader
+	{
+	private:
+	public:
+		std::string ArbitrarySniffData = "\x07\xEB\x13\x37MBG_MBPP_FileInfo\x13\x37";
+		//static length part
+		uint16_t Version[3] = { 0,1,0 };
+		MBCrypto::HashFunction HashFunction = MBCrypto::HashFunction::SHA1;//4 bytes
+		//
+		uint32_t ExtensionDataSize = 0;
+	};
+	struct MBPP_DirectoryHashData
+	{
+		std::string StructureHash = "";
+		std::string ContentHash = "";
+	};
 	class MBPP_FileInfoReader
 	{
 
@@ -267,12 +302,24 @@ namespace MBPM
 
 		friend MBPP_FileInfoDiff GetFileInfoDifference(MBPP_FileInfoReader const& ClientInfo, MBPP_FileInfoReader const& ServerInfo);
 		MBPP_DirectoryInfoNode m_TopNode = MBPP_DirectoryInfoNode();
+		MBPP_FileInfoHeader m_InfoHeader;
 		static std::vector<std::string> sp_GetPathComponents(std::string const& PathToDecompose);
 		MBPP_DirectoryInfoNode p_ReadDirectoryInfoFromFile(MBUtility::MBOctetInputStream* FileToReadFrom,size_t HashSize);
 		MBPP_FileInfo p_ReadFileInfoFromFile(MBUtility::MBOctetInputStream* FileToReadFrom,size_t HashSize);
 		const MBPP_DirectoryInfoNode* p_GetTargetDirectory(std::vector<std::string> const& PathComponents) const;
+		MBPP_DirectoryInfoNode* p_GetTargetDirectory(std::vector<std::string> const& PathComponents);
 	
 		void p_UpdateDirectoriesParents(MBPP_DirectoryInfoNode* DirectoryToUpdate);
+		
+		void p_UpdateDirectoryInfo(MBPP_DirectoryInfoNode& NodeToUpdate, MBPP_DirectoryInfoNode const& UpdatedNode);
+		void p_DeleteObject(std::string const& ObjectPath);
+		void p_UpdateHashes();
+
+		MBPP_DirectoryHashData p_UpdateDirectoryStructureHash(MBPP_DirectoryInfoNode& NodeToUpdate);
+
+		void p_WriteHeader(MBPP_FileInfoHeader const& HeaderToWrite, MBUtility::MBOctetOutputStream* OutputStream);
+		void p_WriteFileInfo(MBPP_FileInfo const& InfoToWrite, MBUtility::MBOctetOutputStream* OutputStream);
+		void p_WriteDirectoryInfo(MBPP_DirectoryInfoNode const& InfoToWrite, MBUtility::MBSearchableOutputStream* OutputStream);
 	public:
 		MBPP_FileInfoReader() {};
 		MBPP_FileInfoReader(std::string const& FileInfoPath);
@@ -287,6 +334,23 @@ namespace MBPM
 		MBPP_FileInfoReader(MBPP_FileInfoReader&& ReaderToSteal) noexcept;
 		MBPP_FileInfoReader(MBPP_FileInfoReader const& ReaderToCopy);
 		MBPP_FileInfoReader& operator=(MBPP_FileInfoReader ReaderToCopy);
+
+		//output grejer
+		std::string GetBinaryString();
+		void WriteData(MBUtility::MBSearchableOutputStream* OutputStream);
+
+		//static grejer 
+		void UpdateInfo(MBPP_FileInfoReader const& NewInfo);
+		template<typename T>
+		void DeleteObjects(T const& ObjectsToDelete)
+		{
+			for (std::string const& ObjectToDelete : ObjectsToDelete)
+			{
+				p_DeleteObject(ObjectsToDelete);
+			}
+			p_UpdateHashes();
+			p_UpdateDirectoriesParents(&m_TopNode);
+		}
 	};
 
 	struct MBPP_PacketHost
@@ -310,7 +374,6 @@ namespace MBPM
 		bool Includes(std::string const& StringToMatch);
 		void AddExcludeFile(std::string const& FileToExlude);
 	};
-
 	void CreatePacketFilesData(std::string const& PacketToHashDirectory,std::string const& FileName = "MBPM_FileInfo");
 	//generella
 	class MBPP_FileListDownloadHandler
