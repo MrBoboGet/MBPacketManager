@@ -50,3 +50,7 @@ Thumbs.db
 /MBPM_Builds/
 /CMakeLists3.txt
 /.mbpm/
+/TestMergeDirectory/
+/FileInfoWithTest
+/FileInfoWithoutTest
+/MBPM_DataToMerge

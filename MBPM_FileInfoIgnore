@@ -9,7 +9,16 @@ Excludes:
 /TestUploadPacket/
 /CMakeSettings.json
 /MBPM_FileInfo
-/MBPM_Builds/
 /CMakeSettings.json/
 /MBPM_Builds/
+
+
+/MBPM_DataToMerge
+/MBPM_FileInfoWithoutTest
+/MBPM_FileInfoWith
+/FileInfoWithTest
+
+
+/TestMergeDirectory/
+/FileInfoWithoutTest
 Includes:

@@ -6,7 +6,7 @@
 #include <memory>
 #include <vector>
 #include <stack>
-
+#include <set>
 #include <MBUtility/MBInterfaces.h>
 
 namespace MBPM
@@ -68,12 +68,14 @@ namespace MBPM
 		x86,
 		x86_64,
 		ARM,
+		ARMv7,
 		Any,
 		Null,
 	};
 	enum class MBPP_OSType : uint32_t
 	{
 		Linux,
+		Windows,
 		Windows_10,
 		Windows_7,
 		MacOS,
@@ -179,7 +181,7 @@ namespace MBPM
 		std::vector<std::string> FilesToUpload = {};
 	};
 	bool MBPP_PathIsValid(std::string const& PathToCheck);
-	MBPP_ComputerInfo GetComputerInfo();
+	//MBPP_ComputerInfo GetComputerInfo();
 	MBPP_GenericRecord MBPP_ParseRecordHeader(const void* Data, size_t DataSize, size_t InOffset, size_t* OutOffset);
 	std::string MBPP_EncodeString(std::string const& StringToEncode);
 	std::string MBPP_GetRecordHeader(MBPP_GenericRecord const& RecordToConvert);
@@ -264,15 +266,20 @@ namespace MBPM
 
 	struct MBPP_ComputerDiffRule
 	{
-		MBPP_OSType OSMatch = MBPP_OSType::Null;
-		MBPP_ProcessorType ProcessorMatch = MBPP_ProcessorType::Null;
+		std::vector<MBPP_OSType> OSMatches = {};
+		std::vector<MBPP_ProcessorType> ProcessorMatch = {};
 		std::string InfoDirectory = "";
 	};
 	class MBPP_ComputerDiffInfo
 	{
 	private:
 		std::vector<MBPP_ComputerDiffRule> m_Rules = {};
+		//MBPP_ComputerDiffRule p_ParseRule(MBParsing::JSONObject const& ObjectToParse,MBError* OutError);
 	public:
+		static MBPP_OSType GetStringOSType(std::string const& StringToConvert);
+		static MBPP_ProcessorType GetStringProcessorType(std::string const& StringToConvert);
+		static std::string GetOSTypeString(MBPP_OSType TypeToConvert);
+		static std::string GetProcessorTypeString(MBPP_ProcessorType TypeToConvert);
 		MBError ReadInfo(std::string const& InfoPath);
 		std::string Match(MBPP_ComputerInfo const& InfoToMatch);
 	};
@@ -308,6 +315,8 @@ namespace MBPM
 		MBPP_FileInfo p_ReadFileInfoFromFile(MBUtility::MBOctetInputStream* FileToReadFrom,size_t HashSize);
 		const MBPP_DirectoryInfoNode* p_GetTargetDirectory(std::vector<std::string> const& PathComponents) const;
 		MBPP_DirectoryInfoNode* p_GetTargetDirectory(std::vector<std::string> const& PathComponents);
+		MBPP_DirectoryInfoNode* p_GetTargetDirectory_Impl(std::vector<std::string> const& PathComponents);
+
 	
 		void p_UpdateDirectoriesParents(MBPP_DirectoryInfoNode* DirectoryToUpdate);
 		
@@ -320,7 +329,12 @@ namespace MBPM
 		void p_WriteHeader(MBPP_FileInfoHeader const& HeaderToWrite, MBUtility::MBOctetOutputStream* OutputStream);
 		void p_WriteFileInfo(MBPP_FileInfo const& InfoToWrite, MBUtility::MBOctetOutputStream* OutputStream);
 		void p_WriteDirectoryInfo(MBPP_DirectoryInfoNode const& InfoToWrite, MBUtility::MBSearchableOutputStream* OutputStream);
+
+		bool p_ObjectIsFile(std::string const& ObjectToCheck);
+		MBPP_FileInfo* p_GetObjectFileData(std::string const& ObjectToCheck);
+		MBPP_DirectoryInfoNode* p_GetObjectDirectoryData(std::string const& ObjectToCheck);
 	public:
+		static MBPP_FileInfoDiff GetFileInfoDifference(MBPP_DirectoryInfoNode const& ClientInfo, MBPP_DirectoryInfoNode const& ServerInfo);
 		MBPP_FileInfoReader() {};
 		MBPP_FileInfoReader(std::string const& FileInfoPath);
 		MBPP_FileInfoReader(const void* DataToRead, size_t DataSize);
@@ -341,6 +355,7 @@ namespace MBPM
 
 		//static grejer 
 		void UpdateInfo(MBPP_FileInfoReader const& NewInfo);
+		void UpdateInfo(MBPP_FileInfoReader const& NewInfo,std::string const& MountPoint);
 		template<typename T>
 		void DeleteObjects(T const& ObjectsToDelete)
 		{
@@ -348,8 +363,8 @@ namespace MBPM
 			{
 				p_DeleteObject(ObjectsToDelete);
 			}
-			p_UpdateHashes();
 			p_UpdateDirectoriesParents(&m_TopNode);
+			p_UpdateHashes();
 		}
 	};
 
@@ -375,6 +390,8 @@ namespace MBPM
 		void AddExcludeFile(std::string const& FileToExlude);
 	};
 	void CreatePacketFilesData(std::string const& PacketToHashDirectory,std::string const& FileName = "MBPM_FileInfo");
+	void CreatePacketFilesData(std::string const& PacketToHashDirectory,MBUtility::MBSearchableOutputStream* OutputStream);
+	MBPP_FileInfoReader CreateFileInfo(std::string const& DirectoryToIterate);
 	//generella
 	class MBPP_FileListDownloadHandler
 	{
@@ -446,6 +463,7 @@ namespace MBPM
 	{
 	private:
 		std::unique_ptr<MBSockets::ConnectSocket> m_ServerConnection = nullptr;
+		MBPP_ComputerInfo m_CurrentComputerInfo = MBPP_ComputerInfo();
 
 		static MBError p_DownloadFileList(std::string const& InitialData, size_t DataOffset, MBSockets::ConnectSocket* SocketToUse, std::string const& OutputTopDirectory
 			, std::vector<std::string> const& OutputFileNames = {});
@@ -454,14 +472,20 @@ namespace MBPM
 		MBError p_GetDirectory(std::string const& PacketName,std::string const& DirectoryToGet,std::string const& OutputDirectory);
 		MBError p_DownloadServerFilesInfo(std::string const& PacketName, std::string const& OutputDirectory, std::vector<std::string> const& OutputFileNames);
 		MBPP_UploadRequest_Response p_GetLoginResult(std::string const& PacketName, MBPP_UserCredentialsType CredentialsType, std::string const& CredentialsData,MBError* OutError);
+		MBPP_ComputerInfo p_GetComputerInfo();
+
+		MBError p_UploadPacket(std::string const& PacketName, MBPP_UserCredentialsType CredentialsType, std::string const& CredentialsData, std::string const& PacketDirectory, std::vector<std::string> const& FilesToUpload,std::vector<std::string> const& FilesToDelete);
 	public:
 		MBError Connect(MBPP_TransferProtocol TransferProtocol, std::string const& Domain, std::string const& Port);
 		MBError Connect(MBPP_PacketHost const& PacketHost);
 		bool IsConnected();
+		void SetComputerInfo(MBPP_ComputerInfo NewComputerInfo);
+		static MBPP_ComputerInfo GetSystemComputerInfo();
 		MBError DownloadPacket(std::string const& OutputDirectory, std::string const& PacketName); //semantiken av denna funktion är att den laddar ner totalt nytt, medans update tar diffen
 		MBError UpdatePacket(std::string const& OutputDirectory, std::string const& PacketName);
 		MBError UploadPacket(std::string const& PacketDirectory, std::string const& PacketName,MBPP_UserCredentialsType CredentialsType,std::string const& CredentialsData
-		, MBPP_UploadRequest_Response* OutResponse);
+		,MBPP_UploadRequest_Response* OutResponse);
+		MBError UploadPacket(std::string const& PacketDirectory, std::string const& PacketName, MBPP_UserCredentialsType CredentialsType, std::string const& CredentialsData, std::vector<std::string> const& FilesToUpload, std::vector<std::string> const& FilesToDelete ,MBPP_UploadRequest_Response* OutResponse);
 		MBError DownloadPacketFiles(std::string const& OutputDirectory, std::string const& PacketName,std::vector<std::string> const& FilesToGet);
 		MBError DownloadPacketDirectories(std::string const& OutputDirectory, std::string const& PacketName,std::vector<std::string> const& DirectoriesToGet);
 		MBPP_FileInfoReader GetPacketFileInfo(std::string const& PacketName,MBError* OutError);
@@ -478,6 +502,15 @@ namespace MBPM
 	{
 		SendListOfFiles,
 		Null,
+	};
+	struct MBPP_ServerTotalFileInfo
+	{
+		std::string DefaultTopDirectory = "";
+		MBPP_FileInfoReader DefaultInfo;
+
+		std::string ComputerDiffTopDirectory = "";
+		MBPP_FileInfoReader ComputerDiffInfo;
+		std::set<std::string> RemovedObjects;
 	};
 	class MBPP_ServerResponseIterator
 	{
@@ -498,6 +531,8 @@ namespace MBPM
 		//}
 		std::string p_GetPacketDirectory(std::string const& PacketName);
 		std::string p_GetTopPacketsDirectory();
+		MBPP_ServerTotalFileInfo p_GetFileInfo(std::string const& PacketName,MBPP_ComputerInfo ComputerInfo);
+		std::vector<std::string> p_GetFilesystemPaths(MBPP_ServerTotalFileInfo const& TotalFileInfo, std::vector<std::string> const& ClientFileList,MBError* OutError);
 	public:
 		std::string& operator*()
 		{
@@ -528,6 +563,7 @@ namespace MBPM
 	};
 	struct MBPP_GetFileList_ResponseData
 	{
+		MBPP_ComputerInfo ComputerInfo;
 		uint32_t PacketNameSize = -1; //totala sizen är egentligen 2, men utifall att
 		std::string PacketName = "";
 
@@ -542,6 +578,7 @@ namespace MBPM
 	};
 	struct MBPP_GetDirectories_ResponseData
 	{
+		MBPP_ComputerInfo ComputerInfo;
 		uint32_t PacketNameSize = -1;
 		std::string PacketName = "";
 		uint32_t DirectoryListSize = -1;
@@ -550,6 +587,7 @@ namespace MBPM
 	struct MBPP_GetPacketInfo_ResponseData
 	{
 		uint32_t PacketNameSize = -1;
+		MBPP_ComputerInfo ResponseComputerInfo;
 		std::string PacketName = "";
 	};
 	struct MBPP_UploadRequest_ResponseData
@@ -581,6 +619,8 @@ namespace MBPM
 	{
 	private:
 		bool m_FileListSent = false;
+
+		std::vector<std::string> m_FilesToSendPaths = {};
 		size_t m_CurrentFileIndex = 0;
 		std::ifstream m_FileHandle;
 	public:
@@ -591,7 +631,8 @@ namespace MBPM
 	{
 	private:
 		bool m_FileListSent = false;
-		std::vector<std::string> m_FilesToSend = {};
+		std::vector<std::string> m_FilesToSendPaths = {};
+		std::vector<std::string> m_FilesToSendNames = {};
 		size_t m_CurrentFileIndex = 0;
 		std::ifstream m_FileHandle;
 	public:
@@ -602,8 +643,12 @@ namespace MBPM
 	{
 	private:
 		bool m_FileListSent = false;
+		bool m_FileInfoSent = false;
 		size_t m_CurrentFileIndex = 0;
-		std::vector<std::string> m_FilesToSend = { "MBPM_PacketInfo","MBPM_FileInfo" };
+		std::vector<std::string> m_FileList = { "MBPM_PacketInfo","MBPM_FileInfo" };
+		std::vector<std::string> m_FilesToSend = { "MBPM_PacketInfo"};
+		std::string m_FileInfoBytes = "";
+		size_t m_SentFileInfoBytes = 0;
 		std::ifstream m_FileHandle;
 	public:
 		MBPP_GetPacketInfo_ResponseIterator(MBPP_GetPacketInfo_ResponseData const& ResponseData,MBPP_Server* AssociatedServer);
@@ -625,6 +670,16 @@ namespace MBPM
 		MBPP_UploadChanges_ResponseIterator();
 		virtual void Increment() override;
 	};
+	class MBPP_UploadChangesIncorporator
+	{
+	private:
+	public:
+		virtual void IncorporatePacketChanges(std::string const& ChangedPacket,MBPP_ComputerInfo ComputerInfo, std::vector<std::string> const& DeletedObjects) = 0;
+		virtual ~MBPP_UploadChangesIncorporator()
+		{
+
+		};
+	};
 	class MBPP_Server
 	{
 		friend class MBPP_ServerResponseIterator;
@@ -643,6 +698,7 @@ namespace MBPM
 		MBPP_ErrorCode m_VerificationResult = MBPP_ErrorCode::Null;
 		//authentication
 		MBUtility::MBBasicUserAuthenticator* m_UserAuthenticator = nullptr;
+		MBPP_UploadChangesIncorporator* m_PacketChangesIncorporator = nullptr;
 		
 		std::vector<MBPP_UserCredentialsType> m_SupportedCredentials = { MBPP_UserCredentialsType::Plain };
 
@@ -667,7 +723,7 @@ namespace MBPM
 
 		MBError p_ParseRequestVerificationData();
 		MBError p_ParseFileList(MBPP_FileList& FileListToUpdate,bool* BoolToUpdate);
-		MBError p_DownloadClientFileList(MBPP_FileListDownloadState* DownloadState ,MBPP_FileListDownloadHandler* DownloadHandler);//antar att fillistan redan är parsad
+		MBError p_DownloadClientFileList(MBPP_FileListDownloadState* DownloadState ,MBPP_FileListDownloadHandler* DownloadHandler,bool* DownloadFinished);//antar att fillistan redan är parsad
 
 		std::string p_GetPacketDirectory(std::string const& PacketName);
 		std::string p_GetPacketDomain(std::string const& PacketName);
@@ -675,8 +731,11 @@ namespace MBPM
 
 		MBPP_ErrorCode p_VerifyPlainLogin(std::string const& PacketName);
 		MBPP_ErrorCode p_VerifyRequest(std::string const& PacketName);
+
+		void p_CreateEmptyComputerDiffDirectory(std::string const& Packetname,MBPP_ComputerInfo NewComputerInfo);//skapar den om den inte existerar
+		void p_CreateEmptyComputerDiffDirectory(std::string const& Packetname);//skapar den helt nytt om den inte än existerar
 	public:
-		MBPP_Server(std::string const& PacketDirectory);
+		MBPP_Server(std::string const& PacketDirectory, MBPP_UploadChangesIncorporator* UploadChangesHandler);
 		void SetUserAuthenticator(MBUtility::MBBasicUserAuthenticator* AuthenticatorToSet);
 		void SetTopDomain(std::string const& NewTopDomain);
 
@@ -690,9 +749,9 @@ namespace MBPM
 		void FreeResponseIterator(MBPP_ServerResponseIterator* IteratorToFree);
 		MBPP_FileInfoReader GetPacketFileInfo(std::string const& PacketName);
 
-		bool PacketUpdated();
-		std::string GetUpdatedPacket();
-		std::vector<std::string> GetPacketRemovedFiles();
+		//bool PacketUpdated();
+		//std::string GetUpdatedPacket();
+		//std::vector<std::string> GetPacketRemovedFiles();
 		//MBError SendResponse(MBSockets::ConnectSocket* SocketToUse);
 	};
 

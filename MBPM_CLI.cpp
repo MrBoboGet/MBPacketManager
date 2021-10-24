@@ -150,7 +150,8 @@ namespace MBPM
 	}
 	MBPP_PacketHost MBPM_ClI::p_GetDefaultPacketHost()
 	{
-		MBPP_PacketHost ReturnValue = { "mrboboget.se/MBPM/",MBPP_TransferProtocol::HTTPS,443 };
+		//MBPP_PacketHost ReturnValue = { "mrboboget.se/MBPM/",MBPP_TransferProtocol::HTTPS,443 };
+		MBPP_PacketHost ReturnValue = { "127.0.0.1/MBPM/",MBPP_TransferProtocol::HTTPS,443 };
 		return(ReturnValue);
 	}
 
@@ -408,6 +409,127 @@ namespace MBPM
 			AssociatedTerminal->PrintLine("Package \""+ PacketName +"\" has no filesystem object \""+ ObjectToGet +"\"");
 		}
 	}
+	std::vector<std::string> h_GetDirectoryFiles(std::string const& DirectoryPath, std::string const& DirectoryPrefix)
+	{
+		std::vector<std::string> ReturnValue = {};
+		std::filesystem::recursive_directory_iterator DirectoryIterator = std::filesystem::recursive_directory_iterator(DirectoryPath);
+		for (auto const& Entry : DirectoryIterator)
+		{
+			if (Entry.is_regular_file())
+			{
+				std::filesystem::path RelativePath = std::filesystem::relative(Entry.path(), DirectoryPath);
+				ReturnValue.push_back(DirectoryPrefix + MBUnicode::PathToUTF8(RelativePath));
+			}
+		}
+		return(ReturnValue);
+	}
+	std::set<std::string> h_GetPacketsToSend(MBCLI::ProcessedCLInput const& CommandInput, std::string const& PacketPath, std::string const& PacketDirectory,MBCLI::MBTerminal* AssociatedTerminal)
+	{
+		std::set<std::string> ReturnValue = {};
+		if (!(std::filesystem::exists(PacketPath + PacketDirectory) && std::filesystem::directory_entry(PacketPath + PacketDirectory).is_regular_file()))
+		{
+			return(ReturnValue);
+		}
+		std::vector<size_t> const& CommandPosition = CommandInput.CommandPositionalOptions.at("d");
+		for (size_t i = 0; i < CommandPosition.size(); i++)
+		{
+			if (CommandPosition[i] + 1 >= CommandInput.TotalCommandTokens.size())
+			{
+				AssociatedTerminal->PrintLine("Positional argument -d given without additional input");
+				return (ReturnValue);
+			}
+			std::string DirectoryToSend = CommandInput.TotalCommandTokens[CommandPosition[i] + 1];
+			//ANTAGANDE denna funktion används för att specificera directorys som annars kanske inte tas upp af FileInfoIgnoren, och går därför igenom hela directoryn
+			std::vector<std::string> NewFiles = h_GetDirectoryFiles(PacketPath + DirectoryToSend, DirectoryToSend);
+			for(std::string const& Paths : NewFiles)
+			{
+				ReturnValue.insert(Paths);
+			}
+		}
+		return(ReturnValue);
+	}
+	void h_GetUpdateToSend(MBCLI::ProcessedCLInput const& CommandInput, MBPP_FileInfoReader const& ServerFileInfo, std::string const& PacketDirectory, std::vector<std::string>& OutFilesToSend, std::vector<std::string>& OutFilesToDelete, MBCLI::MBTerminal* AssociatedTerminal)
+	{
+		//aningen innefektivt iomed all kopiering av data men är viktigare med korrekthet just nu
+		std::set<std::string> FilesToSend = {};
+		std::set<std::string> ObjectsToDelete = {};
+		if (CommandInput.CommandPositionalOptions.find("f") != CommandInput.CommandPositionalOptions.end())
+		{
+			std::vector<size_t> const& FilePosition = CommandInput.CommandPositionalOptions.at("f");
+			for (size_t i = 0; i < FilePosition.size(); i++)
+			{
+				if (FilePosition[i] +1< CommandInput.TotalCommandTokens.size())
+				{
+					FilesToSend.insert(CommandInput.TotalCommandTokens[FilePosition[i]+1]);
+				}
+			}
+		}
+		if (CommandInput.CommandPositionalOptions.find("d") != CommandInput.CommandPositionalOptions.end())
+		{
+			std::vector<size_t> OptionPositions = CommandInput.CommandPositionalOptions.at("d");
+			for (size_t i = 0; i < OptionPositions.size(); i++)
+			{
+				//för varje directory tar vi diffen
+				if (OptionPositions[i] + 1 < CommandInput.TotalCommandTokens.size())
+				{
+					std::string const& CurrentDirectory = CommandInput.TotalCommandTokens[OptionPositions[i] + 1];
+					MBPP_FileInfoReader DirectoryInfo = CreateFileInfo(PacketDirectory + CurrentDirectory);
+					if (ServerFileInfo.ObjectExists(CurrentDirectory))
+					{
+						MBPP_FileInfoDiff DirectoriesDiff = MBPP_FileInfoReader::GetFileInfoDifference(*ServerFileInfo.GetDirectoryInfo(CurrentDirectory), *DirectoryInfo.GetDirectoryInfo("/"));
+						for (auto const& NewFiles : DirectoriesDiff.AddedFiles)
+						{
+							FilesToSend.insert(CurrentDirectory+NewFiles);
+						}
+						for (auto const& UpdateFiles : DirectoriesDiff.UpdatedFiles)
+						{
+							FilesToSend.insert(CurrentDirectory + UpdateFiles);
+						}
+						for (auto const& RemovedFiles : DirectoriesDiff.RemovedFiles)
+						{
+							ObjectsToDelete.insert(CurrentDirectory + RemovedFiles);
+						}
+						for (auto const& DeletedDirectories : DirectoriesDiff.DeletedDirectories)
+						{
+							ObjectsToDelete.insert(CurrentDirectory+DeletedDirectories);
+						}
+						for (auto const& NewDirectories : DirectoriesDiff.AddedDirectories)
+						{
+							const MBPP_DirectoryInfoNode* NewDirectory = DirectoryInfo.GetDirectoryInfo(NewDirectories);
+							MBPP_DirectoryInfoNode_ConstIterator DirectoryIterator = NewDirectory->begin();
+							while (DirectoryIterator != NewDirectory->end())
+							{
+								FilesToSend.insert(CurrentDirectory + DirectoryIterator.GetCurrentDirectory() + (*DirectoryIterator).FileName);
+								DirectoryIterator++;
+							}
+						}
+					}
+					else
+					{
+						//tar bara datan vi har
+						const MBPP_DirectoryInfoNode* NewDirectory = DirectoryInfo.GetDirectoryInfo("/");
+						MBPP_DirectoryInfoNode_ConstIterator DirectoryIterator = NewDirectory->begin();
+						while (DirectoryIterator != NewDirectory->end())
+						{
+							FilesToSend.insert(CurrentDirectory + DirectoryIterator.GetCurrentDirectory() + (*DirectoryIterator).FileName);
+							DirectoryIterator++;
+						}
+						
+					}
+				}
+			}
+		}
+		OutFilesToSend = {};
+		OutFilesToDelete = {};
+		for (auto const& Files : FilesToSend)
+		{
+			OutFilesToSend.push_back(Files);
+		}
+		for (auto const& Files : ObjectsToDelete)
+		{
+			OutFilesToDelete.push_back(Files);
+		}
+	}
 	void MBPM_ClI::p_HandleUpload(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
 	{
 		//först så behöver vi skicka data för att se login typen
@@ -420,7 +542,7 @@ namespace MBPM
 		{
 			PacketsToUpload = p_GetUserUploadPackets();
 		}
-		if (CommandInput.TopCommandArguments.size() == 2)
+		if (CommandInput.TopCommandArguments.size() >= 2)
 		{
 			PacketsToUpload.push_back(std::pair<std::string, std::string>(CommandInput.TopCommandArguments[0], CommandInput.TopCommandArguments[1]));
 		}
@@ -443,22 +565,62 @@ namespace MBPM
 		}
 		MBPP_UploadRequest_Response RequestResponse;
 		MBPP_Client ClientToUse;
+		if (CommandInput.CommandOptions.find("computerdiff") != CommandInput.CommandOptions.end())
+		{
+			ClientToUse.SetComputerInfo(MBPP_Client::GetSystemComputerInfo());
+		}
 		ClientToUse.Connect(p_GetDefaultPacketHost());
 		std::string VerificationData = "";
+		//std::set<std::string> FilesToSend = {};
+		bool UseDirectPaths = false;
+		if (CommandInput.CommandPositionalOptions.find("d") != CommandInput.CommandPositionalOptions.end() || CommandInput.CommandPositionalOptions.find("f") != CommandInput.CommandPositionalOptions.end())
+		{
+			UseDirectPaths = true;
+		}
+		MBError UploadError = true;
 		MBPP_UserCredentialsType CurrentCredentialType = MBPP_UserCredentialsType::Plain;
 		for (size_t i = 0; i < PacketsToUpload.size(); i++)
 		{
+			std::vector<std::string> FilesToUpload = {};
+			std::vector<std::string> FilesToDelete = {};
 			std::string PacketName = PacketsToUpload[i].first;
 			std::string PacketToUploadDirectory = PacketsToUpload[i].second;
-			MBPM::CreatePacketFilesData(PacketToUploadDirectory);
-			MBError UploadError = true;
-			if (VerificationData == "")
+			if (!UseDirectPaths)
 			{
-				UploadError = ClientToUse.UploadPacket(PacketToUploadDirectory, PacketName, MBPP_UserCredentialsType::Request, "", &RequestResponse);
+				MBPM::CreatePacketFilesData(PacketToUploadDirectory);
 			}
 			else
 			{
-				UploadError = ClientToUse.UploadPacket(PacketToUploadDirectory, PacketName, CurrentCredentialType, VerificationData, &RequestResponse);
+				MBPP_FileInfoReader ServerInfo = ClientToUse.GetPacketFileInfo(PacketName,&UploadError);
+				if (!UploadError)
+				{
+					AssociatedTerminal->PrintLine("Error downloading server file info for packet "+PacketName+" : " + UploadError.ErrorMessage);
+					return;
+				}
+				h_GetUpdateToSend(CommandInput, ServerInfo, PacketToUploadDirectory, FilesToUpload, FilesToDelete, AssociatedTerminal);
+			}
+			MBError UploadError = true;
+			if (VerificationData == "")
+			{
+				if (!UseDirectPaths)
+				{
+					UploadError = ClientToUse.UploadPacket(PacketToUploadDirectory, PacketName, MBPP_UserCredentialsType::Request, "", &RequestResponse);
+				}
+				else
+				{
+					UploadError = ClientToUse.UploadPacket(PacketToUploadDirectory, PacketName, MBPP_UserCredentialsType::Request, "", FilesToUpload, FilesToDelete, &RequestResponse);
+				}
+			}
+			else
+			{
+				if (!UseDirectPaths)
+				{
+					UploadError = ClientToUse.UploadPacket(PacketToUploadDirectory, PacketName, CurrentCredentialType, VerificationData, &RequestResponse);
+				}
+				else
+				{
+					UploadError = ClientToUse.UploadPacket(PacketToUploadDirectory, PacketName, CurrentCredentialType, VerificationData, FilesToUpload, FilesToDelete, &RequestResponse);
+				}
 				if (UploadError)
 				{
 					AssociatedTerminal->PrintLine("Sucessfully uploaded " + PacketName);
@@ -478,7 +640,17 @@ namespace MBPM
 				AssociatedTerminal->SetPasswordInput(false);
 				VerificationData = MBPP_EncodeString(Username) + MBPP_EncodeString(Password);
 				ClientToUse.Connect(p_GetDefaultPacketHost());
-				UploadError = ClientToUse.UploadPacket(PacketToUploadDirectory, PacketName, MBPP_UserCredentialsType::Plain, VerificationData, &RequestResponse);
+
+
+				if (!UseDirectPaths)
+				{
+					UploadError = ClientToUse.UploadPacket(PacketToUploadDirectory, PacketName, MBPP_UserCredentialsType::Plain, VerificationData, &RequestResponse);
+				}
+				else
+				{
+					UploadError = ClientToUse.UploadPacket(PacketToUploadDirectory, PacketName, MBPP_UserCredentialsType::Plain, VerificationData, FilesToUpload, FilesToDelete, &RequestResponse);
+				}
+				
 				if (!UploadError)
 				{
 					AssociatedTerminal->PrintLine("Error uploading "+PacketName+": " + UploadError.ErrorMessage);
@@ -505,7 +677,7 @@ namespace MBPM
 		}
 		if (CommandInput.TopCommandArguments[0] == "create")
 		{
-			if (CommandInput.TopCommandArguments.size() < 2 && CommandInput.CommandOptions.find("alluser") == CommandInput.CommandOptions.end())
+			if (CommandInput.TopCommandArguments.size() < 2 && CommandInput.CommandOptions.find("alluser") == CommandInput.CommandOptions.end() && CommandInput.CommandOptions.find("allinstalled") == CommandInput.CommandOptions.end())
 			{
 				AssociatedTerminal->PrintLine("no directory path provided");
 				return;
@@ -521,6 +693,15 @@ namespace MBPM
 				for (size_t i = 0; i < UserPackets.size(); i++)
 				{
 					DirectoriesToProcess.push_back(UserPackets[i].second);
+				}
+			}
+			if (CommandInput.CommandOptions.find("allinstalled") != CommandInput.CommandOptions.end())
+			{
+				std::vector<std::string> InstalledPackets = p_GetInstalledPacketsDependancyOrder();
+				std::string PacketInstallDirectory = p_GetPacketInstallDirectory();
+				for (size_t i = 0; i < InstalledPackets.size(); i++)
+				{
+					DirectoriesToProcess.push_back(PacketInstallDirectory + "/" + InstalledPackets[i]);
 				}
 			}
 			std::string FileInfoName = "MBPM_FileInfo";
@@ -842,6 +1023,8 @@ namespace MBPM
 	}
 	void MBPM_ClI::HandleCommand(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
 	{
+		//denna är en global inställning
+		if(CommandInput.CommandOptions.find("computerdiff") != CommandInput.CommandOptions.end())
 		if (CommandInput.TopCommand == "install")
 		{
 			p_HandleInstall(CommandInput,AssociatedTerminal);

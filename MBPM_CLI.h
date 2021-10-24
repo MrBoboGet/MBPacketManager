@@ -8,6 +8,8 @@ namespace MBPM
 	{
 	private:
 		std::string m_PacketInstallDirectory = "";//kan bara finnas en
+		MBPM::MBPP_Client m_ClientToUse;
+
 		void p_HandleUpdate(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
 		void p_HandleInstall(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
 		void p_HandleGet(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
