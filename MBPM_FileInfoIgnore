@@ -21,4 +21,5 @@ Excludes:
 
 /TestMergeDirectory/
 /FileInfoWithoutTest
+/.mbpm/
 Includes:

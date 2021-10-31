@@ -1,6 +1,7 @@
 #include "MBCLI.h"
 #include <iostream>
 #include <MBUtility/MBCompileDefinitions.h>
+#include <cmath>
 
 #if  defined(WIN32) ||  defined(_WIN32) || defined(_WIN32_)
 #include <windows.h>
@@ -50,6 +51,77 @@ namespace MBCLI
 	}
 	//END ProcessedCLInput
 
+	//BEGIN MBTerminalLoadingbar
+	std::string MBTerminalLoadingbar::p_GetProgressString()
+	{
+		std::string ReturnValue = "";
+		uint8_t Progress = uint8_t(m_CurrentProgress*100);
+		ReturnValue += "[";
+		const uint8_t LoadingBarWidth = 20;
+		uint8_t CurrentProgressPositions = uint8_t((double(Progress) / double(100)) * LoadingBarWidth);
+		uint8_t RemainingPositons = LoadingBarWidth - CurrentProgressPositions;
+		for (size_t i = 0; i < CurrentProgressPositions; i++)
+		{
+			ReturnValue += "-";
+		}
+		if (CurrentProgressPositions != LoadingBarWidth && CurrentProgressPositions > 0)
+		{
+			ReturnValue[ReturnValue.size() - 1] = '>';
+		}
+		for (size_t i = 0; i < RemainingPositons; i++)
+		{
+			ReturnValue += " ";
+		}
+		ReturnValue += "] ";
+		if (!m_IsFinished)
+		{
+			ReturnValue += std::to_string(Progress) + "%";
+		}
+		else
+		{
+			ReturnValue += "finished";
+		}
+		return(ReturnValue);
+	}
+	std::string MBTerminalLoadingbar::p_GetCurrentLine()
+	{
+		std::string ReturnValue = m_CurrentTag + ": "+p_GetProgressString();
+		return(ReturnValue);
+	}
+	void MBTerminalLoadingbar::p_UpdateLine(std::string const& LineData)
+	{
+		m_AssociatedTerminal->p_OverwriteLine(m_LinePosition, LineData);
+	}
+	MBTerminalLoadingbar::MBTerminalLoadingbar(std::string const& LoadingBarTag, float InitialProgress)
+	{
+		m_CurrentTag = LoadingBarTag;
+		m_CurrentProgress = InitialProgress;
+	}
+	void MBTerminalLoadingbar::UpdateTag(std::string const& NewTag)
+	{
+		m_CurrentTag = NewTag;
+		p_UpdateLine(p_GetCurrentLine());
+	}
+	void MBTerminalLoadingbar::UpdateProgress(float NewProgress)
+	{
+		m_CurrentProgress = NewProgress;
+		if (m_CurrentProgress < 0)
+		{
+			m_CurrentProgress = 0;
+		}
+		if (m_CurrentProgress > 1)
+		{
+			m_CurrentProgress = 1;
+		}
+		p_UpdateLine(p_GetCurrentLine());
+	}
+	void MBTerminalLoadingbar::Finalize()
+	{
+		m_CurrentProgress = 1;
+		m_IsFinished = true;
+		p_UpdateLine(p_GetCurrentLine());
+	}
+	//END MBTerminalLoadingbar
 	//BEGIN MBTerminal
 	MBTerminal::MBTerminal()
 	{
@@ -73,6 +145,12 @@ namespace MBCLI
 	}
 	void MBTerminal::Print(std::string const& StringToPrint)
 	{
+		size_t NextNewlinePosition = StringToPrint.find('\n');
+		while (NextNewlinePosition != StringToPrint.npos)
+		{
+			m_CurrentLinePosition += 1;
+			NextNewlinePosition = StringToPrint.find('\n', NextNewlinePosition+1);
+		}
 #ifdef WIN32 || _WIN32
 		std::cout << StringToPrint;
 		//HANDLE hStdin = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -213,5 +291,43 @@ namespace MBCLI
 		std::cout << StringToPrint;
 		//std::cout.flush();
 	}
-
+	void MBTerminal::p_OverwriteLine(size_t LinePosition, std::string const& DataToWrite)
+	{
+		size_t LineDiff = m_CurrentLinePosition - LinePosition;//ANTAGANDE, är alltid över nuvarande linen
+		std::cout << "\x1B[" + std::to_string(LineDiff) + "F";
+		std::cout << DataToWrite;
+		std::cout << "\x1B[0K";
+		std::cout << "\x1B[" + std::to_string(LineDiff) + "E";
+		std::cout.flush();
+	}
+	MBTerminalLoadingbar MBTerminal::CreateLineLoadingBar(std::string const& LoadingBarTag, float InitialProgress)
+	{
+		MBTerminalLoadingbar ReturnValue = MBTerminalLoadingbar(LoadingBarTag, InitialProgress);
+		ReturnValue.m_LinePosition = m_CurrentLinePosition;
+		ReturnValue.m_AssociatedTerminal = this;
+		this->PrintLine("");
+		return(ReturnValue);
+	}
+	std::string MBTerminal::GetByteSizeString(uint64_t NumberOfBytes)
+	{
+		std::string ReturnValue = "";
+		uint8_t FileSizeLog = std::log10(NumberOfBytes);
+		if (FileSizeLog < 3)
+		{
+			ReturnValue = std::to_string(NumberOfBytes) + " B";
+		}
+		else if (FileSizeLog >= 3 && FileSizeLog < 6)
+		{
+			ReturnValue = std::to_string(NumberOfBytes / 1000) + " KB";
+		}
+		else if (FileSizeLog >= 6 && FileSizeLog < 9)
+		{
+			ReturnValue = std::to_string(NumberOfBytes / 1000000) + " MB";
+		}
+		else
+		{
+			ReturnValue = std::to_string(NumberOfBytes / 1000000000) + " GB";
+		}
+		return(ReturnValue);
+	}
 }

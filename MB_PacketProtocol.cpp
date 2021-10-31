@@ -229,7 +229,7 @@ namespace MBPM
 		Excluder.AddExcludeFile("/"+OutputName);
 		Excluder.AddExcludeFile("/MBPM_UploadedChanges/");
 		Excluder.AddExcludeFile("/MBPM_BuildFiles/");
-		//Excluder.AddExcludeFile("/MBPM_Builds/");
+		Excluder.AddExcludeFile("/MBPM_Builds/");
 		Excluder.AddExcludeFile("/.mbpm/");
 		MBUtility::MBFileOutputStream OutputStream = MBUtility::MBFileOutputStream(&OutputFile);
 		h_WriteFileInfoHeader(MBPP_FileInfoHeader(), &OutputStream);
@@ -1659,6 +1659,10 @@ namespace MBPM
 	//END MBPP_ClientHTTPConverter
 
 	//BEGIN MBPP_Client
+	void MBPP_Client::SetLogTerminal(MBCLI::MBTerminal* NewLogTerminal)
+	{
+		m_LogTerminal = NewLogTerminal;
+	}
 	MBError MBPP_Client::Connect(MBPP_TransferProtocol TransferProtocol, std::string const& Domain, std::string const& Port)
 	{
 		return(Connect({ Domain,TransferProtocol,(uint16_t) std::stoi(Port) }));
@@ -1878,7 +1882,14 @@ namespace MBPM
 		while (ParsedFileListBytes < FileListSize)
 		{
 			uint32_t FileNameLength = MBParsing::ParseBigEndianInteger(ResponseData.data(), MBPP_StringLengthSize, ResponseDataOffset, &ResponseDataOffset);
-			FilesToDownload.push_back(std::string(ResponseData.data() + ResponseDataOffset, FileNameLength));
+			std::string NewFileName = std::string(ResponseData.data() + ResponseDataOffset, FileNameLength);
+			if (!MBPP_PathIsValid(NewFileName))
+			{
+				ReturnValue = false;
+				ReturnValue.ErrorMessage = "FileList sent has invalid filepaths";
+				return(ReturnValue);
+			}
+			FilesToDownload.push_back(NewFileName);
 			ResponseDataOffset += FileNameLength;
 			ParsedFileListBytes += MBPP_StringLengthSize + FileNameLength;
 		}
@@ -1893,6 +1904,15 @@ namespace MBPM
 			std::string FileDirectory =h_PathToUTF8(std::filesystem::path(OutputDirectory + FilesToDownload[i]).parent_path());
 			std::filesystem::create_directories(FileDirectory);
 		}
+		MBCLI::MBTerminalLoadingbar Loadingbar;
+		if (m_LogTerminal != nullptr)
+		{
+			m_LogTerminal->PrintLine("Files to download:");
+			for (size_t i = 0; i < FilesToDownload.size(); i++)
+			{
+				m_LogTerminal->PrintLine(FilesToDownload[i]);
+			}
+		}
 		while (CurrentFileIndex < FilesToDownload.size())
 		{
 			if (FileHandle.is_open() == false)
@@ -1906,6 +1926,10 @@ namespace MBPM
 				CurrentFileParsedBytes = 0;
 				//OBS!!! egentligen en security risk om vi inte kollar att filen är inom directoryn
 				FileHandle.open(OutputDirectory + FilesToDownload[CurrentFileIndex],std::ios::out|std::ios::binary);
+				if (m_LogTerminal != nullptr)
+				{
+					Loadingbar = m_LogTerminal->CreateLineLoadingBar(FilesToDownload[CurrentFileIndex] + " ("+MBCLI::MBTerminal::GetByteSizeString(CurrentFileSize)+")",0);
+				}
 			}
 			else
 			{
@@ -1920,10 +1944,18 @@ namespace MBPM
 				FileHandle.write(ResponseData.data() + ResponseDataOffset, FileBytes);
 				CurrentFileParsedBytes += FileBytes;
 				ResponseDataOffset += FileBytes;
+				if (m_LogTerminal != nullptr)
+				{
+					Loadingbar.UpdateProgress(double(CurrentFileParsedBytes)/double(CurrentFileSize));
+				}
 				if (CurrentFileParsedBytes == CurrentFileSize)
 				{
 					FileHandle.flush();
 					FileHandle.close();
+					if (m_LogTerminal != nullptr)
+					{
+						Loadingbar.Finalize();
+					}
 					CurrentFileIndex += 1;
 				}
 			}
@@ -2026,10 +2058,10 @@ namespace MBPM
 			return(UpdateError);
 		}
 		//ANTAGANDE vi antar här att PacketFilesData är uppdaterad
-		if (!std::filesystem::exists(OutputDirectory + "/MBPM_FileInfo"))
-		{
+		//if (!std::filesystem::exists(OutputDirectory + "/MBPM_FileInfo"))
+		//{
 			MBPM::CreatePacketFilesData(OutputDirectory);
-		}
+		//}
 		MBPP_FileInfoDiff FileInfoDifferance = GetFileInfoDifference(MBPP_FileInfoReader(OutputDirectory + "/MBPM_FileInfo"), ServerFiles);
 		std::vector<std::string> FilesToGet = {};
 		std::vector<std::string> DirectoriesToGet = {};
@@ -2108,29 +2140,54 @@ namespace MBPM
 		RecordToSend.RecordData += MBPP_GenerateFileList(FilesToDelete);
 		RecordToSend.RecordData += MBPP_GenerateFileList(FilesToUpload);
 		RecordToSend.RecordSize = RecordToSend.RecordData.size();
+		uint64_t TotalUploadSize = 0;
+		if (m_LogTerminal != nullptr)
+		{
+			m_LogTerminal->PrintLine("Files To Send:");
+		}
 		for (size_t i = 0; i < FilesToUpload.size(); i++)
 		{
-			RecordToSend.RecordSize += 8 + MBGetFileSize(PacketDirectory+FilesToUpload[i]);
+			uint64_t CurrentFileSize = MBGetFileSize(PacketDirectory + FilesToUpload[i]);
+			RecordToSend.RecordSize += 8 + CurrentFileSize;
+			if (m_LogTerminal != nullptr)
+			{
+				m_LogTerminal->PrintLine(PacketDirectory+FilesToUpload[i]);
+			}
 		}
 		m_ServerConnection->SendData(MBPP_GetRecordData(RecordToSend));
 
 		for (size_t i = 0; i < FilesToUpload.size(); i++)
 		{
-
 			std::string DataToSend = std::string(8, 0);
 			uint64_t FileSize = MBGetFileSize(PacketDirectory + FilesToUpload[i]);
+		
+			MBCLI::MBTerminalLoadingbar LoadingBar;
+			if (m_LogTerminal != nullptr)
+			{
+				LoadingBar = m_LogTerminal->CreateLineLoadingBar(FilesToUpload[i] + " ("+MBCLI::MBTerminal::GetByteSizeString(FileSize)+")",0);
+			}
 			h_WriteBigEndianInteger(DataToSend.data(), FileSize, 8);
 			std::ifstream FileInputStream = std::ifstream(PacketDirectory + FilesToUpload[i], std::ios::in | std::ios::binary);
 			m_ServerConnection->SendData(DataToSend);
 			const size_t BlockSize = 4096 * 4;
 			std::string Buffer = std::string(BlockSize, 0);
+			uint64_t CurrentSentBytes = 0;
 			while (true)
 			{
 				FileInputStream.read(Buffer.data(), BlockSize);
 				size_t BytesRead = FileInputStream.gcount();
+				CurrentSentBytes += BytesRead;
+				if (m_LogTerminal != nullptr)
+				{
+					LoadingBar.UpdateProgress(double(CurrentSentBytes) / double(FileSize));
+				}
 				m_ServerConnection->SendData(Buffer.data(), BytesRead);
 				if (BytesRead < BlockSize)
 				{
+					if (m_LogTerminal != nullptr)
+					{
+						LoadingBar.Finalize();
+					}
 					break;
 				}
 			}
@@ -2208,13 +2265,13 @@ namespace MBPM
 		MBPP_FileInfoReader LocalFileInfo = MBPP_FileInfoReader(PacketDirectory + "/MBPM_FileInfo");
 		MBPP_FileInfoDiff FileInfoDifferance = GetFileInfoDifference(ServerFileInfo, LocalFileInfo);
 		//DEBUG 
-		std::cout << "Local files: " << std::endl;
-		MBPP_DirectoryInfoNode_ConstIterator Iterator = LocalFileInfo.GetDirectoryInfo("/")->begin();
-		while (!(Iterator == LocalFileInfo.GetDirectoryInfo("/")->end()))
-		{
-			std::cout << Iterator.GetCurrentDirectory() + (*Iterator).FileName << std::endl;
-			Iterator++;
-		}
+		//std::cout << "Local files: " << std::endl;
+		//MBPP_DirectoryInfoNode_ConstIterator Iterator = LocalFileInfo.GetDirectoryInfo("/")->begin();
+		//while (!(Iterator == LocalFileInfo.GetDirectoryInfo("/")->end()))
+		//{
+		//	std::cout << Iterator.GetCurrentDirectory() + (*Iterator).FileName << std::endl;
+		//	Iterator++;
+		//}
 
 		std::vector<std::string> FilesToSend = {};
 		std::vector<std::string> ObjectsToDelete = {};

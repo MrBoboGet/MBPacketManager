@@ -8,6 +8,7 @@
 #include <stack>
 #include <set>
 #include <MBUtility/MBInterfaces.h>
+#include <MBCLI/MBCLI.h>
 
 namespace MBPM
 {
@@ -464,10 +465,12 @@ namespace MBPM
 	private:
 		std::unique_ptr<MBSockets::ConnectSocket> m_ServerConnection = nullptr;
 		MBPP_ComputerInfo m_CurrentComputerInfo = MBPP_ComputerInfo();
+		MBCLI::MBTerminal* m_LogTerminal = nullptr;
 
-		static MBError p_DownloadFileList(std::string const& InitialData, size_t DataOffset, MBSockets::ConnectSocket* SocketToUse, std::string const& OutputTopDirectory
+
+		MBError p_DownloadFileList(std::string const& InitialData, size_t DataOffset, MBSockets::ConnectSocket* SocketToUse, std::string const& OutputTopDirectory
 			, std::vector<std::string> const& OutputFileNames = {});
-		static MBError p_DownloadFileList(std::string const& InitialData, size_t DataOffset, MBSockets::ConnectSocket* SocketToUse, MBPP_FileListDownloadHandler* DownloadHandler);
+		MBError p_DownloadFileList(std::string const& InitialData, size_t DataOffset, MBSockets::ConnectSocket* SocketToUse, MBPP_FileListDownloadHandler* DownloadHandler);
 		MBError p_GetFiles(std::string const& PacketName,std::vector<std::string> const& FilesToGet,std::string const& OutputDirectory);
 		MBError p_GetDirectory(std::string const& PacketName,std::string const& DirectoryToGet,std::string const& OutputDirectory);
 		MBError p_DownloadServerFilesInfo(std::string const& PacketName, std::string const& OutputDirectory, std::vector<std::string> const& OutputFileNames);
@@ -476,10 +479,12 @@ namespace MBPM
 
 		MBError p_UploadPacket(std::string const& PacketName, MBPP_UserCredentialsType CredentialsType, std::string const& CredentialsData, std::string const& PacketDirectory, std::vector<std::string> const& FilesToUpload,std::vector<std::string> const& FilesToDelete);
 	public:
+		void SetLogTerminal(MBCLI::MBTerminal* NewLogTerminal);
 		MBError Connect(MBPP_TransferProtocol TransferProtocol, std::string const& Domain, std::string const& Port);
 		MBError Connect(MBPP_PacketHost const& PacketHost);
 		bool IsConnected();
 		void SetComputerInfo(MBPP_ComputerInfo NewComputerInfo);
+		MBPP_ComputerInfo GetComputerInfo() { return(m_CurrentComputerInfo); }
 		static MBPP_ComputerInfo GetSystemComputerInfo();
 		MBError DownloadPacket(std::string const& OutputDirectory, std::string const& PacketName); //semantiken av denna funktion är att den laddar ner totalt nytt, medans update tar diffen
 		MBError UpdatePacket(std::string const& OutputDirectory, std::string const& PacketName);
