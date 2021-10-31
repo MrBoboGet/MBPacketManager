@@ -1552,12 +1552,13 @@ namespace MBPM
 	//END MBPP_FileListMemoryMapper
 
 	//BEGIN MBPP_ClientHTTPConverter
-	MBPP_ClientHTTPConverter::MBPP_ClientHTTPConverter(MBPP_PacketHost const& HostData) 
-		: MBSockets::ClientSocket(HostData.URL.substr(0, std::min(HostData.URL.find('/'), HostData.URL.size())),std::to_string(HostData.Port))
+	MBError	MBPP_ClientHTTPConverter::Connect(MBPP_PacketHost const& HostData)
 	{
+		MBError ReturnValue = true;
 		std::string PortToUse = "";
 		std::string Adress = HostData.URL.substr(0, std::min(HostData.URL.find('/'), HostData.URL.size()));
 		m_MBPP_ResourceLocation = HostData.URL.substr(std::min(HostData.URL.find('/'), HostData.URL.size()));
+		m_RemoteHost = Adress;
 		PortToUse = std::to_string(HostData.Port);
 		if (HostData.Port == -1)
 		{
@@ -1570,7 +1571,14 @@ namespace MBPM
 				PortToUse = "80";
 			}
 		}
-		m_InternalHTTPSocket = std::unique_ptr<MBSockets::HTTPConnectSocket>(new MBSockets::HTTPConnectSocket(Adress, PortToUse));
+		MBSockets::TCPClient* Client = new MBSockets::TCPClient(Adress, PortToUse);
+		Client->Connect();
+		if (Client->IsConnected())
+		{
+			m_InternalHTTPSocket = std::unique_ptr<MBSockets::TLSConnectSocket>(new MBSockets::TLSConnectSocket(
+				std::unique_ptr<MBSockets::TCPClient>(Client)));
+		}
+		return(ReturnValue);
 	}
 	void MBPP_ClientHTTPConverter::p_ResetRecieveState()
 	{
@@ -1592,10 +1600,6 @@ namespace MBPM
 		ReturnValue += "Content-Length: " + std::to_string(MBPPHeader.RecordSize+MBPPHeader.VerificationDataSize+MBPP_GenericRecordHeaderSize) + "\r\n\r\n";
 		return(ReturnValue);
 	}
-	int MBPP_ClientHTTPConverter::Connect()
-	{
-		return(m_InternalHTTPSocket->Connect());
-	}
 	bool MBPP_ClientHTTPConverter::IsConnected()
 	{
 		return(m_InternalHTTPSocket->IsConnected());
@@ -1604,9 +1608,16 @@ namespace MBPM
 	{
 		return(m_InternalHTTPSocket->IsValid());
 	}
+	void MBPP_ClientHTTPConverter::Close()
+	{
+		if (m_InternalHTTPSocket != nullptr)
+		{
+			m_InternalHTTPSocket->Close();
+		}
+	}
 	MBError MBPP_ClientHTTPConverter::EstablishTLSConnection()
 	{
-		return(m_InternalHTTPSocket->EstablishTLSConnection());
+		return(m_InternalHTTPSocket->EstablishTLSConnection(false,m_RemoteHost));
 	}
 	std::string MBPP_ClientHTTPConverter::RecieveData(size_t MaxDataToRecieve)
 	{
@@ -1630,7 +1641,7 @@ namespace MBPM
 		}
 		return("");
 	}
-	int MBPP_ClientHTTPConverter::SendData(const void* DataToSend, size_t DataSize)
+	MBError MBPP_ClientHTTPConverter::SendData(const void* DataToSend, size_t DataSize)
 	{
 		p_ResetRecieveState();
 		if (!m_MBPP_HeaderSent)
@@ -1652,7 +1663,7 @@ namespace MBPM
 		}
 		return(0);
 	}
-	int MBPP_ClientHTTPConverter::SendData(std::string const& StringToSend)
+	MBError MBPP_ClientHTTPConverter::SendData(std::string const& StringToSend)
 	{
 		return(MBPP_ClientHTTPConverter::SendData(StringToSend.data(), StringToSend.size()));
 	}
@@ -1672,15 +1683,15 @@ namespace MBPM
 		MBError ReturnValue = true;
 		if (PacketHost.TransferProtocol == MBPP_TransferProtocol::TCP || PacketHost.TransferProtocol == MBPP_TransferProtocol::Null)
 		{
-			m_ServerConnection = std::unique_ptr<MBSockets::ConnectSocket>(new MBSockets::ClientSocket(PacketHost.URL, std::to_string(PacketHost.Port)));
-			MBSockets::ClientSocket* ClientSocket = (MBSockets::ClientSocket*)m_ServerConnection.get();
+			m_ServerConnection = std::unique_ptr<MBSockets::ConnectSocket>(new MBSockets::TCPClient(PacketHost.URL, std::to_string(PacketHost.Port)));
+			MBSockets::TCPClient* ClientSocket = (MBSockets::TCPClient*)m_ServerConnection.get();
 			ClientSocket->Connect();
 		}
 		else if(PacketHost.TransferProtocol == MBPP_TransferProtocol::HTTP || PacketHost.TransferProtocol == MBPP_TransferProtocol::HTTPS)
 		{
-			m_ServerConnection = std::unique_ptr<MBSockets::ConnectSocket>(new MBPP_ClientHTTPConverter(PacketHost));
-			MBSockets::ClientSocket* ClientSocket = (MBSockets::ClientSocket*)m_ServerConnection.get();
-			ClientSocket->Connect();
+			m_ServerConnection = std::unique_ptr<MBSockets::ConnectSocket>(new MBPP_ClientHTTPConverter());
+			MBPP_ClientHTTPConverter* ClientSocket = (MBPP_ClientHTTPConverter*)m_ServerConnection.get();
+			ClientSocket->Connect(PacketHost);
 			if (PacketHost.TransferProtocol == MBPP_TransferProtocol::HTTPS)
 			{
 				ReturnValue = ClientSocket->EstablishTLSConnection();

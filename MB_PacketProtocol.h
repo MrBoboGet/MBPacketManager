@@ -432,10 +432,11 @@ namespace MBPM
 		virtual MBError Close() override;
 		std::map<std::string, std::string>& GetDownloadedFiles() { return(m_DownloadedFiles); };
 	};
-	class MBPP_ClientHTTPConverter : public MBSockets::ClientSocket
+	class MBPP_ClientHTTPConverter : public MBSockets::ConnectSocket
 	{
 	private:
-		std::unique_ptr<MBSockets::HTTPConnectSocket> m_InternalHTTPSocket = nullptr;
+		std::unique_ptr<MBSockets::TLSConnectSocket> m_InternalHTTPSocket = nullptr;
+		std::string m_RemoteHost = "";
 
 		std::string m_MBPP_ResourceLocation = "";
 
@@ -451,14 +452,16 @@ namespace MBPM
 		void p_ResetRecieveState();
 		std::string p_GenerateHTTPHeader(MBPP_GenericRecord const& MBPPHeader);
 	public:
-		MBPP_ClientHTTPConverter(MBPP_PacketHost const& HostData);
-		std::string RecieveData(size_t MaxDataToRecieve) override;
-		int SendData(const void* DataToSend,size_t DataSize) override;
-		int SendData(std::string const& StringToSend) override;
-		MBError EstablishTLSConnection() override;
-		int Connect() override;
+		MBPP_ClientHTTPConverter() {};
+		MBError Connect(MBPP_PacketHost const& HostData);
+		MBError EstablishTLSConnection();
+		//int Connect() override;
 		bool IsConnected() override;
 		bool IsValid() override;
+		void Close() override;
+		std::string RecieveData(size_t MaxDataToRecieve) override;
+		MBError SendData(const void* DataToSend, size_t DataSize) override;
+		MBError SendData(std::string const& StringToSend) override;
 	};
 	class MBPP_Client
 	{
