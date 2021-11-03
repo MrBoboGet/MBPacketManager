@@ -3,6 +3,9 @@ R"1337xd(#variables MBPM_DEPENDENCIES
 #MBPM_TARGET_COMPILE_OPTIONS
 #MBPM_TARGET_LINK_OPTIONS
 #Environment variables MBPM_PACKETS_INSTALL_DIRECTORY
+set(MBPM_CXX_FLAGS ${CMAKE_CXX_FLAGS})
+set(MBPM_CXX_FLAGS_DEBUG ${CMAKE_CXX_FLAGS_DEBUG})
+set(MBPM_CXX_FLAGS_RELEASE ${CMAKE_CXX_FLAGS_RELEASE})
 macro(MBPM_UpdateLibraries TargetToUpdate LinkType BuildType)
 	set(MBPM_TARGET_EXTPACKET_LIBRARIES "")
 	foreach(PACKET IN LISTS MBPM_DEPENDENCIES)
@@ -54,15 +57,18 @@ macro(MBPM_UpdateOutput TargetToUpdate)
 endmacro()
 
 macro(MBPM_SetTargetCompileOptions TargetToUpdate LinkType BuildType)
-	if(UNIX)
-
+	set(CMAKE_CXX_FLAGS " ")
+	#set(NEW_TARGET_COMPILE_OPTIONS "")
+	if(${BuildType} STREQUAL "DEBUG" AND ${LinkType} STREQUAL "STATIC")
+		set(NEW_TARGET_COMPILE_OPTIONS "${MBPM_CXX_FLAGS} ${MBPM_CXX_FLAGS_DEBUG}")
+		set(CMAKE_CXX_FLAGS_DEBUG " ")
 	else()
-		if(${BuildType} STREQUAL "DEBUG" AND ${LinkType} STREQUAL "STATIC")
-			target_compile_options(${TargetToUpdate} PRIVATE /MTd)
-		else()
-			target_compile_options(${TargetToUpdate} PRIVATE /MT)
-		endif()
+		set(NEW_TARGET_COMPILE_OPTIONS "${MBPM_CXX_FLAGS} ${MBPM_CXX_FLAGS_RELEASE}")
+		set(CMAKE_CXX_FLAGS_RELEASE " ")
 	endif()
+	string(REPLACE " " ";" NEW_TARGET_COMPILE_OPTIONS_LIST ${NEW_TARGET_COMPILE_OPTIONS})
+	target_compile_options(${TargetToUpdate} PRIVATE ${NEW_TARGET_COMPILE_OPTIONS_LIST})
+	message(${TargetToUpdate} " Compiled with follwing flags: ""${NEW_TARGET_COMPILE_OPTIONS_LIST}")
 endmacro()
 
 macro(MBPM_LinkTargetPacketLibraries Target)

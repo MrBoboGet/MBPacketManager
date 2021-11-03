@@ -14,6 +14,9 @@ set(MBPM_DEPENDENCIES
 set(MBPM_TARGET_EXTPACKET_LIBRARIES )
 set(MBPM_TARGET_COMPILE_OPTIONS )
 set(MBPM_TARGET_LINK_OPTIONS )
+set(MBPM_CXX_FLAGS ${CMAKE_CXX_FLAGS})
+set(MBPM_CXX_FLAGS_DEBUG ${CMAKE_CXX_FLAGS_DEBUG})
+set(MBPM_CXX_FLAGS_RELEASE ${CMAKE_CXX_FLAGS_RELEASE})
 #MBPM_Functions#variables MBPM_DEPENDENCIES
 #MBPM_TARGET_EXTPACKET_LIBRARIES
 #MBPM_TARGET_COMPILE_OPTIONS
@@ -70,15 +73,19 @@ macro(MBPM_UpdateOutput TargetToUpdate)
 endmacro()
 
 macro(MBPM_SetTargetCompileOptions TargetToUpdate LinkType BuildType)
-	if(UNIX)
-
+	set(CMAKE_CXX_FLAGS " ")
+	#set(NEW_TARGET_COMPILE_OPTIONS "")
+	if(${BuildType} STREQUAL "DEBUG" AND ${LinkType} STREQUAL "STATIC")
+		set(NEW_TARGET_COMPILE_OPTIONS "${MBPM_CXX_FLAGS} ${MBPM_CXX_FLAGS_DEBUG}")
+		set(CMAKE_CXX_FLAGS_DEBUG " ")
 	else()
-		if(${BuildType} STREQUAL "DEBUG" AND ${LinkType} STREQUAL "STATIC")
-			target_compile_options(${TargetToUpdate} PRIVATE /MTd)
-		else()
-			target_compile_options(${TargetToUpdate} PRIVATE /MT)
-		endif()
+		set(NEW_TARGET_COMPILE_OPTIONS "${MBPM_CXX_FLAGS} ${MBPM_CXX_FLAGS_RELEASE}")
+		set(CMAKE_CXX_FLAGS_RELEASE " ")
 	endif()
+	string(REPLACE " " ";" NEW_TARGET_COMPILE_OPTIONS_LIST ${NEW_TARGET_COMPILE_OPTIONS})
+	target_compile_options(${TargetToUpdate} PRIVATE ${NEW_TARGET_COMPILE_OPTIONS_LIST})
+	message(${TargetToUpdate} " Compiled with follwing flags: ""${NEW_TARGET_COMPILE_OPTIONS_LIST}")
+
 endmacro()
 
 macro(MBPM_LinkTargetPacketLibraries Target)
@@ -131,14 +138,20 @@ MBPM_ApplyTargetConfiguration("MBPacketManager_SD" "STATIC" "DEBUG")
 target_compile_features("MBPacketManager_SD" PRIVATE cxx_std_17)
 target_link_libraries("MBPacketManager_SD" ${COMMON_LIBRARIES})
 
+
 add_library(MBPacketManager_SR STATIC ${COMMON_FILES})
 MBPM_ApplyTargetConfiguration("MBPacketManager_SR" "STATIC" "RELEASE")
 target_compile_features("MBPacketManager_SR" PRIVATE cxx_std_17)
 target_link_libraries("MBPacketManager_SR" ${COMMON_LIBRARIES})
 
+
 add_executable("mbpm" ${COMMON_FILES} ${EXECUTABLE_FILES})
 MBPM_ApplyTargetConfiguration("mbpm" "STATIC" "RELEASE")
 target_compile_features("mbpm" PRIVATE cxx_std_17)
-message(MBPM_TARGET_EXTPACKET_LIBRARIES)
 MBPM_LinkTargetPacketLibraries("mbpm")
 target_link_libraries("mbpm" ${COMMON_LIBRARIES})
+message(${CMAKE_CXX_FLAGS})
+#message("CMAKE_CXX_FLAGS_DEBUG is ${CMAKE_CXX_FLAGS_DEBUG}")
+#message("CMAKE_CXX_FLAGS_RELEASE is ${CMAKE_CXX_FLAGS_RELEASE}")
+#message("CMAKE_CXX_FLAGS_RELWITHDEBINFO is ${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
+#message("CMAKE_CXX_FLAGS_MINSIZEREL is ${CMAKE_CXX_FLAGS_MINSIZEREL}")

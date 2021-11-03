@@ -330,7 +330,7 @@ namespace MBPM
 		}
 		return(ReturnValue);
 	}
-	void h_WriteMBPMCmakeValues(std::vector<std::string> const& Dependancies, std::ofstream& OutputFile)
+	void h_WriteMBPMCmakeValues(std::vector<std::string> const& Dependancies, std::ofstream& OutputFile,std::string const& StaticMBPMData)
 	{
 		OutputFile << "##BEGIN MBPM_VARIABLES\n";
 		OutputFile << "set(MBPM_DEPENDENCIES \n";
@@ -339,13 +339,28 @@ namespace MBPM
 			OutputFile << "\t" << Packet << std::endl;
 		}
 		OutputFile << ")\n";
-		OutputFile << "set(MBPM_TARGET_EXTPACKET_LIBRARIES )\n";
 
+		OutputFile << "set(MBPM_TARGET_EXTPACKET_LIBRARIES )\n";
 		OutputFile << "set(MBPM_TARGET_COMPILE_OPTIONS )\n";
 		OutputFile << "set(MBPM_TARGET_LINK_OPTIONS )\n";
-		OutputFile << "#MBPM_Functions";
-		OutputFile << GetMBPMCmakeFunctions()<<'\n';
-		OutputFile << "##END MBPM_VARIABLES\n";
+		//Output för att overrida CMAKE_CXX_FLAGS
+		//OutputFile << "set(MBPM_CXX_FLAGS ${CMAKE_CXX_FLAGS})\n";
+		//OutputFile << "set(MBPM_CXX_FLAGS_DEBUG ${CMAKE_CXX_FLAGS_DEBUG})\n";
+		//OutputFile << "set(MBPM_CXX_FLAGS_RELEASE ${CMAKE_CXX_FLAGS_RELEASE})\n";
+		//
+		if (StaticMBPMData == "")
+		{
+			OutputFile << "#MBPM_Functions";
+			OutputFile << GetMBPMCmakeFunctions() << '\n';
+			OutputFile << "##END MBPM_VARIABLES\n";
+		}
+		else
+		{
+			OutputFile << "#MBPM_Functions";
+			OutputFile << StaticMBPMData<<'\n';
+			OutputFile << "##END MBPM_VARIABLES\n";
+		}
+
 	}
 	MBError WriteCMakeProjectToFile(MBPM_CmakeProject const& ProjectToWrite, std::string const& OutputFilePath)
 	{
@@ -360,7 +375,7 @@ namespace MBPM
 		{
 			Dependancies.push_back(Packets);
 		}
-		h_WriteMBPMCmakeValues(Dependancies, OutputFile);
+		h_WriteMBPMCmakeValues(Dependancies, OutputFile,"");
 		//write common sources
 
 		OutputFile << "set(PROJECT_SOURCES \n\n";
@@ -451,7 +466,7 @@ namespace MBPM
 		}
 		return(ReturnValue);
 	}
-	MBError UpdateCmakeMBPMVariables(std::string const& PacketPath)
+	MBError UpdateCmakeMBPMVariables(std::string const& PacketPath,std::string const& StaticMBPMData)
 	{
 		MBError ReturnValue = true;
 		if (!std::filesystem::exists(PacketPath + "/MBPM_PacketInfo") || !std::filesystem::exists(PacketPath+"/CMakeLists.txt"))
@@ -504,7 +519,7 @@ namespace MBPM
 			if (FileLines[i] == "##BEGIN MBPM_VARIABLES")
 			{
 				InMBPMVariables = true;
-				h_WriteMBPMCmakeValues(TotalPacketDependancies, OutputFile);
+				h_WriteMBPMCmakeValues(TotalPacketDependancies, OutputFile,StaticMBPMData);
 			}
 			if (!InMBPMVariables)
 			{

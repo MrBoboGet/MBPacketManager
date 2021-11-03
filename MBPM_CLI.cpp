@@ -898,6 +898,32 @@ namespace MBPM
 			p_PrintFileInfoDiff(InfoDiff,AssociatedTerminal);
 		}
 	}
+	std::string h_ReadMBPMStaticData(std::string const& Filepath)
+	{
+		std::string ReturnValue = "";
+		size_t FileSize = std::filesystem::file_size(Filepath);
+		std::ifstream FileToRead = std::ifstream(Filepath, std::ios::in|std::ios::binary);
+		std::string Filedata = std::string(FileSize, 0);
+		FileToRead.read(Filedata.data(), FileSize);
+		Filedata = MBUtility::ReplaceAll(Filedata, "\r\n", "\n");
+		std::string BeginDelimiter = "R\"1337xd(";
+		size_t BeginOffset = Filedata.find(BeginDelimiter);
+		if (BeginOffset != Filedata.npos)
+		{
+			BeginOffset += BeginDelimiter.size();
+			size_t EndOffset = Filedata.find(")1337xd\"");
+			if (EndOffset == Filedata.npos)
+			{
+				EndOffset = FileSize;
+			}
+			ReturnValue = Filedata.substr(BeginOffset, EndOffset - BeginOffset)+"\n";
+		}
+		else
+		{
+			ReturnValue = std::move(Filedata);
+		}
+		return(ReturnValue);
+	}
 	void MBPM_ClI::p_HandleCompile(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
 	{
 		std::vector<std::string> PacketDirectories = {};
@@ -936,6 +962,24 @@ namespace MBPM
 			}
 		}
 
+		
+		std::string MBPMStaticData = "";
+		if (CommandInput.CommandPositionalOptions.find("sdata") != CommandInput.CommandPositionalOptions.end())
+		{
+			size_t DataPosition = CommandInput.CommandPositionalOptions.at("sdata")[0];
+			if (CommandInput.TotalCommandTokens.size() <= DataPosition + 1)
+			{
+				AssociatedTerminal->PrintLine("Error with sdata option: No filepath supplied");
+				return;
+			}
+			std::string Filepath = CommandInput.TotalCommandTokens[DataPosition + 1];
+			if (!std::filesystem::exists(Filepath))
+			{
+				AssociatedTerminal->PrintLine("Error with sdata option: Cant't find file \"" + Filepath + "\"");
+				return;
+			}
+			MBPMStaticData = h_ReadMBPMStaticData(Filepath);
+		}
 		//allinstalled är incompatible med att uppdatera packets manuellt, eftersom den gör det i dependancy ordning
 		if (CommandInput.CommandOptions.find("cmake") != CommandInput.CommandOptions.end())
 		{
@@ -1005,7 +1049,7 @@ namespace MBPM
 				}
 				if (UpdateCmake)
 				{
-					MBError UpdateResult = p_UpdateCmake(CurrentDirectory);//ska om packetet följer MBPM standard inte påverka packetet
+					MBError UpdateResult = p_UpdateCmake(CurrentDirectory, MBPMStaticData);//ska om packetet följer MBPM standard inte påverka packetet
 					if (!UpdateResult)
 					{
 						AssociatedTerminal->PrintLine("Failed updating CMake for \"" + CurrentDirectory + "\": " + UpdateResult.ErrorMessage);
@@ -1029,7 +1073,7 @@ namespace MBPM
 					}
 				}
 				MBError CompilationError = true;
-				CompilationError = p_UpdateCmake(PacketDirectories[i]);
+				CompilationError = p_UpdateCmake(PacketDirectories[i], MBPMStaticData);
 				if (CompilationError)
 				{
 				 	CompilationError = p_CompilePacket(PacketDirectories[i]);
@@ -1053,9 +1097,9 @@ namespace MBPM
 			}
 		}
 	}
-	MBError MBPM_ClI::p_UpdateCmake(std::string const& PacketDirectory)
+	MBError MBPM_ClI::p_UpdateCmake(std::string const& PacketDirectory, std::string const& OptionalMBPMStaticData)
 	{
-		return(MBPM::UpdateCmakeMBPMVariables(PacketDirectory));
+		return(MBPM::UpdateCmakeMBPMVariables(PacketDirectory,OptionalMBPMStaticData));
 	}
 	MBError MBPM_ClI::p_CreateCmake(std::string const& PacketDirectory)
 	{
