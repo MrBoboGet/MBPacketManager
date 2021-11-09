@@ -25,6 +25,7 @@ namespace MBPM
 		TriviallyCompilable,
 		TriviallyConstructable,
 		Embedabble,
+		IncludeOnly,
 		TriviallyEmbedabble,
 		NoSource,
 		Precompiled,

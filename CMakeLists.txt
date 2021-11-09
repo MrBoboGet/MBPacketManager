@@ -146,7 +146,7 @@ target_link_libraries("MBPacketManager_SR" ${COMMON_LIBRARIES})
 
 
 add_executable("mbpm" ${COMMON_FILES} ${EXECUTABLE_FILES})
-MBPM_ApplyTargetConfiguration("mbpm" "STATIC" "RELEASE")
+MBPM_ApplyTargetConfiguration("mbpm" "STATIC" "DEBUG")
 target_compile_features("mbpm" PRIVATE cxx_std_17)
 MBPM_LinkTargetPacketLibraries("mbpm")
 target_link_libraries("mbpm" ${COMMON_LIBRARIES})

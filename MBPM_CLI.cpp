@@ -2,6 +2,7 @@
 #include <filesystem>
 #include <map>
 #include <MBUnicode/MBUnicode.h>
+#include <exception>
 //#include "MBCLI/"
 
 namespace MBPM
@@ -1154,11 +1155,19 @@ namespace MBPM
 
 	int MBCLI_Main(int argc, char** argv)
 	{
-		MBSockets::Init();
-		MBCLI::ProcessedCLInput CommandInput(argc, argv);
-		MBCLI::MBTerminal ProgramTerminal;
-		MBPM_ClI CLIHandler;
-		CLIHandler.HandleCommand(CommandInput, &ProgramTerminal);
+		try
+		{
+			MBSockets::Init();
+			MBCLI::ProcessedCLInput CommandInput(argc, argv);
+			MBCLI::MBTerminal ProgramTerminal;
+			MBPM_ClI CLIHandler;
+			CLIHandler.HandleCommand(CommandInput, &ProgramTerminal);
+			return(0);
+		}
+		catch(std::exception const& e)
+		{
+			std::cout << "Uncaught error in executing command: " << e.what() << std::endl;
+		}
 		return(0);
 	}
 }

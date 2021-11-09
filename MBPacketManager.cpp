@@ -210,6 +210,10 @@ namespace MBPM
 			{
 				ReturnValue.Attributes.insert(MBPM_PacketAttribute::NonMBBuild);
 			}
+			if (Attribute.GetStringData() == "IncludeOnly")
+			{
+				ReturnValue.Attributes.insert(MBPM_PacketAttribute::IncludeOnly);
+			}
 		}
 		for (auto const& OutputConfigurations : ParsedJson.GetAttribute("OutputConfigurations").GetArrayData())
 		{
@@ -298,11 +302,14 @@ namespace MBPM
 			DependanciesToTraverse.pop();
 			if (VisitedPackets.find(CurrentPacket) == VisitedPackets.end())
 			{
-				ReturnValue.push_back(CurrentPacket);
 				VisitedPackets.insert(CurrentPacket);
 				if (std::filesystem::exists(PacketsDirectory + "/" + CurrentPacket + "/MBPM_PacketInfo"))
 				{
 					MBPM_PacketInfo DependancyPacket = ParseMBPM_PacketInfo(PacketsDirectory + "/" + CurrentPacket + "/MBPM_PacketInfo");
+					if (DependancyPacket.Attributes.find(MBPM_PacketAttribute::IncludeOnly) != DependancyPacket.Attributes.end())
+					{
+						ReturnValue.push_back(CurrentPacket);
+					}
 					if (DependancyPacket.PacketName != "")
 					{
 						for (size_t i = 0; i < DependancyPacket.PacketDependancies.size(); i++)

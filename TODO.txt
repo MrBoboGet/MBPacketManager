@@ -1,0 +1,1 @@
+MBPM_FileInfoIgnore: Inkluderar inte faktikst filer som blivit include. Inget använder det än, men kanske i framtiden?
