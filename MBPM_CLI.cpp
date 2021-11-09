@@ -1061,7 +1061,7 @@ namespace MBPM
 		else
 		{
 			//nu ska vi faktiskt ta och kompilera packetsen
-			std::vector<std::string> FailedCompiles = {};
+			std::vector<std::pair<std::string,std::string>> FailedCompiles = {};
 			for (size_t i = 0; i < PacketDirectories.size(); i++)
 			{
 				if (std::filesystem::exists(PacketDirectories[i] + "MBPM_PacketInfo"))
@@ -1081,7 +1081,7 @@ namespace MBPM
 				}
 				if (!CompilationError)
 				{
-					FailedCompiles.push_back(PacketDirectories[i]);
+					FailedCompiles.push_back(std::pair<std::string,std::string>(PacketDirectories[i],CompilationError.ErrorMessage));
 				}
 			}
 			if (FailedCompiles.size() > 0)
@@ -1089,7 +1089,15 @@ namespace MBPM
 				AssociatedTerminal->PrintLine("Failed building following packets:");
 				for (size_t i = 0; i < FailedCompiles.size(); i++)
 				{
-					AssociatedTerminal->PrintLine(FailedCompiles[i]);
+					AssociatedTerminal->Print(FailedCompiles[i].first);
+					if (FailedCompiles[i].second != "")
+					{
+						AssociatedTerminal->PrintLine(" : " + FailedCompiles[i].second);
+					}
+					else
+					{
+						AssociatedTerminal->PrintLine("");
+					}
 				}
 			}
 			else

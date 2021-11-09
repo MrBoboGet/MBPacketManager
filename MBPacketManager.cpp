@@ -306,7 +306,7 @@ namespace MBPM
 				if (std::filesystem::exists(PacketsDirectory + "/" + CurrentPacket + "/MBPM_PacketInfo"))
 				{
 					MBPM_PacketInfo DependancyPacket = ParseMBPM_PacketInfo(PacketsDirectory + "/" + CurrentPacket + "/MBPM_PacketInfo");
-					if (DependancyPacket.Attributes.find(MBPM_PacketAttribute::IncludeOnly) != DependancyPacket.Attributes.end())
+					if (DependancyPacket.Attributes.find(MBPM_PacketAttribute::IncludeOnly) == DependancyPacket.Attributes.end())
 					{
 						ReturnValue.push_back(CurrentPacket);
 					}
