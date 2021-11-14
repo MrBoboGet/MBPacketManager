@@ -959,9 +959,19 @@ namespace MBPM
 	MBPP_FileInfoDiff MBPP_FileInfoReader::GetFileInfoDifference(MBPP_DirectoryInfoNode const& ClientInfo, MBPP_DirectoryInfoNode const& ServerInfo)
 	{
 		MBPP_FileInfoDiff ReturnValue;
-		MBPP_DirectoryInfoNode const& ClientNode = ClientInfo;
-		MBPP_DirectoryInfoNode const& ServerNode = ServerInfo;
-		h_UpdateDiffOverDirectory(ReturnValue, ClientNode, ServerNode, "/");
+		MBPP_DirectoryInfoNode DefaultClientNode;
+		MBPP_DirectoryInfoNode DefaultServerNode;
+		MBPP_DirectoryInfoNode const* ClientNodeToUse = &ClientInfo;
+		MBPP_DirectoryInfoNode const* ServerNodeToUse = &ServerInfo;
+		if (&ClientInfo == nullptr)
+		{
+			ClientNodeToUse = &DefaultClientNode;
+		}
+		if (&ServerInfo == nullptr)
+		{
+			ServerNodeToUse = &DefaultServerNode;
+		}
+		h_UpdateDiffOverDirectory(ReturnValue, *ClientNodeToUse, *ServerNodeToUse, "/");
 		return(ReturnValue);
 	}
 	bool MBPP_FileInfoReader::ObjectExists(std::string const& ObjectToSearch) const

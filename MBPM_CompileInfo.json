@@ -1,0 +1,37 @@
+{
+  "Windows": {
+    "StaticDebug": {
+      "MakeType": "MSBuild",
+      "Target": "cryptlib",
+      "Solution": "cryptest.sln",
+      "Configuration": "Debug",
+      "Platform": "x64",
+      "OutputPath": "/x64/Output/DebugOutput/Debug/cryptlib.lib",
+      "NewName": "cryptopp_SD.lib"
+    },
+    "StaticRelease": {
+      "MakeType": "MSBuild",
+      "Solution": "cryptest.sln",
+      "Target": "cryptlib",
+      "Configuration": "Release",
+      "Platform": "x64",
+      "OutputPath": "/x64/Output/DebugOutput/Release/cryptlib.lib",
+      "NewName": "cryptopp_SR.lib"
+    }
+  },
+  "Linux": {
+    "StaticDebug": {
+      "MakeType": "Make",
+      "Target": "libcryptopp.a",
+      "OutputPath": "/libcryptopp.a",
+      "NewName": "libcryptopp_SD.a"
+    },
+    "StaticRelease": {
+      "MakeType": "Make",
+      "Target": "libcryptopp.a",
+      "Directory": "/",
+      "OutputPath": "/libcryptopp.a",
+      "NewName": "libcryptopp_SR.a"
+    }
+  }
+}

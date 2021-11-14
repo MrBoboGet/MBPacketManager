@@ -113,5 +113,5 @@ namespace MBPM
 	MBError CompileAndInstallPacket(std::string const& PacketToCompileDirectory);
 
 	std::string GetSystemPacketsDirectory();
-	MBError SetSystemPacketsDirectory(std::string const& DirectoryPath);
+	//MBError SetSystemPacketsDirectory(std::string const& DirectoryPath);
 };

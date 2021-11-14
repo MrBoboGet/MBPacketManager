@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <iostream>
 #include <MBUtility/MBCompileDefinitions.h>
+#include <MBUtility/MBFiles.h>
 
 //magiska namn macros
 #define MBPM_PACKETINFO_FILENAME "MBPM_PacketInfo";
@@ -175,16 +176,16 @@ namespace MBPM
 			return(Result);
 		}
 	}
-	MBError SetSystemPacketsDirectory(std::string const& DirectoryPath)
-	{
-		MBError ReturnValue = true;
-#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
-		_putenv_s("MBPM_PACKETS_DIRECTORY", DirectoryPath.c_str());
-#else
-		setenv("MBPM_PACKETS_DIRECTORY", DirectoryPath.c_str(),true);
-#endif // 
-		return(ReturnValue);
-	}
+//	MBError SetSystemPacketsDirectory(std::string const& DirectoryPath)
+//	{
+//		MBError ReturnValue = true;
+//#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
+//		_putenv_s("MBPM_PACKETS_DIRECTORY", DirectoryPath.c_str());
+//#else
+//		setenv("MBPM_PACKETS_DIRECTORY", DirectoryPath.c_str(),true);
+//#endif // 
+//		return(ReturnValue);
+//	}
 
 
 	MBPM_PacketInfo ParseMBPM_PacketInfo(std::string const& PacketPath)
@@ -586,32 +587,233 @@ namespace MBPM
 
 		return(ReturnValue);
 	}
-
-	MBError CompilePacket(std::string const& PacketDirectory)
+	struct CompileTargetInfo_MSBuild
+	{
+		std::string Solution = "";
+		std::string Target = "";
+		std::string Configuration = "";
+		std::string Platform = "";
+		std::string OutputPath = "";
+		std::string NewName = "";
+	};
+	MBError h_ParseCompileTargetInfo_MSBuild(MBParsing::JSONObject const& ObjectToParse,CompileTargetInfo_MSBuild* OutResult)
 	{
 		MBError ReturnValue = true;
-		MBPM_PacketInfo PacketInfo = ParseMBPM_PacketInfo(PacketDirectory + "/MBPM_PacketInfo");
-		int CommandReturnValue = 0;
-		if (PacketInfo.Attributes.find(MBPM_PacketAttribute::Embedabble) != PacketInfo.Attributes.end() || PacketInfo.Attributes.find(MBPM_PacketAttribute::TriviallyCompilable) != PacketInfo.Attributes.end())
+		CompileTargetInfo_MSBuild NewTarget;
+		NewTarget.Target = ObjectToParse.GetAttribute("Target").GetStringData();
+		NewTarget.Solution = ObjectToParse.GetAttribute("Solution").GetStringData();
+		NewTarget.Configuration = ObjectToParse.GetAttribute("Configuration").GetStringData();
+		NewTarget.Platform = ObjectToParse.GetAttribute("Platform").GetStringData();
+		NewTarget.OutputPath = ObjectToParse.GetAttribute("OutputPath").GetStringData();
+		NewTarget.NewName = ObjectToParse.GetAttribute("NewName").GetStringData();
+		if (ReturnValue)
 		{
-			CommandReturnValue = std::system(("cmake -S " + PacketDirectory + " -B " + PacketDirectory + "/MBPM_BuildFiles/").c_str());
-			CommandReturnValue = std::system(("cmake --build " + PacketDirectory + "/MBPM_BuildFiles/").c_str());
+			*OutResult = std::move(NewTarget);
 		}
-		if (CommandReturnValue != 0)
+		return(ReturnValue);
+	}
+	MBError h_CompileTarget_MSBuild(std::string const& PacketDirectory,MBParsing::JSONObject const& ObjectToParse)
+	{
+		MBError ReturnValue = true;
+		//if (ObjectToParse.GetAttribute("MakeType").GetStringData() != "MSBuild")
+		//{
+		//	ReturnValue = false;
+		//	ReturnValue.ErrorMessage = "Unsuported MakeType for windows platform: "+ ObjectToParse.GetAttribute("MakeType").GetStringData();
+		//	return(ReturnValue);
+		//}
+		CompileTargetInfo_MSBuild TargetInfo;
+		ReturnValue = h_ParseCompileTargetInfo_MSBuild(ObjectToParse, &TargetInfo);
+		if(!ReturnValue)
+		{
+			return(ReturnValue);
+		}
+		std::string CommandToExecute = "cd " + PacketDirectory + "& msbuild " + TargetInfo.Solution + " /t:" + TargetInfo.Target + " /p:Configuration=" + TargetInfo.Configuration;
+		CommandToExecute += " /p:Platform=" + TargetInfo.Platform;
+		int CommandResult = std::system(CommandToExecute.c_str());
+		if (CommandResult != 0)
 		{
 			ReturnValue = false;
+			ReturnValue.ErrorMessage = "Failed compiling target";
 		}
 		else
+		{
+			if (!std::filesystem::exists(PacketDirectory+"/MBPM_Builds/"))
+			{
+				std::filesystem::create_directories(PacketDirectory + "/MBPM_Builds/");
+			}
+			//nu ska vi ta och flytta den till dess korrekta ställe
+			std::filesystem::rename(PacketDirectory + "/" + TargetInfo.OutputPath, PacketDirectory + "/MBPM_Builds/" + TargetInfo.NewName);
+		}
+		return(ReturnValue);
+	}
+	MBError h_CompileTarget(std::string const& PacketDirectory, MBParsing::JSONObject const& ObjectToParse);
+	struct CompileTargetInfo_Cmake
+	{
+		std::vector<std::string> CMakeOptions = {};
+		MBParsing::JSONObject CMakeTarget;
+	};
+	MBError h_CompileTarget_CMake(std::string const& PacketDirectory, MBParsing::JSONObject const& ObjectToParse)
+	{
+		MBError ReturnValue = true;
+		CompileTargetInfo_Cmake TargetInfo;
+		std::vector<MBParsing::JSONObject> const& Options = ObjectToParse.GetAttribute("CMakeOptions").GetArrayData();
+		for (size_t i = 0; i < Options.size(); i++)
+		{
+			TargetInfo.CMakeOptions.push_back(Options[i].GetStringData());
+		}
+		TargetInfo.CMakeTarget = ObjectToParse.GetAttribute("CMakeTarget");
+		std::string CMakeCommand = "cmake -S " + PacketDirectory + " -B " + PacketDirectory + "/MBPM_BuildFiles/ ";
+		for (size_t i = 0; i < TargetInfo.CMakeOptions.size(); i++)
+		{
+			CMakeCommand += "-D" + TargetInfo.CMakeOptions[i]+" ";
+		}
+		int CommandResult = std::system(CMakeCommand.c_str());
+		if (CommandResult == 0)
+		{
+			h_CompileTarget(PacketDirectory, TargetInfo.CMakeTarget);
+		}
+		else
+		{
+			ReturnValue = false;
+			ReturnValue.ErrorMessage = "Error compiling packet";
+		}
+		return(ReturnValue);
+	}
+	struct CompileTargetInfo_Make
+	{
+		std::string Target = "";
+		std::string Directory = "";
+		std::string OutputPath = "";
+		std::string NewName = "";
+	};
+	MBError h_CompileTarget_Make(std::string const& PacketDirectory, MBParsing::JSONObject const& ObjectToParse)
+	{
+		MBError ReturnValue = true;
+		CompileTargetInfo_Make TargetInfo;
+		TargetInfo.Target = ObjectToParse.GetAttribute("Target").GetStringData();
+		TargetInfo.Directory = ObjectToParse.GetAttribute("Directory").GetStringData();
+		TargetInfo.OutputPath = ObjectToParse.GetAttribute("OutputPath").GetStringData();
+		TargetInfo.NewName = ObjectToParse.GetAttribute("NewName").GetStringData();
+
+		std::string Command = "make -C " + PacketDirectory + TargetInfo.Directory + " " + TargetInfo.Target;
+
+		int CommandResult = std::system(Command.c_str());
+		if (CommandResult == 0)
+		{
+			if (!std::filesystem::exists(PacketDirectory + "/MBPM_Builds/"))
+			{
+				std::filesystem::create_directories(PacketDirectory + "/MBPM_Builds/");
+			}
+			std::filesystem::rename(PacketDirectory + "/" + TargetInfo.OutputPath, PacketDirectory + "/MBPM_Builds/" + TargetInfo.NewName);
+		}
+		else
+		{
+			ReturnValue = false;
+			ReturnValue.ErrorMessage = "Failed executing build command";
+		}
+
+		return(ReturnValue);
+	}
+	MBError h_CompileTarget(std::string const& PacketDirectory, MBParsing::JSONObject const& ObjectToParse)
+	{
+		MBError ReturnValue = true;
+		if (ObjectToParse.GetAttribute("MakeType").GetStringData() == "MSBuild")
+		{
+			ReturnValue = h_CompileTarget_MSBuild(PacketDirectory, ObjectToParse);
+		}
+		else if(ObjectToParse.GetAttribute("MakeType").GetStringData() == "CMake")
+		{
+			ReturnValue = h_CompileTarget_CMake(PacketDirectory, ObjectToParse);
+		}
+		else
+		{
+			ReturnValue = false;
+			ReturnValue.ErrorMessage = "Unkown build type: " + ObjectToParse.GetAttribute("MakeType").GetStringData();
+		}
+		return(ReturnValue);
+	}
+	MBError h_CompilePacket_CompileInfo(std::string const& PacketDirectory)
+	{
+		MBError ReturnValue = false;
+		if (!std::filesystem::exists(PacketDirectory + "/MBPM_CompileInfo.json"))
+		{
+			ReturnValue = false;
+			ReturnValue.ErrorMessage = "No compile MBPM_CompileInfo.json in directory";
+			return(ReturnValue);
+		}
+		try
+		{
+			std::string CompileInfoData = MBUtility::ReadWholeFile(PacketDirectory + "/MBPM_CompileInfo.json");
+			MBParsing::JSONObject CompileInfoObject = MBParsing::ParseJSONObject(CompileInfoData, 0, nullptr, &ReturnValue);
+			if (!ReturnValue)
+			{
+				return(ReturnValue);
+			}
+			if (MBUtility::IsWindows())
+			{
+				std::map<std::string,MBParsing::JSONObject> const& WindowsTargets = CompileInfoObject.GetAttribute("Windows").GetMapData();
+				for (auto const& Targets : WindowsTargets)
+				{
+					h_CompileTarget(PacketDirectory,Targets.second);
+				}
+			}
+			else
+			{
+				std::map<std::string, MBParsing::JSONObject> const& LinuxTargets = CompileInfoObject.GetAttribute("Linux").GetMapData();
+				for (auto const& Targets : LinuxTargets)
+				{
+					h_CompileTarget(PacketDirectory, Targets.second);
+				}
+			}
+		}
+		catch (const std::exception& e)
+		{
+			ReturnValue = false;
+			ReturnValue.ErrorMessage = e.what();
+		}
+		return(ReturnValue);
+	}
+	MBError h_CompilePacket_MBBuild(std::string const& PacketDirectory)
+	{
+		MBError ReturnValue = false;
+		int CommandReturnValue = 0;
+		CommandReturnValue = std::system(("cmake -S " + PacketDirectory + " -B " + PacketDirectory + "/MBPM_BuildFiles/").c_str());
+		CommandReturnValue = std::system(("cmake --build " + PacketDirectory + "/MBPM_BuildFiles/").c_str());
+		if (CommandReturnValue == 0)
 		{
 #ifdef _WIN32
 			std::string BuildDirectory = PacketDirectory + "/MBPM_Builds/";
 			std::filesystem::copy_options Overwrite = std::filesystem::copy_options::overwrite_existing;
 			if (std::filesystem::exists(BuildDirectory + "Debug"))
 			{
-				std::filesystem::copy(BuildDirectory + "Debug",BuildDirectory,Overwrite);
+				std::filesystem::copy(BuildDirectory + "Debug", BuildDirectory, Overwrite);
+				std::filesystem::remove_all(BuildDirectory + "Debug");
 			}
 #endif // 
+			ReturnValue = true;
+		}
+		else
+		{
+			ReturnValue = false;
+		}
+		return(ReturnValue);
+	}
 
+	MBError CompilePacket(std::string const& PacketDirectory)
+	{
+		MBError ReturnValue = true;
+		MBPM_PacketInfo PacketInfo = ParseMBPM_PacketInfo(PacketDirectory + "/MBPM_PacketInfo");
+		if (PacketInfo.Attributes.find(MBPM_PacketAttribute::Embedabble) != PacketInfo.Attributes.end() || PacketInfo.Attributes.find(MBPM_PacketAttribute::TriviallyCompilable) != PacketInfo.Attributes.end())
+		{
+			ReturnValue = h_CompilePacket_MBBuild(PacketDirectory);
+		}
+		else if(std::filesystem::exists(PacketDirectory+"/MBPM_CompileInfo.json"))
+		{
+			ReturnValue = h_CompilePacket_CompileInfo(PacketDirectory);
+		}
+		else
+		{
+			ReturnValue = false;
 		}
 		return(ReturnValue);
 	}

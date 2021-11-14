@@ -8,19 +8,21 @@
 int main(int argc,char** argv)
 {
 	//DEBUG GREJER
-	//std::filesystem::current_path("C:/Users/emanu/Desktop/Program/C++/MBPM_ExternalPackets/gl3w/");
-	//return(MBPM::MBCLI_Main(argc, argv));
-	
-	//const int argc2 = 5;
+	//mbpm upload --allinstalled -d /MBPM_Builds/ --computerdiff
+	//std::filesystem::current_path("C:/Users/emanu/Desktop/Program/C++/MBPM_ExternalPackets/cryptopp/");
+	////return(MBPM::MBCLI_Main(argc, argv));
+	//
+	//const int argc2 = 7;
 	//char* argv2[argc2];
 	//argv2[0] = "mbpm";
-	//argv2[1] = "compile";
-	//argv2[2] = "./";
-	//argv2[3] = "--cmake";
-	//argv2[4] = "--create";
+	//argv2[1] = "upload";
+	//argv2[2] = "MBPacketManager";
+	//argv2[3] = "--installed";
+	//argv2[4] = "-d";
+	//argv2[5] = "/MBPM_Builds/";
+	//argv2[6] = "--computerdiff";
 	//argc = argc2;
 	//argv = argv2;
-
 	
 	return(MBPM::MBCLI_Main(argc, argv));
 }

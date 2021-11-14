@@ -10,7 +10,17 @@ namespace MBPM
 	//BEGIN MBPM_CLI
 	std::string MBPM_ClI::p_GetPacketInstallDirectory()
 	{
-		return(std::getenv("MBPM_PACKETS_INSTALL_DIRECTORY"));
+		const char* Data = std::getenv("MBPM_PACKETS_INSTALL_DIRECTORY");
+		if (Data == nullptr)
+		{
+			throw std::exception("MBPM_PACKETS_INSTALL_DIRECTORY environment variable is not set");
+		}
+		std::string ReturnValue = Data;
+		if (ReturnValue.back() != '/')
+		{
+			ReturnValue += "/";
+		}
+		return(ReturnValue);
 	}
 	struct MBPM_PacketDependancyRankInfo
 	{
@@ -94,6 +104,32 @@ namespace MBPM
 		{
 			ReturnValue.push_back(Packet.PacketName);
 		}
+		return(ReturnValue);
+	}
+	std::vector<std::pair<std::string, std::string>> MBPM_ClI::p_GetUserInstalledPackets()
+	{
+		std::vector<std::pair<std::string, std::string>> ReturnValue = {};
+		std::string InstalledPacketsDirectory = p_GetPacketInstallDirectory();
+		if (std::filesystem::exists(InstalledPacketsDirectory))
+		{
+			std::filesystem::directory_iterator DirectoryIterator = std::filesystem::directory_iterator(InstalledPacketsDirectory);
+			for (auto const& Entry : DirectoryIterator)
+			{
+				if (Entry.is_directory())
+				{
+					if (std::filesystem::exists(Entry.path() / "MBPM_PacketInfo"))
+					{
+						std::string PacketPath = MBUnicode::PathToUTF8(Entry.path())+"/";
+						MBPM_PacketInfo CurrentPacketInfo = ParseMBPM_PacketInfo(PacketPath+"MBPM_PacketInfo");
+						if (CurrentPacketInfo.PacketName != "")
+						{
+							ReturnValue.push_back({ CurrentPacketInfo.PacketName ,PacketPath});
+						}
+					}
+				}
+			}
+		}
+
 		return(ReturnValue);
 	}
 	std::vector<std::pair<std::string, std::string>> MBPM_ClI::p_GetUserUploadPackets()
@@ -269,6 +305,154 @@ namespace MBPM
 		}
 		AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::White);
 	}
+	void MBPM_ClI::p_HandleHelp(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
+	{
+		if (CommandInput.TopCommand == "")
+		{
+			AssociatedTerminal->PrintLine("mbpm is packet manager that installs user defined packets, consisting of source needed");
+			AssociatedTerminal->PrintLine("to compile the library, and depending on platform precompiled libraries. A packet may");
+			AssociatedTerminal->PrintLine("also export executables. All installed packets are located under the folder pointed to by");
+			AssociatedTerminal->PrintLine("the MBPM_PACKETS_INSTALL_DIRECTORY environemnt variable, and all compiled libraries and executables have");
+			AssociatedTerminal->PrintLine("symlinks located under MBPM_PACKETS_INSTALL_DIRECTORY/MBPM_CompiledLibraries/ and");
+			AssociatedTerminal->PrintLine("MBPM_PACKETS_INSTALL_DIRECTORY/MBPM_ExportedExecutables respectively.");
+			AssociatedTerminal->PrintLine("-----------------------------------------------------------------------");
+			AssociatedTerminal->PrintLine("Usage of mbpm:");
+			AssociatedTerminal->PrintLine("All commands consist of top level command identified by the first input string not starting with -");
+			AssociatedTerminal->PrintLine("followed by additional top command arguments. Options without arguments start with --");
+			AssociatedTerminal->PrintLine("and options that have arguments start with - and expect the argument to be the next following");
+			AssociatedTerminal->PrintLine("input strings");
+			AssociatedTerminal->PrintLine("Global options:");
+			AssociatedTerminal->PrintLine("--computerdiff: Makes the command work on the filesystem that differs depending on platform, some commands");
+			AssociatedTerminal->PrintLine("                set or unsets this flag automatically like install.");
+			AssociatedTerminal->PrintLine("--nocomputerdiff: Makes the command work on the filesystem that is the same for each packet. Only meaningful");
+			AssociatedTerminal->PrintLine("                  in conjunction with install that automatically sets the computerdiff");
+			AssociatedTerminal->PrintLine("Top level commands:");
+			p_HandleUpdate_Help(CommandInput, AssociatedTerminal);
+			AssociatedTerminal->PrintLine("-----------------------------------------------------------------------");
+			p_HandleInstall_Help(CommandInput, AssociatedTerminal);
+			AssociatedTerminal->PrintLine("-----------------------------------------------------------------------");
+			p_HandleGet_Help(CommandInput, AssociatedTerminal);
+			AssociatedTerminal->PrintLine("-----------------------------------------------------------------------");
+			p_HandleUpload_Help(CommandInput, AssociatedTerminal);
+			AssociatedTerminal->PrintLine("-----------------------------------------------------------------------");
+			p_HandleIndex_Help(CommandInput, AssociatedTerminal);
+		}
+		else if (CommandInput.TopCommand == "update")
+		{
+			p_HandleUpdate_Help(CommandInput, AssociatedTerminal);
+		}
+		else if (CommandInput.TopCommand == "install")
+		{
+			p_HandleInstall_Help(CommandInput, AssociatedTerminal);
+		}
+		else if (CommandInput.TopCommand == "get")
+		{
+			p_HandleGet_Help(CommandInput, AssociatedTerminal);
+		}
+		else if (CommandInput.TopCommand == "upload")
+		{
+			p_HandleUpload_Help(CommandInput, AssociatedTerminal);
+		}
+		else if (CommandInput.TopCommand == "index")
+		{
+			p_HandleIndex_Help(CommandInput, AssociatedTerminal);
+		}
+		else if (CommandInput.TopCommand == "compile")
+		{
+			p_HandleCompile_Help(CommandInput, AssociatedTerminal);
+		}
+		else
+		{
+			AssociatedTerminal->PrintLine("Unrecognized command: " + CommandInput.TopCommand);
+		}
+	}
+	void MBPM_ClI::p_HandleUpdate_Help(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
+	{
+		AssociatedTerminal->PrintLine("update:");
+		AssociatedTerminal->PrintLine("Command that updates already installed packtets with the current packet on the remote server");
+		AssociatedTerminal->PrintLine("Arguments:");
+		AssociatedTerminal->PrintLine("Each top command argument is interpreted as the name of a packet to update located under");
+		AssociatedTerminal->PrintLine("MBPM_PACKETS_INSTALL_DIRECTORY");
+		AssociatedTerminal->PrintLine("Options:");
+		AssociatedTerminal->PrintLine("--all: Updates all installed packets in their dependancy order");
+	}
+	void MBPM_ClI::p_HandleInstall_Help(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
+	{
+		AssociatedTerminal->PrintLine("install:");
+		AssociatedTerminal->PrintLine("Command that installs a packet under MBPM_PACKETS_INSTALL_DIRECTORY");
+		AssociatedTerminal->PrintLine("unlike the get command that only download the files so is the install");
+		AssociatedTerminal->PrintLine("command responsible for installing all dependancies and compiling the packet if required.");
+		AssociatedTerminal->PrintLine("Installing a already installed packets doesn't do anything.");
+		AssociatedTerminal->PrintLine("Arguments:");
+		AssociatedTerminal->PrintLine("list of packets to install from remote");
+		AssociatedTerminal->PrintLine("Options:");
+		AssociatedTerminal->PrintLine("--nocomputerdiff: Makes so the install command doesn't download pre-built binaries");
+	}
+	void MBPM_ClI::p_HandleGet_Help(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
+	{
+		AssociatedTerminal->PrintLine("get:");
+		AssociatedTerminal->PrintLine("Command that download individual files or directories from a packet");
+		AssociatedTerminal->PrintLine("Note: getting a file and directory have the same syntax, getting");
+		AssociatedTerminal->PrintLine("/ for example downlaod the whole packet.");
+		AssociatedTerminal->PrintLine("Note: all filesystem objects start with /");
+		AssociatedTerminal->PrintLine("Arguments:");
+		AssociatedTerminal->PrintLine("[0]: Packet to install");
+		AssociatedTerminal->PrintLine("[1]: filesystem object to download");
+	}
+	void MBPM_ClI::p_HandleUpload_Help(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
+	{
+		AssociatedTerminal->PrintLine("upload:");
+		AssociatedTerminal->PrintLine("Command that uploads that uploads and replaces the packet stored on a server");
+		AssociatedTerminal->PrintLine("Note: specifying --computerdiff uploads all the files to a paralell filesystem to the packet");
+		AssociatedTerminal->PrintLine("      associated with the current computers operating system proccessor and so on. The flag");
+		AssociatedTerminal->PrintLine("      should therefore only be used specifying specific files, for example files under /MBPM_Builds");
+		AssociatedTerminal->PrintLine("      the whole packet source may be out of sync from computer to computer");
+		AssociatedTerminal->PrintLine("Arguments:");
+		AssociatedTerminal->PrintLine("[0]: Remote packet to update");
+		AssociatedTerminal->PrintLine("[1]: Local directory containing the updated packet");
+		AssociatedTerminal->PrintLine("Options:");
+		AssociatedTerminal->PrintLine("--user: changes the meaning of the command arguments to specify the names of locally stored packets");
+		AssociatedTerminal->PrintLine("        located on a path under the paths listed in MBPM_PACKETS_INSTALL_DIRECTORY/LocalUploadPackets.txt");
+		AssociatedTerminal->PrintLine("--installed: changes the meaning of the command arguments to specify the names of installed packets");
+		AssociatedTerminal->PrintLine("--all:  Uploads all user packets stored under a path listed in MBPM_PACKETS_INSTALL_DIRECTORY/LocalUploadPackets.txt");
+		AssociatedTerminal->PrintLine("--allinstalled:  Uploads all installed packets");
+		AssociatedTerminal->PrintLine("-d (PacketDirectory): For each packet to upload, instead of uploading the complete diff it uploads the specific");
+		AssociatedTerminal->PrintLine("                       directory relative to the packets directory. Can for example be used to upload all compiled");
+		AssociatedTerminal->PrintLine("                       binaries under MBPM_Builds/");
+		AssociatedTerminal->PrintLine("-f (PacketFile): For each packet to upload, instead of uploading the complete diff it uploads the specific");
+		AssociatedTerminal->PrintLine("                 file relative to the packets directory.");
+	}
+	void MBPM_ClI::p_HandleIndex_Help(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
+	{
+		AssociatedTerminal->PrintLine("index:");
+		AssociatedTerminal->PrintLine("Top command used to invoke several subcommands associated with the the index MBPM_FileInfo");
+		AssociatedTerminal->PrintLine("Note: MBPM_FileInfoIgnore specifies files and directories that is not to be a part of the index and packet");
+		AssociatedTerminal->PrintLine("Arguments:");
+		AssociatedTerminal->PrintLine("Case [0] == create: creates a index file for directory [1] with optional named specified by [2]");
+		AssociatedTerminal->PrintLine("                    Defaults to MBPM_FileInfo.");
+		AssociatedTerminal->PrintLine("Case [0] == list:   Lists the contents of the index file specified by [1] or [1]/MBPM_FileInfo");
+		AssociatedTerminal->PrintLine("                    if [1] is a directory");
+		AssociatedTerminal->PrintLine("     Options:  ");
+		AssociatedTerminal->PrintLine("     --remote: lists the content of the index file on a remote packet identified by [1]");
+		AssociatedTerminal->PrintLine("     --installed: lists the content of locally installed packet identified by it's packet name [1]");
+		AssociatedTerminal->PrintLine("Case [1] == diff: Lists the difference between the index files for 2 packets");
+		AssociatedTerminal->PrintLine("                  -p specifies a local directory, and -r packet on a server by name");
+		AssociatedTerminal->PrintLine("                  for example: mbpm index diff -p ./ -r MBPacketManager");
+	}
+	void MBPM_ClI::p_HandleCompile_Help(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
+	{
+		AssociatedTerminal->PrintLine("compile:");
+		AssociatedTerminal->PrintLine("Command responsible for compiling packets, and for updating and creating CMake files following");
+		AssociatedTerminal->PrintLine("the MBPM systems");
+		AssociatedTerminal->PrintLine("Arguments:");
+		AssociatedTerminal->PrintLine("[..]: List of packets to compile. A packet starting with . or / is assumed to point a directory, and");
+		AssociatedTerminal->PrintLine("      otherwise assumed to be the name of a installed packet");
+		AssociatedTerminal->PrintLine("Options:");
+		AssociatedTerminal->PrintLine("--cmake: Instead of compiling only updates the MBPM variables of packets that are declared to use a MBBuild");
+		AssociatedTerminal->PrintLine("--create: Only works in conjunction with --cmake. Instead of updating the MBPM variables of cmake files in");
+		AssociatedTerminal->PrintLine("          the directories specified so is a CMakeLists.txt created following the MBPM system, that adds all");
+		AssociatedTerminal->PrintLine("          .cpp and .h files in the directory as a part of the build");
+	}
 	void MBPM_ClI::p_HandleUpdate(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
 	{
 		std::vector<std::string> PacketsToUpdate = {};
@@ -328,6 +512,15 @@ namespace MBPM
 		for (size_t i = 0; i < CommandInput.TopCommandArguments.size(); i++)
 		{
 			PacketsToInstall.push(CommandInput.TopCommandArguments[i]);
+		}
+		MBPM::MBPP_ComputerInfo PreviousInfo = m_ClientToUse.GetComputerInfo();
+		if (CommandInput.CommandOptions.find("nocomputerdiff") != CommandInput.CommandOptions.end())
+		{
+			m_ClientToUse.SetComputerInfo(MBPM::MBPP_ComputerInfo());
+		}
+		else
+		{
+			m_ClientToUse.SetComputerInfo(MBPM::MBPP_Client::GetSystemComputerInfo());
 		}
 		std::unordered_set<std::string> AlreadyInstalledPackets = {};
 		std::stack<std::string> NewPacketsToCompile = {};
@@ -494,6 +687,11 @@ namespace MBPM
 				if (OptionPositions[i] + 1 < CommandInput.TotalCommandTokens.size())
 				{
 					std::string const& CurrentDirectory = CommandInput.TotalCommandTokens[OptionPositions[i] + 1];
+					if (CurrentDirectory.front() != '/')
+					{
+						AssociatedTerminal->PrintLine("Invalid directory specification: needs to be an absolute path starting with / relative to packet directory");
+						return;
+					}
 					MBPP_FileInfoReader DirectoryInfo = CreateFileInfo(PacketDirectory + CurrentDirectory);
 					if (ServerFileInfo.ObjectExists(CurrentDirectory))
 					{
@@ -556,39 +754,101 @@ namespace MBPM
 		//först så behöver vi skicka data för att se login typen
 		MBPM::MBPP_ComputerInfo PreviousComputerInfo = m_ClientToUse.GetComputerInfo();
 		if (CommandInput.TopCommandArguments.size() < 2 && CommandInput.CommandOptions.find("all") == CommandInput.CommandOptions.end() && CommandInput.CommandOptions.find("user") 
-			== CommandInput.CommandOptions.end())
+			== CommandInput.CommandOptions.end() && CommandInput.CommandOptions.find("allinstalled") == CommandInput.CommandOptions.end())
 		{
 			AssociatedTerminal->PrintLine("Invalid \"upload\" arguments, requires packet to upload and packet directory");
+			return;
 		}
 		std::vector<std::pair<std::string, std::string>> PacketsToUpload = {};//packet name + packet directory
 		if (CommandInput.CommandOptions.find("all") != CommandInput.CommandOptions.end())
 		{
 			PacketsToUpload = p_GetUserUploadPackets();
 		}
-		if (CommandInput.TopCommandArguments.size() >= 2 && CommandInput.CommandOptions.find("user") == CommandInput.CommandOptions.end())
+		if (CommandInput.TopCommandArguments.size() >= 2 && CommandInput.CommandOptions.find("user") == CommandInput.CommandOptions.end() &&
+			CommandInput.CommandOptions.find("installed") == CommandInput.CommandOptions.end())
 		{
 			PacketsToUpload.push_back(std::pair<std::string, std::string>(CommandInput.TopCommandArguments[0], CommandInput.TopCommandArguments[1]));
 		}
-		if (CommandInput.CommandOptions.find("user") != CommandInput.CommandOptions.end())
+		if (CommandInput.CommandOptions.find("user") != CommandInput.CommandOptions.end() || CommandInput.CommandOptions.find("installed") != CommandInput.CommandOptions.end())
 		{
-			std::vector<std::pair<std::string, std::string>> UserPackets = p_GetUserUploadPackets();
-			for (size_t i = 0; i < CommandInput.TopCommandArguments.size(); i++)
+			//std::vector<std::pair<std::string, std::string>> UserPackets = p_GetUserUploadPackets();
+			//std::vector<std::pair<std::string, std::string>> InstalledPacket = p_GetUserInstalledPackets();
+			
+			std::vector<std::string> SupportedOptions = { "user","installed" };
+
+			for (auto const& CurrentOption : SupportedOptions)
 			{
-				bool PacketFound = false;
-				for (size_t j = 0; j < UserPackets.size(); j++)
+				std::vector<std::pair<std::string, std::string>> PacketsToSearch = {};
+				if (CurrentOption == "user")
 				{
-					if (UserPackets[j].first == CommandInput.TopCommandArguments[i])
+					if (CommandInput.CommandOptions.find("user") != CommandInput.CommandOptions.end())
 					{
-						PacketFound = true;
-						PacketsToUpload.push_back(UserPackets[j]);
-						break;
+						PacketsToSearch = p_GetUserUploadPackets();
+					}
+					else
+					{
+						continue;
 					}
 				}
-				if (!PacketFound)
+				if (CurrentOption == "installed")
 				{
-					AssociatedTerminal->PrintLine("Couldn't find UserPacket \"" + CommandInput.TopCommandArguments[i] + "\"");
-					return;
+					if (PacketsToSearch.size() > 0)
+					{
+						AssociatedTerminal->PrintLine("Can only specify user or installed not both");
+						return;
+					}
+					if (CommandInput.CommandOptions.find("installed") != CommandInput.CommandOptions.end())
+					{
+						PacketsToSearch = p_GetUserInstalledPackets();
+					}
+					else
+					{
+						continue;
+					}
 				}
+				for (size_t i = 0; i < CommandInput.TopCommandArguments.size(); i++)
+				{
+					bool PacketFound = false;
+					std::string CurrentPacket = CommandInput.TopCommandArguments[i];
+					bool SkipPacket = false;
+					for (auto const& Options : CommandInput.CommandPositionalOptions)
+					{
+						for (size_t Position : Options.second)
+						{
+							if (Position + 1 < CommandInput.TotalCommandTokens.size() && CommandInput.TotalCommandTokens[Position + 1] == CurrentPacket)
+							{
+								SkipPacket = true;
+								continue;
+							}
+						}
+					}
+					if (SkipPacket)
+					{
+						continue;
+					}
+					for (size_t j = 0; j < PacketsToSearch.size(); j++)
+					{
+						if (PacketsToSearch[j].first == CommandInput.TopCommandArguments[i])
+						{
+							PacketFound = true;
+							PacketsToUpload.push_back(PacketsToSearch[j]);
+							break;
+						}
+					}
+					if (!PacketFound)
+					{
+						AssociatedTerminal->PrintLine("Couldn't find UserPacket \"" + CommandInput.TopCommandArguments[i] + "\"");
+						return;
+					}
+				}
+			}
+		}
+		if (CommandInput.CommandOptions.find("allinstalled") != CommandInput.CommandOptions.end())
+		{
+			std::vector<std::pair<std::string, std::string>> InstalledPackets = p_GetUserInstalledPackets();
+			for (size_t i = 0; i < InstalledPackets.size(); i++)
+			{
+				PacketsToUpload.push_back(InstalledPackets[i]);
 			}
 		}
 		//kollar att alla packets har unika namn
@@ -714,7 +974,7 @@ namespace MBPM
 		//	AssociatedTerminal->PrintLine("Upload packet sucessful");
 		//}
 	}
-	void MBPM_ClI::p_HandleInfo(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
+	void MBPM_ClI::p_HandleIndex(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
 	{
 		if (CommandInput.TopCommandArguments.size() < 1)
 		{
@@ -1064,17 +1324,28 @@ namespace MBPM
 			std::vector<std::pair<std::string,std::string>> FailedCompiles = {};
 			for (size_t i = 0; i < PacketDirectories.size(); i++)
 			{
+				bool MBBuild = true;
 				if (std::filesystem::exists(PacketDirectories[i] + "MBPM_PacketInfo"))
 				{
 					MBPM::MBPM_PacketInfo CurrentPacket = MBPM::ParseMBPM_PacketInfo(PacketDirectories[i] + "MBPM_PacketInfo");
 					if (CurrentPacket.Attributes.find(MBPM::MBPM_PacketAttribute::NonMBBuild) != CurrentPacket.Attributes.end())
 					{
 						//icke mb builds borde varken uppdateras eller skapas
-						continue;
+						if (!std::filesystem::exists(PacketDirectories[i] + "/MBPM_CompileInfo.json"))
+						{
+							continue;
+						}
+						else
+						{
+							MBBuild = false;
+						}
 					}
 				}
 				MBError CompilationError = true;
-				CompilationError = p_UpdateCmake(PacketDirectories[i], MBPMStaticData);
+				if (MBBuild)
+				{
+					CompilationError = p_UpdateCmake(PacketDirectories[i], MBPMStaticData);
+				}
 				if (CompilationError)
 				{
 				 	CompilationError = p_CompilePacket(PacketDirectories[i]);
@@ -1130,7 +1401,11 @@ namespace MBPM
 			m_ClientToUse.SetComputerInfo(MBPM::MBPP_ComputerInfo());
 		}
 		m_ClientToUse.SetLogTerminal(AssociatedTerminal);
-		if (CommandInput.TopCommand == "install")
+		if (CommandInput.CommandOptions.find("help") != CommandInput.CommandOptions.end())
+		{
+			p_HandleHelp(CommandInput,AssociatedTerminal);
+		}
+		else if (CommandInput.TopCommand == "install")
 		{
 			p_HandleInstall(CommandInput,AssociatedTerminal);
 		}
@@ -1148,7 +1423,7 @@ namespace MBPM
 		}
 		else if (CommandInput.TopCommand == "index")
 		{
-			p_HandleInfo(CommandInput, AssociatedTerminal);
+			p_HandleIndex(CommandInput, AssociatedTerminal);
 		}
 		else if(CommandInput.TopCommand == "compile")
 		{
