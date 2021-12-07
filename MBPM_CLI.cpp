@@ -238,6 +238,12 @@ namespace MBPM
 		const MBPM::MBPP_DirectoryInfoNode* InfoTopNode = InfoToPrint.GetDirectoryInfo("/");
 		MBPM::MBPP_DirectoryInfoNode_ConstIterator DirectoryIterator = InfoTopNode->begin();
 		MBPM::MBPP_DirectoryInfoNode_ConstIterator End = InfoTopNode->end();
+		std::vector<std::string> FilePaths = {};
+		size_t LargestPath = 0;
+		std::vector<std::string> FileSizes = {};
+		size_t LargestSize = 0;
+		std::vector<std::string> Hashes = {};
+		size_t LargestHash = 0;
 		while (DirectoryIterator != End)
 		{
 			std::string Filename = DirectoryIterator.GetCurrentDirectory() + (*DirectoryIterator).FileName;
@@ -261,10 +267,27 @@ namespace MBPM
 			{
 				FileSizeString = std::to_string(FileSize / 1000000000) + " GB";
 			}
-			AssociatedTerminal->PrintLine(Filename+"\t\t\t\t"+FileSizeString+"\t"+ FileHash);
+			//förutsätter såklart ascii B)
+			if (Filename.size() > LargestPath)
+			{
+				LargestPath = Filename.size();
+			}
+			if (FileSizeString.size() > LargestSize)
+			{
+				LargestSize = FileSizeString.size();
+			}
+			//AssociatedTerminal->PrintLine(Filename+"\t\t\t\t"+FileSizeString+"\t"+ FileHash);
+			FilePaths.push_back(Filename);
+			FileSizes.push_back(FileSizeString);
+			Hashes.push_back(FileHash);
 			DirectoryIterator++;
 		}
-
+		for (size_t i = 0; i < FilePaths.size(); i++)
+		{
+			std::cout << FilePaths[i] << std::string(LargestPath - FilePaths[i].size(), ' ') << std::string(4, ' ');
+			std::cout << FileSizes[i] << std::string(LargestSize - FileSizes[i].size(), ' ') << std::string(4, ' ');
+			std::cout << Hashes[i] << std::endl;
+		}
 	}
 	void MBPM_ClI::p_PrintFileInfoDiff(MBPM::MBPP_FileInfoDiff const& InfoToPrint,MBCLI::MBTerminal* AssociatedTerminal)
 	{
@@ -749,6 +772,92 @@ namespace MBPM
 			OutFilesToDelete.push_back(Files);
 		}
 	}
+	void MBPM_ClI::p_UploadPacketsLocal(std::vector<std::pair<std::string, std::string>> const& PacketsToUpload,MBCLI::MBTerminal* AssociatedTerminal)
+	{
+		std::string InstalledPacketsDirectory = GetSystemPacketsDirectory();
+		std::vector<std::pair<std::string, std::string>> FailedPackets = {};
+		for (size_t i = 0; i < PacketsToUpload.size(); i++)
+		{
+			if (std::filesystem::exists(PacketsToUpload[i].second+"/MBPM_PacketInfo") == false)
+			{
+				FailedPackets.push_back(std::pair<std::string,std::string>(PacketsToUpload[i].first, "Invalid user packet to upload, No MBPM_PacketInfo"));
+			}
+			std::string PacketInstallPath = InstalledPacketsDirectory + PacketsToUpload[i].first + "/";
+			if (std::filesystem::exists(PacketInstallPath) == false)
+			{
+				std::filesystem::create_directories(PacketInstallPath);
+				MBPM::CreatePacketFilesData(PacketInstallPath);
+			}
+			//OBS antar här att packets inte är up to date, vi kan om vi vill optimera göra det men blir relevant när det blir relevant
+			MBPM::CreatePacketFilesData(PacketInstallPath); // redundant med det ovan men men
+			MBPM::CreatePacketFilesData(PacketsToUpload[i].second);
+			MBPM::MBPP_FileInfoReader InstalledInfo = MBPM::MBPP_FileInfoReader(PacketInstallPath+"/MBPM_FileInfo");
+			MBPM::MBPP_FileInfoReader LocalPacketInfo = MBPM::MBPP_FileInfoReader(PacketsToUpload[i].second+"/MBPM_FileInfo");
+			std::string LocalPacketPath = PacketsToUpload[i].second;
+			MBPM::MBPP_FileInfoDiff FileInfoDiff = MBPM::GetFileInfoDifference(InstalledInfo, LocalPacketInfo);
+			AssociatedTerminal->PrintLine("Files to copy:");
+			AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::Green);
+			std::vector<std::string> ObjectsToCopy = {};
+			std::vector<std::string> ObjectsToRemove = {};
+			for (size_t i = 0; i < FileInfoDiff.AddedFiles.size(); i++)
+			{
+				AssociatedTerminal->PrintLine(FileInfoDiff.AddedFiles[i]);
+				ObjectsToCopy.push_back(FileInfoDiff.AddedFiles[i]);
+			}
+			for (size_t i = 0; i < FileInfoDiff.UpdatedFiles.size(); i++)
+			{
+				AssociatedTerminal->PrintLine(FileInfoDiff.UpdatedFiles[i]);
+				ObjectsToCopy.push_back(FileInfoDiff.UpdatedFiles[i]);
+			}
+			AssociatedTerminal->PrintLine("Directories to copy:");
+			for (size_t i = 0; i < FileInfoDiff.AddedDirectories.size(); i++)
+			{
+				AssociatedTerminal->PrintLine(FileInfoDiff.AddedDirectories[i]);
+				ObjectsToCopy.push_back(FileInfoDiff.AddedDirectories[i]);
+			}
+			AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::White);
+			AssociatedTerminal->PrintLine("Files to remove:");
+			AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::Red);
+			for (size_t i = 0; i < FileInfoDiff.RemovedFiles.size(); i++)
+			{
+				AssociatedTerminal->PrintLine(FileInfoDiff.RemovedFiles[i]);
+				ObjectsToRemove.push_back(FileInfoDiff.RemovedFiles[i]);
+			}
+			AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::White);
+			AssociatedTerminal->PrintLine("Directories to remove:");
+			AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::Red);
+			for (size_t i = 0; i < FileInfoDiff.DeletedDirectories.size(); i++)
+			{
+				AssociatedTerminal->PrintLine(FileInfoDiff.DeletedDirectories[i]);
+				ObjectsToRemove.push_back(FileInfoDiff.RemovedFiles[i]);
+			}
+			AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::White);
+			AssociatedTerminal->PrintLine("Copying files:");
+			std::filesystem::copy_options CopyOptions = std::filesystem::copy_options::update_existing|std::filesystem::copy_options::recursive;
+			for (size_t i = 0; i < ObjectsToCopy.size(); i++)
+			{
+				std::filesystem::copy(LocalPacketPath + ObjectsToCopy[i], PacketInstallPath + ObjectsToCopy[i], CopyOptions);
+				AssociatedTerminal->PrintLine("Copied " + ObjectsToCopy[i]);
+			}
+			AssociatedTerminal->PrintLine("Removing objects:");
+			for (size_t i = 0; i < ObjectsToRemove.size(); i++)
+			{
+				std::filesystem::remove_all(PacketInstallPath + ObjectsToRemove[i]);
+				AssociatedTerminal->PrintLine("Removed " + ObjectsToCopy[i]);
+			}
+			MBPM::CreatePacketFilesData(PacketInstallPath);
+			AssociatedTerminal->PrintLine("Successfully uploaded packet " + PacketsToUpload[i].second + "!");
+		}
+		if (FailedPackets.size() > 0)
+		{
+			AssociatedTerminal->PrintLine("Failed uploading following packets:");
+		}
+		for (size_t i = 0; i < FailedPackets.size(); i++)
+		{
+			AssociatedTerminal->PrintLine(FailedPackets[i].first + ": " + FailedPackets[i].second);
+		}
+		AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::White);
+	}
 	void MBPM_ClI::p_HandleUpload(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
 	{
 		//först så behöver vi skicka data för att se login typen
@@ -868,6 +977,12 @@ namespace MBPM
 			AssociatedTerminal->PrintLine("Error: you are trying to upload multiple packets with the same name");
 			return;
 		}
+		if (CommandInput.CommandOptions.find("local") != CommandInput.CommandOptions.end())
+		{
+			p_UploadPacketsLocal(PacketsToUpload,AssociatedTerminal);
+			return;
+		}
+
 		MBPP_UploadRequest_Response RequestResponse;
 		if (CommandInput.CommandOptions.find("computerdiff") == CommandInput.CommandOptions.end())
 		{
@@ -931,7 +1046,7 @@ namespace MBPM
 					AssociatedTerminal->PrintLine("Sucessfully uploaded " + PacketName);
 				}
 			}
-			if (RequestResponse.Result != MBPP_ErrorCode::Ok || !UploadError)
+			while (RequestResponse.Result != MBPP_ErrorCode::Ok || !UploadError)
 			{
 				AssociatedTerminal->PrintLine("Need verification for " + RequestResponse.DomainToLogin + ":");
 				//Borde egentligen kolla vilka typer den stödjer
@@ -944,7 +1059,7 @@ namespace MBPM
 				AssociatedTerminal->GetLine(Password);
 				AssociatedTerminal->SetPasswordInput(false);
 				VerificationData = MBPP_EncodeString(Username) + MBPP_EncodeString(Password);
-				m_ClientToUse.Connect(p_GetDefaultPacketHost());
+				//m_ClientToUse.Connect(p_GetDefaultPacketHost());
 
 
 				if (!UseDirectPaths)

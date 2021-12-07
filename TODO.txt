@@ -1,1 +1,3 @@
 MBPM_FileInfoIgnore: Inkluderar inte faktikst filer som blivit include. Inget använder det än, men kanske i framtiden?
+
+Upload local stödjer inte alla funktioner som remote gör, till exempel går det inte att specificera vissa filer/directories

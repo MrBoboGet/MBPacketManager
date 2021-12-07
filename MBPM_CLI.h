@@ -29,6 +29,8 @@ namespace MBPM
 		void p_HandleUpload(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
 		void p_HandleIndex(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
 		void p_HandleCompile(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
+
+		void p_UploadPacketsLocal(std::vector<std::pair<std::string,std::string>> const& PacketsToUpload,MBCLI::MBTerminal* AssociatedTerminal);
 	
 		MBError p_UpdateCmake(std::string const& PacketDirectory,std::string const& OptionalMBPMStaticData);//fyller bara i MBPM variablar och skriver inte över filen
 		MBError p_CreateCmake(std::string const& PacketDirectory);

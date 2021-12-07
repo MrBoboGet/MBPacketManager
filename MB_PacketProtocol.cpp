@@ -2254,6 +2254,7 @@ namespace MBPM
 		if (UploadRequestResponse.Result != MBPP_ErrorCode::Ok || !UploadError)
 		{
 			//update out struct
+			UploadError = false;
 			return(UploadError);
 		}
 
@@ -2270,6 +2271,7 @@ namespace MBPM
 		if (UploadRequestResponse.Result != MBPP_ErrorCode::Ok || !UploadError)
 		{
 			//update out struct
+			UploadError = false;
 			return(UploadError);
 		}
 		//TODO finns det något smidigt sätt att undvika mycket redundant server nedladdande?

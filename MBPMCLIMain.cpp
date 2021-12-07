@@ -12,15 +12,13 @@ int main(int argc,char** argv)
 	//std::filesystem::current_path("C:/Users/emanu/Desktop/Program/C++/MBPM_ExternalPackets/cryptopp/");
 	////return(MBPM::MBCLI_Main(argc, argv));
 	//
-	//const int argc2 = 7;
+	//const int argc2 = 5;
 	//char* argv2[argc2];
 	//argv2[0] = "mbpm";
 	//argv2[1] = "upload";
-	//argv2[2] = "MBPacketManager";
-	//argv2[3] = "--installed";
-	//argv2[4] = "-d";
-	//argv2[5] = "/MBPM_Builds/";
-	//argv2[6] = "--computerdiff";
+	//argv2[2] = "MBTouhou";
+	//argv2[3] = "--user";
+	//argv2[4] = "--local";
 	//argc = argc2;
 	//argv = argv2;
 	
