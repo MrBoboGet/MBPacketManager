@@ -1,3 +1,27 @@
 MBPM_FileInfoIgnore: Inkluderar inte faktikst filer som blivit include. Inget använder det än, men kanske i framtiden?
 
 Upload local stödjer inte alla funktioner som remote gör, till exempel går det inte att specificera vissa filer/directories
+
+På raspberry pi:en när jag installar något får jag alltid 
+"Error Att connecta Bad file descriptor
+Segmentation fault" 
+efter den är klar att ha laddat ner något. Den har inte senaste variationen men värt att undersöka.
+
+Läg till mbpm index list {LokaltPaket} --user
+
+
+om man har att MBPM_PACKETS_INSTALL_DIRECTORY inte slutar med / kajkar väldigt mycket.
+
+Fixa support för semantic versioning och vilka packets man beror på samt vilken man vill hämta
+
+fixa så att install om man har alla executable/library targets inte fortsätter
+
+fixa så att install kan uppdatera / känner av om inte alla packets är hämtade
+
+uploada installerat packet
+
+default librarys för operativsystem, specifikt pthread, winsock, dl  osv.
+
+option för att istället för att se allt som downloadas så visar bara totala tiden
+
+kunna lisa specifika delar av ett index med index list

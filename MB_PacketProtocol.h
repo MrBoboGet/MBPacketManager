@@ -489,13 +489,19 @@ namespace MBPM
 		void SetComputerInfo(MBPP_ComputerInfo NewComputerInfo);
 		MBPP_ComputerInfo GetComputerInfo() { return(m_CurrentComputerInfo); }
 		static MBPP_ComputerInfo GetSystemComputerInfo();
+
+
 		MBError DownloadPacket(std::string const& OutputDirectory, std::string const& PacketName); //semantiken av denna funktion är att den laddar ner totalt nytt, medans update tar diffen
+		
 		MBError UpdatePacket(std::string const& OutputDirectory, std::string const& PacketName);
+		
 		MBError UploadPacket(std::string const& PacketDirectory, std::string const& PacketName,MBPP_UserCredentialsType CredentialsType,std::string const& CredentialsData
 		,MBPP_UploadRequest_Response* OutResponse);
 		MBError UploadPacket(std::string const& PacketDirectory, std::string const& PacketName, MBPP_UserCredentialsType CredentialsType, std::string const& CredentialsData, std::vector<std::string> const& FilesToUpload, std::vector<std::string> const& FilesToDelete ,MBPP_UploadRequest_Response* OutResponse);
+		
 		MBError DownloadPacketFiles(std::string const& OutputDirectory, std::string const& PacketName,std::vector<std::string> const& FilesToGet);
 		MBError DownloadPacketDirectories(std::string const& OutputDirectory, std::string const& PacketName,std::vector<std::string> const& DirectoriesToGet);
+		
 		MBPP_FileInfoReader GetPacketFileInfo(std::string const& PacketName,MBError* OutError);
 	};
 	//client grejer

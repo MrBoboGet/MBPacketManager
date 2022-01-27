@@ -22,6 +22,7 @@
   "Linux": {
     "StaticDebug": {
       "MakeType": "Make",
+      "Directory": "/",
       "Target": "libcryptopp.a",
       "OutputPath": "/libcryptopp.a",
       "NewName": "libcryptopp_SD.a"

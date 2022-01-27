@@ -3,6 +3,7 @@
 #include <map>
 #include <MBUnicode/MBUnicode.h>
 #include <exception>
+#include <stdexcept>
 //#include "MBCLI/"
 
 namespace MBPM
@@ -13,7 +14,7 @@ namespace MBPM
 		const char* Data = std::getenv("MBPM_PACKETS_INSTALL_DIRECTORY");
 		if (Data == nullptr)
 		{
-			throw std::exception("MBPM_PACKETS_INSTALL_DIRECTORY environment variable is not set");
+			throw std::runtime_error("MBPM_PACKETS_INSTALL_DIRECTORY environment variable is not set");
 		}
 		std::string ReturnValue = Data;
 		if (ReturnValue.back() != '/')

@@ -215,6 +215,10 @@ namespace MBPM
 			{
 				ReturnValue.Attributes.insert(MBPM_PacketAttribute::IncludeOnly);
 			}
+			if (Attribute.GetStringData() == "TriviallyCompilable")
+			{
+				ReturnValue.Attributes.insert(MBPM_PacketAttribute::TriviallyCompilable);
+			}
 		}
 		for (auto const& OutputConfigurations : ParsedJson.GetAttribute("OutputConfigurations").GetArrayData())
 		{
@@ -647,30 +651,133 @@ namespace MBPM
 		return(ReturnValue);
 	}
 	MBError h_CompileTarget(std::string const& PacketDirectory, MBParsing::JSONObject const& ObjectToParse);
-	struct CompileTargetInfo_Cmake
+	//struct CompileTargetInfo_Cmake
+	//{
+	//	//std::vector<std::string> CMakeOptions = {};
+	//	MBParsing::JSONObject CMakeTarget;
+	//};
+	struct CompileInfo_CMake
 	{
-		std::vector<std::string> CMakeOptions = {};
-		MBParsing::JSONObject CMakeTarget;
+		std::string BuildConfiguration = "";
+		std::vector<std::string> BuildOptions = {};
+		std::vector<std::pair<std::string, std::string>> FilesToMove = {};
 	};
+	MBError h_ParseCompileInfo_CMake(MBParsing::JSONObject const& ObjectToParse,CompileInfo_CMake* OutInfo)
+	{
+		MBError ReturnValue = true;
+		CompileInfo_CMake ParsedInfo;
+		try
+		{
+			if (ObjectToParse.HasAttribute("BuildConfiguration"))
+			{
+				ParsedInfo.BuildConfiguration = ObjectToParse.GetAttribute("BuildConfiguration").GetStringData();
+			}
+			std::vector<MBParsing::JSONObject> const& BuildOptions = ObjectToParse.GetAttribute("BuildOptions").GetArrayData();
+			for (size_t i = 0; i < BuildOptions.size(); i++)
+			{
+				ParsedInfo.BuildOptions.push_back(BuildOptions[i].GetStringData());
+			}
+			std::vector<MBParsing::JSONObject> const& FilesToMove = ObjectToParse.GetAttribute("FilesToMove").GetArrayData();
+			for (size_t i = 0; i < FilesToMove.size(); i++)
+			{
+				ParsedInfo.FilesToMove.push_back(std::pair<std::string, std::string>(FilesToMove[i].GetArrayData()[0].GetStringData(), FilesToMove[i].GetArrayData()[1].GetStringData()));
+			}
+			*OutInfo = std::move(ParsedInfo);
+		}
+		catch (const std::exception& e)
+		{
+			*OutInfo = CompileInfo_CMake();
+			ReturnValue = false;
+			ReturnValue.ErrorMessage = "Failed parsing CMake compile info: ";
+			ReturnValue.ErrorMessage += e.what();
+		}
+		return(ReturnValue);
+	}
+	MBError h_Compile_CMakeBuild(std::string const& PacketDirectory, MBParsing::JSONObject const& ObjectToParse)
+	{
+		MBError ReturnValue = true;
+		CompileInfo_CMake CompileInfo;
+		ReturnValue = h_ParseCompileInfo_CMake(ObjectToParse, &CompileInfo);
+		if (!ReturnValue)
+		{
+			return(ReturnValue);
+		}
+		std::string CompileCommand = "cmake --build " + PacketDirectory + "/MBPM_BuildFiles/ ";
+		if (CompileInfo.BuildConfiguration != "")
+		{
+			CompileCommand += "--config " + CompileInfo.BuildConfiguration;
+		}
+		for (size_t i = 0; i < CompileInfo.BuildOptions.size(); i++)
+		{
+			CompileCommand += " -D" + CompileInfo.BuildOptions[i];
+		}
+		int BuildResult = std::system(CompileCommand.c_str());
+		//DEBUG
+		//std::cout << "Build Result: " << BuildResult << std::endl;
+		//DEBUG
+		if (BuildResult == 0)
+		{
+			try
+			{
+				for (size_t i = 0; i < CompileInfo.FilesToMove.size(); i++)
+				{
+					if (!std::filesystem::exists(std::filesystem::path(PacketDirectory + CompileInfo.FilesToMove[i].second).parent_path()))
+					{
+						std::filesystem::create_directories(std::filesystem::path(PacketDirectory + CompileInfo.FilesToMove[i].second).parent_path());
+					}
+					std::filesystem::rename(PacketDirectory+"/"+CompileInfo.FilesToMove[i].first, PacketDirectory+"/"+ CompileInfo.FilesToMove[i].second);
+					//DEBUG
+					//std::cout << "Moving file: " << CompileInfo.FilesToMove[i].first << " to: " << CompileInfo.FilesToMove[i].second << std::endl;
+					//DEBUG
+				}
+			}
+			catch (const std::exception& e)
+			{
+				ReturnValue = false;
+				ReturnValue.ErrorMessage = "Failed moving files: ";
+				ReturnValue.ErrorMessage += e.what();
+			}
+		}
+		else
+		{
+			ReturnValue = false;
+			ReturnValue.ErrorMessage = "Failed to compile with CMakeBuild";
+		}
+		return(ReturnValue);
+	}
 	MBError h_CompileTarget_CMake(std::string const& PacketDirectory, MBParsing::JSONObject const& ObjectToParse)
 	{
 		MBError ReturnValue = true;
-		CompileTargetInfo_Cmake TargetInfo;
+		//CompileTargetInfo_Cmake TargetInfo;
 		std::vector<MBParsing::JSONObject> const& Options = ObjectToParse.GetAttribute("CMakeOptions").GetArrayData();
+		std::vector<std::string> CMakeOptions = {};
 		for (size_t i = 0; i < Options.size(); i++)
 		{
-			TargetInfo.CMakeOptions.push_back(Options[i].GetStringData());
+			CMakeOptions.push_back(Options[i].GetStringData());
 		}
-		TargetInfo.CMakeTarget = ObjectToParse.GetAttribute("CMakeTarget");
+		//TargetInfo.CMakeTarget = ObjectToParse.GetAttribute("CMakeTarget");
 		std::string CMakeCommand = "cmake -S " + PacketDirectory + " -B " + PacketDirectory + "/MBPM_BuildFiles/ ";
-		for (size_t i = 0; i < TargetInfo.CMakeOptions.size(); i++)
+		for (size_t i = 0; i < CMakeOptions.size(); i++)
 		{
-			CMakeCommand += "-D" + TargetInfo.CMakeOptions[i]+" ";
+			CMakeCommand += "-D" + CMakeOptions[i]+" ";
 		}
 		int CommandResult = std::system(CMakeCommand.c_str());
 		if (CommandResult == 0)
 		{
-			h_CompileTarget(PacketDirectory, TargetInfo.CMakeTarget);
+			//h_CompileTarget(PacketDirectory, TargetInfo.CMakeTarget);
+			if (ObjectToParse.HasAttribute("CMakeTarget"))
+			{
+				ReturnValue = h_CompileTarget(PacketDirectory, ObjectToParse.GetAttribute("CMakeTarget"));
+			}
+			else if (ObjectToParse.HasAttribute("CMakeBuild"))
+			{
+				ReturnValue = h_Compile_CMakeBuild(PacketDirectory, ObjectToParse.GetAttribute("CMakeBuild"));
+			}
+			else
+			{
+				ReturnValue = false;
+				ReturnValue.ErrorMessage = "Error compiling packet: No valid build info";
+			}
 		}
 		else
 		{
@@ -725,6 +832,10 @@ namespace MBPM
 		{
 			ReturnValue = h_CompileTarget_CMake(PacketDirectory, ObjectToParse);
 		}
+		else if (ObjectToParse.GetAttribute("MakeType").GetStringData() == "Make")
+		{
+			ReturnValue = h_CompileTarget_Make(PacketDirectory, ObjectToParse);
+		}
 		else
 		{
 			ReturnValue = false;
@@ -734,7 +845,7 @@ namespace MBPM
 	}
 	MBError h_CompilePacket_CompileInfo(std::string const& PacketDirectory)
 	{
-		MBError ReturnValue = false;
+		MBError ReturnValue = true;
 		if (!std::filesystem::exists(PacketDirectory + "/MBPM_CompileInfo.json"))
 		{
 			ReturnValue = false;
@@ -754,15 +865,38 @@ namespace MBPM
 				std::map<std::string,MBParsing::JSONObject> const& WindowsTargets = CompileInfoObject.GetAttribute("Windows").GetMapData();
 				for (auto const& Targets : WindowsTargets)
 				{
-					h_CompileTarget(PacketDirectory,Targets.second);
+					ReturnValue = h_CompileTarget(PacketDirectory,Targets.second);
+					if (!ReturnValue)
+					{
+						break;
+					}
 				}
 			}
+			//Antar nu att det är linux eller unix
 			else
 			{
-				std::map<std::string, MBParsing::JSONObject> const& LinuxTargets = CompileInfoObject.GetAttribute("Linux").GetMapData();
-				for (auto const& Targets : LinuxTargets)
+				std::map<std::string, MBParsing::JSONObject> CurrentTargets = {};
+				if (CompileInfoObject.HasAttribute("Linux"))
 				{
-					h_CompileTarget(PacketDirectory, Targets.second);
+					CurrentTargets = CompileInfoObject.GetAttribute("Linux").GetMapData();
+				}
+				else if (CompileInfoObject.HasAttribute("Unix"))
+				{
+					CurrentTargets = CompileInfoObject.GetAttribute("Unix").GetMapData();
+				}
+				else
+				{
+					ReturnValue = false;
+					ReturnValue.ErrorMessage = "No targets for current operating system";
+					return(ReturnValue);
+				}
+				for (auto const& Targets : CurrentTargets)
+				{
+					ReturnValue = h_CompileTarget(PacketDirectory, Targets.second);
+					if (!ReturnValue)
+					{
+						break;
+					}
 				}
 			}
 		}
