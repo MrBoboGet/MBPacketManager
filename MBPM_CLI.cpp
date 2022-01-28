@@ -1339,14 +1339,14 @@ namespace MBPM
 		}
 		if (CommandInput.CommandOptions.find("user") != CommandInput.CommandOptions.end())
 		{
-			for (size_t i = 1; i < CommandInput.TopCommandArguments[i].size(); i++)
+			for (size_t i = 0; i < CommandInput.TopCommandArguments.size(); i++)
 			{
 				PacketsToUpload.push_back(p_GetUserPacket(CommandInput.TopCommandArguments[i]));
 			}
 		}
 		if (CommandInput.CommandOptions.find("installed") != CommandInput.CommandOptions.end())
 		{
-			for (size_t i = 1; i < CommandInput.TopCommandArguments[i].size(); i++)
+			for (size_t i = 0; i < CommandInput.TopCommandArguments.size(); i++)
 			{
 				PacketsToUpload.push_back(p_GetInstalledPacket(CommandInput.TopCommandArguments[i]));
 			}
