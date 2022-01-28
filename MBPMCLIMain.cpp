@@ -15,10 +15,10 @@ int main(int argc,char** argv)
 	//const int argc2 = 5;
 	//char* argv2[argc2];
 	//argv2[0] = "mbpm";
-	//argv2[1] = "upload";
-	//argv2[2] = "MBTouhou";
-	//argv2[3] = "--user";
-	//argv2[4] = "--local";
+	//argv2[1] = "index";
+	//argv2[2] = "diff";
+	//argv2[3] = "-u:MBPacketManager";
+	//argv2[4] = "-p:../";
 	//argc = argc2;
 	//argv = argv2;
 	

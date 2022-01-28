@@ -214,6 +214,16 @@ namespace MBPM
 		ReturnValue.ExtensionDataSize = MBParsing::ParseBigEndianInteger(InitialData, 4, ParseOffset, &ParseOffset);
 		return(ReturnValue);
 	}
+	void UpdateFileInfo(std::string const& PacketToIndexm, std::string const& FileName)
+	{
+		std::cout << "OBS: Update not implemented yet" << std::endl;
+		CreatePacketFilesData(PacketToIndexm, FileName);
+	}
+	void UpdateFileInfo(std::string const& PacketToIndexm, MBUtility::MBSearchableOutputStream* OutputStream)
+	{
+		std::cout << "OBS: Update not implemented yet" << std::endl;
+		CreatePacketFilesData(PacketToIndexm, OutputStream);
+	}
 	void CreatePacketFilesData(std::string const& PacketToHashDirectory,std::string const& OutputName)
 	{
 		std::ofstream OutputFile = std::ofstream(PacketToHashDirectory +"/"+ OutputName,std::ios::out|std::ios::binary);
@@ -1470,9 +1480,9 @@ namespace MBPM
 	{
 		return(m_IterationInfo.top().AssociatedDirectory->Files[m_IterationInfo.top().CurrentFileOffset]);
 	}
-	MBPP_FileInfo const& MBPP_DirectoryInfoNode_ConstIterator::operator->()
+	const MBPP_FileInfo* MBPP_DirectoryInfoNode_ConstIterator::operator->()
 	{
-		return(**this);
+		return(&(**this));
 	}
 
 	MBPP_DirectoryInfoNode_ConstIterator MBPP_DirectoryInfoNode::begin() const
@@ -1487,21 +1497,21 @@ namespace MBPM
 
 	//BEGIN 	class MBPP_FileListDownloadHandler
 	
-	MBError MBPP_FileListDownloadHandler::Open(std::string const& FileToDownloadName)
-	{
-		assert(false);
-		return(false);
-	}
-	MBError MBPP_FileListDownloadHandler::InsertData(const void* Data, size_t DataSize)
-	{
-		assert(false);
-		return(false);
-	}
-	MBError MBPP_FileListDownloadHandler::Close()
-	{
-		assert(false);
-		return(false);
-	}
+	//MBError MBPP_FileListDownloadHandler::Open(std::string const& FileToDownloadName)
+	//{
+	//	assert(false);
+	//	return(false);
+	//}
+	//MBError MBPP_FileListDownloadHandler::InsertData(const void* Data, size_t DataSize)
+	//{
+	//	assert(false);
+	//	return(false);
+	//}
+	//MBError MBPP_FileListDownloadHandler::Close()
+	//{
+	//	assert(false);
+	//	return(false);
+	//}
 	//END MBPP_FileListDownloadHandler
 
 
@@ -1713,14 +1723,14 @@ namespace MBPM
 	{
 		return(m_ServerConnection->IsConnected());
 	}
-	MBError MBPP_Client::p_GetFiles(std::string const& PacketName,std::vector<std::string> const& FilesToGet, std::string const& OutputDirectory)
+	MBError MBPP_Client::p_GetFiles(std::string const& PacketName, std::vector<std::string> const& FilesToGet, MBPP_FileListDownloadHandler* DownloadHandler)
 	{
 		MBError ReturnValue = true;
 		MBPP_GenericRecord RecordToSend;
 		std::string PacketNameData = MBPP_EncodeString(PacketName);
 		RecordToSend.ComputerInfo = p_GetComputerInfo();
 		RecordToSend.Type = MBPP_RecordType::GetFiles;
-		RecordToSend.RecordData = MBPP_EncodeString(PacketName)+MBPP_GenerateFileList(FilesToGet);
+		RecordToSend.RecordData = MBPP_EncodeString(PacketName) + MBPP_GenerateFileList(FilesToGet);
 		RecordToSend.RecordSize = RecordToSend.RecordData.size();
 		m_ServerConnection->SendData(MBPP_GetRecordData(RecordToSend));
 		std::string RecievedData = m_ServerConnection->RecieveData();
@@ -1735,17 +1745,18 @@ namespace MBPM
 		}
 		else
 		{
-			ReturnValue = p_DownloadFileList(RecievedData, MBPP_GenericRecordHeaderSize, m_ServerConnection.get(), OutputDirectory,FilesToGet);
+			ReturnValue = p_DownloadFileList(RecievedData, MBPP_GenericRecordHeaderSize, m_ServerConnection.get(), DownloadHandler);
+			//ReturnValue = p_DownloadFileList(RecievedData, MBPP_GenericRecordHeaderSize, m_ServerConnection.get(), OutputDirectory, FilesToGet);
 		}
 		return(ReturnValue);
 	}
-	MBError MBPP_Client::p_GetDirectory(std::string const& Packet,std::string const& DirectoryToGet, std::string const& OutputDirectory) 
+	MBError MBPP_Client::p_GetDirectory(std::string const& PacketName, std::string const& DirectoryToGet, MBPP_FileListDownloadHandler* DownloadHandler)
 	{
 		MBError ReturnValue = true;
 		MBPP_GenericRecord RecordToSend;
 		RecordToSend.Type = MBPP_RecordType::GetDirectory;
 		RecordToSend.ComputerInfo = p_GetComputerInfo();
-		RecordToSend.RecordData = MBPP_EncodeString(Packet)+ MBPP_GenerateFileList({ DirectoryToGet });
+		RecordToSend.RecordData = MBPP_EncodeString(PacketName) + MBPP_GenerateFileList({ DirectoryToGet });
 		RecordToSend.RecordSize = RecordToSend.RecordData.size();
 		m_ServerConnection->SendData(MBPP_GetRecordData(RecordToSend));
 		std::string RecievedData = m_ServerConnection->RecieveData();
@@ -1753,16 +1764,26 @@ namespace MBPM
 		{
 			RecievedData += m_ServerConnection->RecieveData();
 		}
-		if (RecievedData.size() < MBPP_GenericRecordHeaderSize+2)
+		if (RecievedData.size() < MBPP_GenericRecordHeaderSize + 2)
 		{
 			ReturnValue = false;
 			ReturnValue.ErrorMessage = "Server didn't send enough data for a MBPPGenericHeader";
 		}
 		else
 		{
-			ReturnValue = p_DownloadFileList(RecievedData, MBPP_GenericRecordHeaderSize, m_ServerConnection.get(), OutputDirectory);
+			ReturnValue = p_DownloadFileList(RecievedData, MBPP_GenericRecordHeaderSize, m_ServerConnection.get(), DownloadHandler);
 		}
 		return(ReturnValue);
+	}
+	MBError MBPP_Client::p_GetFiles(std::string const& PacketName,std::vector<std::string> const& FilesToGet, std::string const& OutputDirectory)
+	{
+		MBPP_FileListDownloader DownloaderToUse(OutputDirectory);
+		return(p_GetFiles(PacketName, FilesToGet, &DownloaderToUse));
+	}
+	MBError MBPP_Client::p_GetDirectory(std::string const& Packet,std::string const& DirectoryToGet, std::string const& OutputDirectory) 
+	{
+		MBPP_FileListDownloader DownloaderToUse(OutputDirectory);
+		return(p_GetDirectory(Packet, DirectoryToGet, &DownloaderToUse));
 	}
 	MBError MBPP_Client::p_DownloadServerFilesInfo(std::string const& PacketName, std::string const& OutputDirectory,std::vector<std::string> const& OutputFileNames)
 	{
@@ -2057,7 +2078,7 @@ namespace MBPM
 				}
 			}
 		}
-		DownloadHandler->Close();
+		//DownloadHandler->Close();
 		return(ReturnValue);
 	}
 	MBError MBPP_Client::DownloadPacket(std::string const& OutputDirectory, std::string const& PacketName)
@@ -2346,6 +2367,21 @@ namespace MBPM
 			{
 				break;
 			}
+		}
+		return(ReturnValue);
+	}
+	MBError MBPP_Client::DownloadPacketFiles(std::string const& PacketName,std::vector<std::string> const& FilesToDownload, MBPP_FileListDownloadHandler* DownloadHandler)
+	{
+		MBError ReturnValue = true;
+		ReturnValue = p_GetFiles(PacketName,FilesToDownload,DownloadHandler);
+		return(ReturnValue);
+	}
+	MBError MBPP_Client::DownloadPacketDirectories(std::string const& PacketName, std::vector<std::string> const& DirectoriesToDownload, MBPP_FileListDownloadHandler* DownloadHandler)
+	{
+		MBError ReturnValue = true;
+		for (size_t i = 0; i < DirectoriesToDownload.size(); i++)
+		{
+			ReturnValue = p_GetDirectory(PacketName, DirectoriesToDownload[i], DownloadHandler);
 		}
 		return(ReturnValue);
 	}

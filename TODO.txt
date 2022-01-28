@@ -25,3 +25,9 @@ default librarys för operativsystem, specifikt pthread, winsock, dl  osv.
 option för att istället för att se allt som downloadas så visar bara totala tiden
 
 kunna lisa specifika delar av ett index med index list
+
+för att göra semantiken lite smidiagre 
+
+dokumentera allt, framförallt internet protokollet och MBMP_FileInfo formatet...
+
+fixa så att get har att man ser download tiden

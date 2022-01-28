@@ -235,7 +235,7 @@ namespace MBPM
 		MBPP_DirectoryInfoNode_ConstIterator& operator++();
 		MBPP_DirectoryInfoNode_ConstIterator& operator++(int);
 		MBPP_FileInfo const& operator*();
-		MBPP_FileInfo const& operator->();
+		const MBPP_FileInfo * operator->();
 	};
 	
 	struct MBPP_DirectoryInfoNode
@@ -392,6 +392,8 @@ namespace MBPM
 	};
 	void CreatePacketFilesData(std::string const& PacketToHashDirectory,std::string const& FileName = "MBPM_FileInfo");
 	void CreatePacketFilesData(std::string const& PacketToHashDirectory,MBUtility::MBSearchableOutputStream* OutputStream);
+	void UpdateFileInfo(std::string const& PacketToIndexm, std::string const& FileName = "MBPM_FileInfo");
+	void UpdateFileInfo(std::string const& PacketToIndexm, MBUtility::MBSearchableOutputStream* OutputStream);
 	MBPP_FileInfoReader CreateFileInfo(std::string const& DirectoryToIterate);
 	//generella
 	class MBPP_FileListDownloadHandler
@@ -399,13 +401,17 @@ namespace MBPM
 	private:
 	public:
 		virtual MBError NotifyFiles(std::vector<std::string> const& FileToNotify) { return(MBError(true)); };
-		virtual MBError Open(std::string const& FileToDownloadName);
-		virtual MBError InsertData(const void* Data, size_t DataSize);
-		virtual MBError Close();
+		virtual MBError Open(std::string const& FileToDownloadName) = 0;
+		virtual MBError InsertData(const void* Data, size_t DataSize) = 0;
+		virtual MBError Close() = 0;
 		MBError InsertData(std::string const& DataToInsert)
 		{
 			return(InsertData(DataToInsert.data(), DataToInsert.size()));
 		};
+		virtual ~MBPP_FileListDownloadHandler()
+		{
+
+		}
 	};
 	//laddar ner tills den fått alla filer, *inte* efter att den 
 	class MBPP_FileListDownloader : public MBPP_FileListDownloadHandler
@@ -418,7 +424,7 @@ namespace MBPM
 		MBPP_FileListDownloader(std::string const& OutputDirectory);
 		MBError Open(std::string const& FileToDownloadName) override;
 		MBError InsertData(const void* Data, size_t DataSize) override;
-		MBError Close();
+		MBError Close() override;
 	};
 	class MBPP_FileListMemoryMapper : public MBPP_FileListDownloadHandler
 	{
@@ -474,8 +480,13 @@ namespace MBPM
 		MBError p_DownloadFileList(std::string const& InitialData, size_t DataOffset, MBSockets::ConnectSocket* SocketToUse, std::string const& OutputTopDirectory
 			, std::vector<std::string> const& OutputFileNames = {});
 		MBError p_DownloadFileList(std::string const& InitialData, size_t DataOffset, MBSockets::ConnectSocket* SocketToUse, MBPP_FileListDownloadHandler* DownloadHandler);
+		
+		MBError p_GetFiles(std::string const& PacketName, std::vector<std::string> const& FilesToGet, MBPP_FileListDownloadHandler*);
+		MBError p_GetDirectory(std::string const& PacketName, std::string const& FilesToGet, MBPP_FileListDownloadHandler*);
+		
 		MBError p_GetFiles(std::string const& PacketName,std::vector<std::string> const& FilesToGet,std::string const& OutputDirectory);
 		MBError p_GetDirectory(std::string const& PacketName,std::string const& DirectoryToGet,std::string const& OutputDirectory);
+		
 		MBError p_DownloadServerFilesInfo(std::string const& PacketName, std::string const& OutputDirectory, std::vector<std::string> const& OutputFileNames);
 		MBPP_UploadRequest_Response p_GetLoginResult(std::string const& PacketName, MBPP_UserCredentialsType CredentialsType, std::string const& CredentialsData,MBError* OutError);
 		MBPP_ComputerInfo p_GetComputerInfo();
@@ -483,9 +494,11 @@ namespace MBPM
 		MBError p_UploadPacket(std::string const& PacketName, MBPP_UserCredentialsType CredentialsType, std::string const& CredentialsData, std::string const& PacketDirectory, std::vector<std::string> const& FilesToUpload,std::vector<std::string> const& FilesToDelete);
 	public:
 		void SetLogTerminal(MBCLI::MBTerminal* NewLogTerminal);
+
 		MBError Connect(MBPP_TransferProtocol TransferProtocol, std::string const& Domain, std::string const& Port);
 		MBError Connect(MBPP_PacketHost const& PacketHost);
 		bool IsConnected();
+
 		void SetComputerInfo(MBPP_ComputerInfo NewComputerInfo);
 		MBPP_ComputerInfo GetComputerInfo() { return(m_CurrentComputerInfo); }
 		static MBPP_ComputerInfo GetSystemComputerInfo();
@@ -501,6 +514,9 @@ namespace MBPM
 		
 		MBError DownloadPacketFiles(std::string const& OutputDirectory, std::string const& PacketName,std::vector<std::string> const& FilesToGet);
 		MBError DownloadPacketDirectories(std::string const& OutputDirectory, std::string const& PacketName,std::vector<std::string> const& DirectoriesToGet);
+		
+		MBError DownloadPacketFiles(std::string const& PacketName,std::vector<std::string> const& FilesToDownload, MBPP_FileListDownloadHandler* DownloadHandler);
+		MBError DownloadPacketDirectories(std::string const& PacketName, std::vector<std::string> const& DirectorieToDownload, MBPP_FileListDownloadHandler* DownloadHandler);
 		
 		MBPP_FileInfoReader GetPacketFileInfo(std::string const& PacketName,MBError* OutError);
 	};

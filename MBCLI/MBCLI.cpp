@@ -49,6 +49,19 @@ namespace MBCLI
 			}
 		}
 	}
+	std::vector<std::pair<std::string,int>> ProcessedCLInput::GetSingleArgumentOptionList(std::string const& OptionName) const
+	{
+		//Optionent är på formen -{OptionName}:{OptionArgumentUtanMellanslag}
+		std::vector<std::pair<std::string, int>> ReturnValue = {};
+		for (size_t i = 1; i < TotalCommandTokens.size(); i++)
+		{
+			if (TotalCommandTokens[i].substr(0, 1 + OptionName.size() + 1) == "-" + OptionName + ":")
+			{
+				ReturnValue.push_back(std::pair<std::string, int>(TotalCommandTokens[i].substr(1 + OptionName.size() + 1),i));
+			}
+		}
+		return(ReturnValue);
+	}
 	//END ProcessedCLInput
 
 	//BEGIN MBTerminalLoadingbar

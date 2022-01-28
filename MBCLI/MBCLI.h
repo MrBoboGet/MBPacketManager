@@ -31,6 +31,7 @@ namespace MBCLI
 		std::vector<std::string> TopCommandArguments = {};
 		std::unordered_map<std::string, std::vector<size_t>> CommandPositionalOptions = {};
 		//std::vector<std::string> CommandTopDirectives = {};
+		std::vector<std::pair<std::string, int>> GetSingleArgumentOptionList(std::string const& OptionName) const;
 		ProcessedCLInput(int argc, const char* const* argv);
 	};
 	class MBTerminal;
@@ -64,6 +65,7 @@ namespace MBCLI
 	public:
 		MBTerminal();
 		void Print(std::string const& StringToPrint);
+		//void Print(const void* DataToPrint,size_t DataSize);
 		void PrintLine(std::string const& StringToPrint);
 		void GetLine(std::string& OutLine);
 		void SetPasswordInput(bool IsPassword);
