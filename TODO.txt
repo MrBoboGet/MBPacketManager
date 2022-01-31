@@ -33,3 +33,5 @@ dokumentera allt, framförallt internet protokollet och MBMP_FileInfo formatet...
 fixa så att get har att man ser download tiden
 
 command för att uppdatera alla dependancies
+
+tog extremt mycket minne att jämföra den installerade ffmpegen och den lokala, borde kolla upp det där

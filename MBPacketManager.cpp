@@ -448,6 +448,7 @@ namespace MBPM
 				"Secur32.lib\n"
 				"Bcrypt.lib\n"
 				"Mfplat.lib\n"
+				"opengl32\n"
 				"Mfuuid.lib\n	"
 				"Strmiids.lib\n)\n";
 		}
