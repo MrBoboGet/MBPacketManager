@@ -1779,16 +1779,33 @@ namespace MBPM
 			size_t DotPosition = CurrentInput.find('.');
 			size_t SlashPosition = CurrentInput.find('/');
 			size_t BackslashPosition = CurrentInput.find('\\');
-			if (p_GetInstalledPacket(CurrentInput).PacketURI != "" && (SlashPosition == CurrentInput.npos && DotPosition == CurrentInput.npos && BackslashPosition == CurrentInput.npos))
+			if (CommandInput.CommandOptions.find("user") != CommandInput.CommandOptions.end())
 			{
-				PacketDirectories.push_back(p_GetInstalledPacket(CurrentInput));
+				if (p_GetUserPacket(CurrentInput).PacketURI != "" && (SlashPosition == CurrentInput.npos && DotPosition == CurrentInput.npos && BackslashPosition == CurrentInput.npos))
+				{
+					PacketDirectories.push_back(p_GetUserPacket(CurrentInput));
+				}
+				else
+				{
+					PacketIdentifier NewPacket;
+					NewPacket.PacketURI = CurrentInput;
+					NewPacket.PacketLocation = PacketLocationType::Local;
+					PacketDirectories.push_back(NewPacket);
+				}
 			}
 			else
 			{
-				PacketIdentifier NewPacket;
-				NewPacket.PacketURI = CurrentInput;
-				NewPacket.PacketLocation = PacketLocationType::Local;
-				PacketDirectories.push_back(NewPacket);
+				if (p_GetInstalledPacket(CurrentInput).PacketURI != "" && (SlashPosition == CurrentInput.npos && DotPosition == CurrentInput.npos && BackslashPosition == CurrentInput.npos))
+				{
+					PacketDirectories.push_back(p_GetInstalledPacket(CurrentInput));
+				}
+				else
+				{
+					PacketIdentifier NewPacket;
+					NewPacket.PacketURI = CurrentInput;
+					NewPacket.PacketLocation = PacketLocationType::Local;
+					PacketDirectories.push_back(NewPacket);
+				}
 			}
 		}
 

@@ -12,32 +12,42 @@ set(MBPM_DEPENDENCIES
 	MrBoboSockets
 )
 set(MBPM_SystemLibraries
-
+Ws2_32.lib
+Secur32.lib
+Bcrypt.lib
+Mfplat.lib
+Mfuuid.lib
+	Strmiids.lib
 )
-set(MBPM_ExtraIncludeDirectories
-	
+set(MBPM_DependanciesIncludeDirectories
 )
-
 set(MBPM_TARGET_EXTPACKET_LIBRARIES )
 set(MBPM_TARGET_COMPILE_OPTIONS )
 set(MBPM_TARGET_LINK_OPTIONS )
-set(MBPM_CXX_FLAGS ${CMAKE_CXX_FLAGS})
-set(MBPM_CXX_FLAGS_DEBUG ${CMAKE_CXX_FLAGS_DEBUG})
-set(MBPM_CXX_FLAGS_RELEASE ${CMAKE_CXX_FLAGS_RELEASE})
 #MBPM_Functions#variables MBPM_DEPENDENCIES
 #MBPM_TARGET_EXTPACKET_LIBRARIES
 #MBPM_TARGET_COMPILE_OPTIONS
 #MBPM_TARGET_LINK_OPTIONS
 #Environment variables MBPM_PACKETS_INSTALL_DIRECTORY
+set(MBPM_CXX_FLAGS ${CMAKE_CXX_FLAGS})
+set(MBPM_CXX_FLAGS_DEBUG ${CMAKE_CXX_FLAGS_DEBUG})
+set(MBPM_CXX_FLAGS_RELEASE ${CMAKE_CXX_FLAGS_RELEASE})
 macro(MBPM_UpdateLibraries TargetToUpdate LinkType BuildType)
 	set(MBPM_TARGET_EXTPACKET_LIBRARIES "")
 	foreach(PACKET IN LISTS MBPM_DEPENDENCIES)
 		set(NewLibraryName "")
-		set(NewLibraryToAdd "$ENV{MBPM_PACKETS_INSTALL_DIRECTORY}/${PACKET}/MBPM_Builds/")
+		set(PacketName ${PACKET})
+		set(LibraryName ${PACKET})
+		if(${PACKET} MATCHES "#")
+			string(REPLACE " " ";" PACKET_PART_LIST ${PACKET})
+			set(PacketName list(GET ${PACKET_PART_LIST} 0))
+			set(LibraryName list(GET ${PACKET_PART_LIST} 1))
+		endif()
+		set(NewLibraryToAdd "$ENV{MBPM_PACKETS_INSTALL_DIRECTORY}/${PacketName}/MBPM_Builds/")
 		if(${LinkType} STREQUAL "STATIC")
-			set(NewLibraryName "${PACKET}_S")
+			set(NewLibraryName "${LibraryName}_S")
 		elseif(${LinkType} STREQUAL "DYNAMIC")
-			set(NewLibraryName "${PACKET}_D")
+			set(NewLibraryName "${LibraryName}_D")
 		endif()
 		if(${BuildType} STREQUAL "DEBUG")
 			set(NewLibraryName "${NewLibraryName}D")
@@ -81,22 +91,25 @@ endmacro()
 
 macro(MBPM_SetTargetCompileOptions TargetToUpdate LinkType BuildType)
 	set(CMAKE_CXX_FLAGS " ")
-	#set(NEW_TARGET_COMPILE_OPTIONS "")
+	set(CMAKE_CXX_FLAGS_DEBUG " ")
+	set(CMAKE_CXX_FLAGS_RELEASE " ")
+	set(CMAKE_C_FLAGS " ")
+	set(CMAKE_C_FLAGS_DEBUG " ")
+	set(CMAKE_C_FLAGS_RELEASE " ")
+
 	if(${BuildType} STREQUAL "DEBUG" AND ${LinkType} STREQUAL "STATIC")
 		set(NEW_TARGET_COMPILE_OPTIONS "${MBPM_CXX_FLAGS} ${MBPM_CXX_FLAGS_DEBUG}")
-		set(CMAKE_CXX_FLAGS_DEBUG " ")
 	else()
 		set(NEW_TARGET_COMPILE_OPTIONS "${MBPM_CXX_FLAGS} ${MBPM_CXX_FLAGS_RELEASE}")
-		set(CMAKE_CXX_FLAGS_RELEASE " ")
 	endif()
 	string(REPLACE " " ";" NEW_TARGET_COMPILE_OPTIONS_LIST ${NEW_TARGET_COMPILE_OPTIONS})
 	target_compile_options(${TargetToUpdate} PRIVATE ${NEW_TARGET_COMPILE_OPTIONS_LIST})
 	message(${TargetToUpdate} " Compiled with follwing flags: ""${NEW_TARGET_COMPILE_OPTIONS_LIST}")
-
 endmacro()
 
 macro(MBPM_LinkTargetPacketLibraries Target)
 	target_link_libraries(${Target} ${MBPM_TARGET_EXTPACKET_LIBRARIES})
+	target_link_libraries(${Target} ${MBPM_SystemLibraries})
 endmacro()
 
 macro(MBPM_SetTargetIncludeDirectories Target)
