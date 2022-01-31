@@ -11,6 +11,13 @@ set(MBPM_DEPENDENCIES
 	MBParsing
 	MrBoboSockets
 )
+set(MBPM_SystemLibraries
+
+)
+set(MBPM_ExtraIncludeDirectories
+	
+)
+
 set(MBPM_TARGET_EXTPACKET_LIBRARIES )
 set(MBPM_TARGET_COMPILE_OPTIONS )
 set(MBPM_TARGET_LINK_OPTIONS )

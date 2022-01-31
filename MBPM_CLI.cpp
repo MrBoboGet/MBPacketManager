@@ -529,7 +529,7 @@ namespace MBPM
 		{
 			if (!InfoToPrint.ObjectExists(ObjectsToprint[i]))
 			{
-				Errors.push_back(ObjectsToprint[i]);
+				Errors.push_back(ObjectsToprint[i]); 
 			}
 			if (InfoToPrint.GetDirectoryInfo(ObjectsToprint[i]) != nullptr)
 			{

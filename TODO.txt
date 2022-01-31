@@ -31,3 +31,5 @@ för att göra semantiken lite smidiagre
 dokumentera allt, framförallt internet protokollet och MBMP_FileInfo formatet...
 
 fixa så att get har att man ser download tiden
+
+command för att uppdatera alla dependancies

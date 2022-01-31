@@ -32,6 +32,11 @@ namespace MBPM
 		NonMBBuild,
 		Null
 	};
+	struct MBPM_SubLibrary
+	{
+		std::string LibraryName = "";
+		std::vector<MBPM_CompileOutputConfiguration> OutputConfigurations = {};
+	};
 	struct MBPM_PacketInfo
 	{
 		std::string PacketName = "";
@@ -43,6 +48,8 @@ namespace MBPM
 		std::vector<std::string> PacketDependancies = {};
 		std::map<MBPM_CompileOutputConfiguration, std::string> OutputConfigurationTargetNames = {};
 		std::vector<std::string> ExportedTargets = {}; //Targets som ska komma till pathen, library targets inkluderas ej
+		std::vector<std::string> ExtraIncludeDirectories = {};
+		std::vector<MBPM_SubLibrary> SubLibraries = {};
 	};
 	MBPM_PacketInfo ParseMBPM_PacketInfo(std::string const& PacketPath);
 	MBError WriteMBPM_PacketInfo(MBPM_PacketInfo const& PacketToWrite);
@@ -111,6 +118,8 @@ namespace MBPM
 	MBError InstallCompiledPacket(std::string const& PacketDirectory);
 
 	MBError CompileAndInstallPacket(std::string const& PacketToCompileDirectory);
+
+	bool PacketIsPrecompiled(std::string const& PacketDirectoryToCheck, MBError* OutError);
 
 	std::string GetSystemPacketsDirectory();
 	//MBError SetSystemPacketsDirectory(std::string const& DirectoryPath);

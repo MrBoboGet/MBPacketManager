@@ -255,6 +255,28 @@ namespace MBPM
 				}
 			}
 		}
+		//För include
+		if (ParsedJson.HasAttribute("ExtraIncludeDirectories"))
+		{
+			MBParsing::JSONObject const& IncludeDirectoryObjects = ParsedJson.GetAttribute("ExtraIncludeDirectories");
+			if (IncludeDirectoryObjects.GetType() != MBParsing::JSONObjectType::Array)
+			{
+				//throw std::runtime_error("ErrorIncludeDirectories not of array type!");
+				ReturnValue = MBPM_PacketInfo();
+				return(ReturnValue);
+			}
+			std::vector<MBParsing::JSONObject> const& IncludeDirectories = IncludeDirectoryObjects.GetArrayData();
+			for (size_t i = 0; i < IncludeDirectories.size(); i++)
+			{
+				if (IncludeDirectories[i].GetType() != MBParsing::JSONObjectType::String)
+				{
+					ReturnValue = MBPM_PacketInfo();
+					return(ReturnValue);
+				}
+				ReturnValue.ExtraIncludeDirectories.push_back(IncludeDirectories[i].GetStringData());
+			}
+		}
+
 		//för outout configuratuions
 		MBParsing::JSONObject OutputConfiguration = ParsedJson.GetAttribute("OutputTargetNames");
 		if (OutputConfiguration.HasAttribute("StaticDebug"))
@@ -342,15 +364,68 @@ namespace MBPM
 		}
 		return(ReturnValue);
 	}
+	std::vector<MBPM_PacketInfo> h_GetDependanciesInfo(std::vector<std::string> const& DependanciesToCheck)
+	{
+		std::vector<MBPM_PacketInfo> ReturnValue;
+		std::string InstallDirectory = GetSystemPacketsDirectory();
+		for (size_t i = 0; i < DependanciesToCheck.size(); i++)
+		{
+			ReturnValue.push_back(ParseMBPM_PacketInfo(InstallDirectory+"/"+DependanciesToCheck[i]+"/MBPM_PacketInfo"));
+		}
+		return(ReturnValue);
+	}
 	void h_WriteMBPMCmakeValues(std::vector<std::string> const& Dependancies, std::ofstream& OutputFile,std::string const& StaticMBPMData)
 	{
 		OutputFile << "##BEGIN MBPM_VARIABLES\n";
 		OutputFile << "set(MBPM_DEPENDENCIES \n";
-		for (auto const& Packet : Dependancies)
+
+		std::vector<MBPM_PacketInfo> TargetDependancies = h_GetDependanciesInfo(Dependancies);
+
+		for (auto const& Packet : TargetDependancies)
 		{
-			OutputFile << "\t" << Packet << std::endl;
+			if (Packet.OutputConfigurationTargetNames.size() > 0)
+			{
+				OutputFile << "\t" << Packet.PacketName << "\n";
+			}
+			for (size_t i = 0; i < Packet.SubLibraries.size(); i++)
+			{
+				OutputFile << "\t"<<Packet.PacketName<<"#" << Packet.SubLibraries[i].LibraryName<<"\n";
+			}
 		}
 		OutputFile << ")\n";
+		
+		//System libraries
+		OutputFile << "set(MBPM_SystemLibraries\n";
+		if constexpr(MBUtility::IsWindows())
+		{
+			OutputFile << "Ws2_32.lib\n"
+				"Secur32.lib\n"
+				"Bcrypt.lib\n"
+				"Mfplat.lib\n"
+				"Mfuuid.lib\n	"
+				"Strmiids.lib\n)\n";
+		}
+		else//ska egentligen kolla om det är unix...
+		{
+			OutputFile <<	"pthread\n"
+							"dl\n";
+							"m\n)\n";
+		}
+		//
+
+		//Include directories
+		OutputFile << "set(MBPM_DependanciesIncludeDirectories\n";
+		for (size_t i = 0; i < TargetDependancies.size(); i++)
+		{
+			for (size_t j = 0; j < TargetDependancies[i].ExtraIncludeDirectories.size(); j++)
+			{
+				//Verifiera pathen...
+				OutputFile << "$ENV{MBPM_PACKETS_INSTALL_DIRECTORY}/" << TargetDependancies[i].PacketName << "/" << TargetDependancies[i].ExtraIncludeDirectories[j]<<"\n";
+			}
+		}
+		OutputFile << ")\n";
+		//
+
 
 		OutputFile << "set(MBPM_TARGET_EXTPACKET_LIBRARIES )\n";
 		OutputFile << "set(MBPM_TARGET_COMPILE_OPTIONS )\n";
