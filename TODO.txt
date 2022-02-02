@@ -35,3 +35,11 @@ fixa så att get har att man ser download tiden
 command för att uppdatera alla dependancies
 
 tog extremt mycket minne att jämföra den installerade ffmpegen och den lokala, borde kolla upp det där
+
+upload fastnar ibland på vissa ställen
+
+mbpm upload MBSearchEngine --installed -d /MBPM_Builds/ --computerdiff
+
+servern crashar om man försöker ladda upp packet med namn ""
+
+ta bort den gammla "downloadfilelist" och använd bara den nya, gör bland annat så att allt får en fin download bar samt att det inte är lika jobbigt att uppdatera

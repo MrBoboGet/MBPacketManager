@@ -455,7 +455,8 @@ namespace MBPM
 		else//ska egentligen kolla om det är unix...
 		{
 			OutputFile <<	"pthread\n"
-							"dl\n";
+							"dl\n"
+							"asound\n"
 							"m\n)\n";
 		}
 		//
@@ -1165,6 +1166,117 @@ namespace MBPM
 		if (ReturnValue)
 		{
 			ReturnValue = InstallCompiledPacket(PacketToCompileDirectory);
+		}
+		return(ReturnValue);
+	}
+	std::string h_ConfigurationPostfix(MBPM_CompileOutputConfiguration Configuration)
+	{
+		std::string ReturnValue = "";
+		if (Configuration == MBPM_CompileOutputConfiguration::StaticDebug || Configuration == MBPM_CompileOutputConfiguration::StaticRelease)
+		{
+			ReturnValue += "_S";
+		}
+		else
+		{
+			ReturnValue += "_D";
+		}
+		if(Configuration == MBPM_CompileOutputConfiguration::DynamicDebug || Configuration == MBPM_CompileOutputConfiguration::StaticDebug)
+		{
+			ReturnValue += "D";
+		}
+		else
+		{
+			ReturnValue += "R";
+		}
+		return(ReturnValue);
+	}
+	bool PacketIsPrecompiled(std::string const& PacketDirectoryToCheck, MBError* OutError)
+	{
+		bool ReturnValue = true;
+		try
+		{
+			MBPM_PacketInfo PacketInfo = ParseMBPM_PacketInfo(PacketDirectoryToCheck + "/MBPM_PacketInfo");
+			if (PacketInfo.PacketName == "")
+			{
+				*OutError = false;
+				OutError->ErrorMessage = "No packet in packet directory";
+				return(false);
+			}
+			for (size_t i = 0; i < PacketInfo.ExportedTargets.size(); i++)
+			{
+				std::string TargetPath = PacketDirectoryToCheck+"/MBPM_Builds/" + PacketInfo.ExportedTargets[i];
+				if constexpr (MBUtility::IsWindows())
+				{
+					TargetPath += ".exe";
+				}
+				if (!std::filesystem::exists(TargetPath))
+				{
+					ReturnValue = false;
+					return(ReturnValue);
+				}
+				if (!std::filesystem::is_regular_file(TargetPath))
+				{
+					ReturnValue = false;
+					return(ReturnValue);
+				}
+			}
+			for (auto const& Configuration : PacketInfo.OutputConfigurationTargetNames)
+			{
+				std::string LibraryName = Configuration.second;
+				if constexpr (MBUtility::IsWindows())
+				{
+					LibraryName = LibraryName + ".lib";
+				}
+				else
+				{
+					LibraryName = "lib" + LibraryName + ".a";
+				}
+				if (!std::filesystem::exists(PacketDirectoryToCheck + "/MBPM_Builds/" + LibraryName))
+				{
+					ReturnValue = false;
+					return(ReturnValue);
+				}
+				if (!std::filesystem::is_regular_file(PacketDirectoryToCheck + "/MBPM_Builds/" + LibraryName))
+				{
+					ReturnValue = false;
+					return(ReturnValue);
+				}
+			}
+			for (size_t i = 0; i < PacketInfo.SubLibraries.size(); i++)
+			{
+				for (size_t j = 0; j < PacketInfo.SubLibraries[j].OutputConfigurations.size(); j++)
+				{
+					std::string LibraryName = PacketInfo.SubLibraries[i].LibraryName;
+					LibraryName += h_ConfigurationPostfix(PacketInfo.SubLibraries[i].OutputConfigurations[j]);
+					if constexpr (MBUtility::IsWindows())
+					{
+						LibraryName = LibraryName + ".lib";
+					}
+					else
+					{
+						LibraryName = "lib" + LibraryName + ".a";
+					}
+					if (!std::filesystem::exists(PacketDirectoryToCheck + "/MBPM_Builds/" + LibraryName))
+					{
+						ReturnValue = false;
+						return(ReturnValue);
+					}
+					if (!std::filesystem::is_regular_file(PacketDirectoryToCheck + "/MBPM_Builds/" + LibraryName))
+					{
+						ReturnValue = false;
+						return(ReturnValue);
+					}
+				}
+			}
+		}
+		catch (std::exception const& e)
+		{
+			if (OutError != nullptr)
+			{
+				*OutError = false;
+				OutError->ErrorMessage = e.what();
+			}
+			ReturnValue = false;
 		}
 		return(ReturnValue);
 	}

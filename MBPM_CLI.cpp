@@ -900,6 +900,11 @@ namespace MBPM
 		{
 			std::string CurrentPacket = NewPacketsToCompile.top();
 			NewPacketsToCompile.pop();
+			MBError IsPrecompiledError = true;
+			if (MBPM::PacketIsPrecompiled(InstallDirectory + CurrentPacket + "/",&IsPrecompiledError))
+			{
+				continue;
+			}
 			MBPM::CompileAndInstallPacket(InstallDirectory + CurrentPacket + "/");
 		}
 	}
@@ -1127,75 +1132,81 @@ namespace MBPM
 		//aningen innefektivt iomed all kopiering av data men är viktigare med korrekthet just nu
 		std::set<std::string> FilesToSend = {};
 		std::set<std::string> ObjectsToDelete = {};
-		if (CommandInput.CommandPositionalOptions.find("f") != CommandInput.CommandPositionalOptions.end())
+		
+		std::vector<std::pair<std::string,int>> FileSpecifications = CommandInput.GetSingleArgumentOptionList("f");
+		for (size_t i = 0; i < FileSpecifications.size(); i++)
 		{
-			std::vector<size_t> const& FilePosition = CommandInput.CommandPositionalOptions.at("f");
-			for (size_t i = 0; i < FilePosition.size(); i++)
+			if (FileSpecifications[i].first.size() == 0 || FileSpecifications[i].first[0] != '/')
 			{
-				if (FilePosition[i] +1< CommandInput.TotalCommandTokens.size())
-				{
-					FilesToSend.insert(CommandInput.TotalCommandTokens[FilePosition[i]+1]);
-				}
+				AssociatedTerminal->PrintLine("Invalid file specification: needs to be an absolute path starting with / relative to packet directory");
+				return;
+			}
+			if (std::filesystem::exists(PacketDirectory + "/" + FileSpecifications[i].first) && std::filesystem::is_regular_file(PacketDirectory + "/" + FileSpecifications[i].first))
+			{
+				FilesToSend.insert(FileSpecifications[i].first);
+			}
+			else
+			{
+				AssociatedTerminal->PrintLine("Cant find file \"" + FileSpecifications[i].first + "\" in packet, omitting to send update");
+				return;
 			}
 		}
-		if (CommandInput.CommandPositionalOptions.find("d") != CommandInput.CommandPositionalOptions.end())
+		std::vector<std::pair<std::string, int>> DirectorySpecifications = CommandInput.GetSingleArgumentOptionList("d");
+		for (size_t i = 0; i < DirectorySpecifications.size(); i++)
 		{
-			std::vector<size_t> OptionPositions = CommandInput.CommandPositionalOptions.at("d");
-			for (size_t i = 0; i < OptionPositions.size(); i++)
+			std::string const& CurrentDirectory = DirectorySpecifications[i].first;
+			if (CurrentDirectory.size() == 0 || CurrentDirectory.front() != '/')
 			{
-				//för varje directory tar vi diffen
-				if (OptionPositions[i] + 1 < CommandInput.TotalCommandTokens.size())
+				AssociatedTerminal->PrintLine("Invalid directory specification: needs to be an absolute path starting with / relative to packet directory");
+				return;
+			}
+			if (!std::filesystem::exists(PacketDirectory + CurrentDirectory) || !std::filesystem::is_directory(PacketDirectory + CurrentDirectory))
+			{
+				AssociatedTerminal->PrintLine("Cant find directory \"" + DirectorySpecifications[i].first + "\" in packet, omitting to send update");
+				return;
+			}
+			MBPP_FileInfoReader DirectoryInfo = CreateFileInfo(PacketDirectory + CurrentDirectory);
+			if (ServerFileInfo.ObjectExists(CurrentDirectory))
+			{
+				MBPP_FileInfoDiff DirectoriesDiff = MBPP_FileInfoReader::GetFileInfoDifference(*ServerFileInfo.GetDirectoryInfo(CurrentDirectory), *DirectoryInfo.GetDirectoryInfo("/"));
+				for (auto const& NewFiles : DirectoriesDiff.AddedFiles)
 				{
-					std::string const& CurrentDirectory = CommandInput.TotalCommandTokens[OptionPositions[i] + 1];
-					if (CurrentDirectory.front() != '/')
+					FilesToSend.insert(CurrentDirectory+NewFiles);
+				}
+				for (auto const& UpdateFiles : DirectoriesDiff.UpdatedFiles)
+				{
+					FilesToSend.insert(CurrentDirectory + UpdateFiles);
+				}
+				for (auto const& RemovedFiles : DirectoriesDiff.RemovedFiles)
+				{
+					ObjectsToDelete.insert(CurrentDirectory + RemovedFiles);
+				}
+				for (auto const& DeletedDirectories : DirectoriesDiff.DeletedDirectories)
+				{
+					ObjectsToDelete.insert(CurrentDirectory+DeletedDirectories);
+				}
+				for (auto const& NewDirectories : DirectoriesDiff.AddedDirectories)
+				{
+					const MBPP_DirectoryInfoNode* NewDirectory = DirectoryInfo.GetDirectoryInfo(NewDirectories);
+					MBPP_DirectoryInfoNode_ConstIterator DirectoryIterator = NewDirectory->begin();
+					while (DirectoryIterator != NewDirectory->end())
 					{
-						AssociatedTerminal->PrintLine("Invalid directory specification: needs to be an absolute path starting with / relative to packet directory");
-						return;
-					}
-					MBPP_FileInfoReader DirectoryInfo = CreateFileInfo(PacketDirectory + CurrentDirectory);
-					if (ServerFileInfo.ObjectExists(CurrentDirectory))
-					{
-						MBPP_FileInfoDiff DirectoriesDiff = MBPP_FileInfoReader::GetFileInfoDifference(*ServerFileInfo.GetDirectoryInfo(CurrentDirectory), *DirectoryInfo.GetDirectoryInfo("/"));
-						for (auto const& NewFiles : DirectoriesDiff.AddedFiles)
-						{
-							FilesToSend.insert(CurrentDirectory+NewFiles);
-						}
-						for (auto const& UpdateFiles : DirectoriesDiff.UpdatedFiles)
-						{
-							FilesToSend.insert(CurrentDirectory + UpdateFiles);
-						}
-						for (auto const& RemovedFiles : DirectoriesDiff.RemovedFiles)
-						{
-							ObjectsToDelete.insert(CurrentDirectory + RemovedFiles);
-						}
-						for (auto const& DeletedDirectories : DirectoriesDiff.DeletedDirectories)
-						{
-							ObjectsToDelete.insert(CurrentDirectory+DeletedDirectories);
-						}
-						for (auto const& NewDirectories : DirectoriesDiff.AddedDirectories)
-						{
-							const MBPP_DirectoryInfoNode* NewDirectory = DirectoryInfo.GetDirectoryInfo(NewDirectories);
-							MBPP_DirectoryInfoNode_ConstIterator DirectoryIterator = NewDirectory->begin();
-							while (DirectoryIterator != NewDirectory->end())
-							{
-								FilesToSend.insert(CurrentDirectory + DirectoryIterator.GetCurrentDirectory() + (*DirectoryIterator).FileName);
-								DirectoryIterator++;
-							}
-						}
-					}
-					else
-					{
-						//tar bara datan vi har
-						const MBPP_DirectoryInfoNode* NewDirectory = DirectoryInfo.GetDirectoryInfo("/");
-						MBPP_DirectoryInfoNode_ConstIterator DirectoryIterator = NewDirectory->begin();
-						while (DirectoryIterator != NewDirectory->end())
-						{
-							FilesToSend.insert(CurrentDirectory + DirectoryIterator.GetCurrentDirectory() + (*DirectoryIterator).FileName);
-							DirectoryIterator++;
-						}
-						
+						FilesToSend.insert(CurrentDirectory + DirectoryIterator.GetCurrentDirectory() + (*DirectoryIterator).FileName);
+						DirectoryIterator++;
 					}
 				}
+			}
+			else
+			{
+				//tar bara datan vi har
+				const MBPP_DirectoryInfoNode* NewDirectory = DirectoryInfo.GetDirectoryInfo("/");
+				MBPP_DirectoryInfoNode_ConstIterator DirectoryIterator = NewDirectory->begin();
+				while (DirectoryIterator != NewDirectory->end())
+				{
+					FilesToSend.insert(CurrentDirectory + DirectoryIterator.GetCurrentDirectory() + (*DirectoryIterator).FileName);
+					DirectoryIterator++;
+				}
+						
 			}
 		}
 		OutFilesToSend = {};
@@ -1300,7 +1311,8 @@ namespace MBPM
 		//först så behöver vi skicka data för att se login typen
 		MBPM::MBPP_ComputerInfo PreviousComputerInfo = m_ClientToUse.GetComputerInfo();
 		if (CommandInput.TopCommandArguments.size() < 2 && CommandInput.CommandOptions.find("all") == CommandInput.CommandOptions.end() && CommandInput.CommandOptions.find("user") 
-			== CommandInput.CommandOptions.end() && CommandInput.CommandOptions.find("allinstalled") == CommandInput.CommandOptions.end())
+			== CommandInput.CommandOptions.end() && CommandInput.CommandOptions.find("allinstalled") == CommandInput.CommandOptions.end() 
+			&& CommandInput.CommandOptions.find("installed") == CommandInput.CommandOptions.end())
 		{
 			AssociatedTerminal->PrintLine("Invalid \"upload\" arguments, requires packet to upload and packet directory");
 			return;
@@ -1411,7 +1423,7 @@ namespace MBPM
 		std::string VerificationData = "";
 		//std::set<std::string> FilesToSend = {};
 		bool UseDirectPaths = false;
-		if (CommandInput.CommandPositionalOptions.find("d") != CommandInput.CommandPositionalOptions.end() || CommandInput.CommandPositionalOptions.find("f") != CommandInput.CommandPositionalOptions.end())
+		if (CommandInput.GetSingleArgumentOptionList("d").size() != 0 || CommandInput.GetSingleArgumentOptionList("f").size() != 0)
 		{
 			UseDirectPaths = true;
 		}
