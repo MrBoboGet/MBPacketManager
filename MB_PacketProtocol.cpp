@@ -1897,112 +1897,8 @@ namespace MBPM
 	MBError MBPP_Client::p_DownloadFileList(std::string const& InitialData,size_t InitialDataOffset, MBSockets::ConnectSocket* SocketToUse, std::string const& OutputDirectory
 		,std::vector<std::string> const& OutputFileNames)
 	{
-		MBError ReturnValue = true;
-		size_t MaxRecieveSize = 300000000;
-		std::ofstream FileHandle;
-
-		std::string ResponseData = InitialData; //TODO borde kanske mova intial datan istället
-
-		size_t ResponseDataOffset = InitialDataOffset;
-
-		std::vector<std::string> FilesToDownload = {};
-		size_t CurrentFileIndex = 0;
-		uint64_t CurrentFileSize = -1;
-		uint64_t CurrentFileParsedBytes = -1;
-
-		//parsar fil listan
-		while (ResponseData.size() - ResponseDataOffset < 4)
-		{
-			ResponseData += SocketToUse->RecieveData(MaxRecieveSize);
-		}
-		uint32_t FileListSize = MBParsing::ParseBigEndianInteger(ResponseData.data(), 4, ResponseDataOffset, &ResponseDataOffset);
-		while (ResponseData.size() - ResponseDataOffset < FileListSize)
-		{
-			ResponseData += SocketToUse->RecieveData(MaxRecieveSize);
-		}
-		uint32_t ParsedFileListBytes = 0;
-		while (ParsedFileListBytes < FileListSize)
-		{
-			uint32_t FileNameLength = MBParsing::ParseBigEndianInteger(ResponseData.data(), MBPP_StringLengthSize, ResponseDataOffset, &ResponseDataOffset);
-			std::string NewFileName = std::string(ResponseData.data() + ResponseDataOffset, FileNameLength);
-			if (!MBPP_PathIsValid(NewFileName))
-			{
-				ReturnValue = false;
-				ReturnValue.ErrorMessage = "FileList sent has invalid filepaths";
-				return(ReturnValue);
-			}
-			FilesToDownload.push_back(NewFileName);
-			ResponseDataOffset += FileNameLength;
-			ParsedFileListBytes += MBPP_StringLengthSize + FileNameLength;
-		}
-		if (OutputFileNames.size() != 0)
-		{
-			assert(OutputFileNames.size() == FilesToDownload.size());
-			FilesToDownload = OutputFileNames;
-		}
-		for (size_t i = 0; i < FilesToDownload.size(); i++)
-		{
-			//kollar om directoryn finns, annars skapar vi dem
-			std::string FileDirectory =h_PathToUTF8(std::filesystem::path(OutputDirectory + FilesToDownload[i]).parent_path());
-			std::filesystem::create_directories(FileDirectory);
-		}
-		MBCLI::MBTerminalLoadingbar Loadingbar;
-		if (m_LogTerminal != nullptr)
-		{
-			m_LogTerminal->PrintLine("Files to download:");
-			for (size_t i = 0; i < FilesToDownload.size(); i++)
-			{
-				m_LogTerminal->PrintLine(FilesToDownload[i]);
-			}
-		}
-		while (CurrentFileIndex < FilesToDownload.size())
-		{
-			if (FileHandle.is_open() == false)
-			{
-				//vi måste få info om den fil vi ska skriva till nu
-				while (ResponseData.size() - ResponseDataOffset < 8)
-				{
-					ResponseData += SocketToUse->RecieveData(MaxRecieveSize);
-				}
-				CurrentFileSize = MBParsing::ParseBigEndianInteger(ResponseData.data(), 8, ResponseDataOffset, &ResponseDataOffset);
-				CurrentFileParsedBytes = 0;
-				//OBS!!! egentligen en security risk om vi inte kollar att filen är inom directoryn
-				FileHandle.open(OutputDirectory + FilesToDownload[CurrentFileIndex],std::ios::out|std::ios::binary);
-				if (m_LogTerminal != nullptr)
-				{
-					Loadingbar = m_LogTerminal->CreateLineLoadingBar(FilesToDownload[CurrentFileIndex] + " ("+MBCLI::MBTerminal::GetByteSizeString(CurrentFileSize)+")",0);
-				}
-			}
-			else
-			{
-				//all ny data vi får nu ska tillhöra filen
-				//antar också att response data är tom här
-				if (ResponseData.size() == ResponseDataOffset)
-				{
-					ResponseData = SocketToUse->RecieveData(MaxRecieveSize);
-					ResponseDataOffset = 0;
-				}
-				uint64_t FileBytes = std::min((uint64_t)ResponseData.size() - ResponseDataOffset, CurrentFileSize - CurrentFileParsedBytes);
-				FileHandle.write(ResponseData.data() + ResponseDataOffset, FileBytes);
-				CurrentFileParsedBytes += FileBytes;
-				ResponseDataOffset += FileBytes;
-				if (m_LogTerminal != nullptr)
-				{
-					Loadingbar.UpdateProgress(double(CurrentFileParsedBytes)/double(CurrentFileSize));
-				}
-				if (CurrentFileParsedBytes == CurrentFileSize)
-				{
-					FileHandle.flush();
-					FileHandle.close();
-					if (m_LogTerminal != nullptr)
-					{
-						Loadingbar.Finalize();
-					}
-					CurrentFileIndex += 1;
-				}
-			}
-		}
-		return(ReturnValue);
+		MBPP_FileListDownloader DownloaderToUse = MBPP_FileListDownloader(OutputDirectory);
+		return(p_DownloadFileList(InitialData, InitialDataOffset, SocketToUse, &DownloaderToUse));
 	}
 	 MBError MBPP_Client::p_DownloadFileList(std::string const& InitialData, size_t DataOffset, MBSockets::ConnectSocket* SocketToUse, MBPP_FileListDownloadHandler* DownloadHandler)
 	{
@@ -2042,6 +1938,15 @@ namespace MBPM
 			return(ReturnValue);
 		}
 		bool NewFile = true;
+		MBCLI::MBTerminalLoadingbar Loadingbar;
+		if (m_LogTerminal != nullptr && m_LoggingEnabled)
+		{
+			m_LogTerminal->PrintLine("Files to download:");
+			for (size_t i = 0; i < FilesToDownload.size(); i++)
+			{
+				m_LogTerminal->PrintLine(FilesToDownload[i]);
+			}
+		}
 		while (CurrentFileIndex < FilesToDownload.size())
 		{
 			if (NewFile)
@@ -2056,6 +1961,10 @@ namespace MBPM
 				//OBS!!! egentligen en security risk om vi inte kollar att filen är inom directoryn
 				DownloadHandler->Open(FilesToDownload[CurrentFileIndex]);
 				NewFile = false;
+				if (m_LogTerminal != nullptr && m_LoggingEnabled)
+				{
+					Loadingbar = m_LogTerminal->CreateLineLoadingBar(FilesToDownload[CurrentFileIndex] + " (" + MBCLI::MBTerminal::GetByteSizeString(CurrentFileSize) + ")", 0);
+				}
 			}
 			else
 			{
@@ -2070,10 +1979,18 @@ namespace MBPM
 				DownloadHandler->InsertData(ResponseData.data() + ResponseDataOffset, FileBytes);
 				CurrentFileParsedBytes += FileBytes;
 				ResponseDataOffset += FileBytes;
+				if (m_LogTerminal != nullptr && m_LoggingEnabled)
+				{
+					Loadingbar.UpdateProgress(double(CurrentFileParsedBytes) / double(CurrentFileSize));
+				}
 				if (CurrentFileParsedBytes == CurrentFileSize)
 				{
 					ReturnValue = DownloadHandler->Close();
 					NewFile = true;
+					if (m_LogTerminal != nullptr && m_LoggingEnabled)
+					{
+						Loadingbar.Finalize();
+					}
 					CurrentFileIndex += 1;
 				}
 			}
@@ -2387,6 +2304,7 @@ namespace MBPM
 	}
 	MBPP_FileInfoReader MBPP_Client::GetPacketFileInfo(std::string const& PacketName, MBError* OutError)
 	{
+		bool PreviousEnableLoggin = m_LoggingEnabled;
 		MBPP_FileListMemoryMapper MemoryMapper = MBPP_FileListMemoryMapper();
 		MBPP_FileInfoReader ReturnValue;
 		MBError GetPacketError = true;
@@ -2403,6 +2321,7 @@ namespace MBPM
 			OutError->ErrorMessage = "Not connected to client";
 			return(ReturnValue);
 		}
+		DisableLogging();
 		std::string RecievedData = m_ServerConnection->RecieveData();
 		while (m_ServerConnection->IsConnected() && RecievedData.size() < MBPP_GenericRecordHeaderSize)
 		{
@@ -2434,6 +2353,10 @@ namespace MBPM
 		if (OutError != nullptr)
 		{
 			*OutError = std::move(GetPacketError);
+		}
+		if (PreviousEnableLoggin)
+		{
+			EnableLoggin();
 		}
 		return(ReturnValue);
 	}

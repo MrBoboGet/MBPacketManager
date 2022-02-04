@@ -967,6 +967,11 @@ namespace MBPM
 		std::vector<std::string> ObjectsToGet = {};
 		for (size_t i = 1; i < CommandInput.TopCommandArguments.size(); i++)
 		{
+			if (CommandInput.TopCommandArguments[i] == "" || CommandInput.TopCommandArguments[i][0] != '/')
+			{
+				AssociatedTerminal->PrintLine("Filesystem objects to get has to be absolute path starting with /");
+				return;
+			}
 			ObjectsToGet.push_back(CommandInput.TopCommandArguments[i]);
 		}
 		if (ObjectsToGet.size() == 0)
@@ -982,6 +987,7 @@ namespace MBPM
 		}
 		else
 		{
+			m_ClientToUse.DisableLogging();
 			DownloadHandler = std::unique_ptr<MBPP_FileListDownloadHandler>(new DownloadPrinter(AssociatedTerminal));
 		}
 		if (RemotePacket)

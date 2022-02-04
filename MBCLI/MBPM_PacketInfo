@@ -6,6 +6,6 @@
 		"StaticRelease": "MBCLI_SR",
 		"StaticDebug": "MBCLI_SD"
 	},
-	"ExportedExecutableTargets":["mbpm"],
-	"Dependancies":["MBUtility"],
+	"ExportedExecutableTargets":[],
+	"Dependancies":["MBUtility"]
 }

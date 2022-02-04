@@ -169,11 +169,12 @@ namespace MBPM
 		char* Result = std::getenv("MBPM_PACKETS_INSTALL_DIRECTORY");
 		if (Result == nullptr)
 		{
+			throw std::runtime_error("MBPM_PACKETS_INSTALL_DIRECTORY environment variable not set");
 			return("");
 		}
 		else
 		{
-			return(Result);
+			return(std::string(Result)+"/");
 		}
 	}
 //	MBError SetSystemPacketsDirectory(std::string const& DirectoryPath)

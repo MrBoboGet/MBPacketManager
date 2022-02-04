@@ -13,11 +13,14 @@ int main(int argc,char** argv)
 	////return(MBPM::MBCLI_Main(argc, argv));
 	//
 	//mbpm upload MBSearchEngine --installed -d /MBPM_Builds/ --computerdiff
-	//const int argc2 = 3;
+	//const int argc2 = 6;
 	//char* argv2[argc2];
 	//argv2[0] = "mbpm";
-	//argv2[1] = "install";
-	//argv2[2] = "MBSearchEngine";
+	//argv2[1] = "get";
+	//argv2[2] = "MBRadio";
+	//argv2[3] = "/MBRadioMain.cpp";
+	//argv2[4] = "--stdout";
+	//argv2[5] = "--remote";
 	//argc = argc2;
 	//argv = argv2;
 	

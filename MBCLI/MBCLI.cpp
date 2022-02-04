@@ -2,12 +2,14 @@
 #include <iostream>
 #include <MBUtility/MBCompileDefinitions.h>
 #include <cmath>
-
+#include <exception>
+#include <stdexcept>
 #if  defined(WIN32) ||  defined(_WIN32) || defined(_WIN32_)
 #include <windows.h>
 #else
 #include <termios.h>
 #include <unistd.h>
+#include <sys/ioctl.h>
 #endif // WIN32 || _WIN32
 
 namespace MBCLI
@@ -342,5 +344,84 @@ namespace MBCLI
 			ReturnValue = std::to_string(NumberOfBytes / 1000000000) + " GB";
 		}
 		return(ReturnValue);
+	}
+
+	CursorPosition MBTerminal::GetCursorPosition()
+	{
+		CursorPosition ReturnValue;
+#ifdef WIN32
+		HANDLE hStdin = GetStdHandle(STD_OUTPUT_HANDLE);
+		CONSOLE_SCREEN_BUFFER_INFO CurrentBuffer;
+		bool Result = GetConsoleScreenBufferInfo(hStdin, &CurrentBuffer);
+		ReturnValue.RowIndex = CurrentBuffer.dwCursorPosition.Y;
+		ReturnValue.ColumnIndex = CurrentBuffer.dwCursorPosition.X;
+		if (!Result)
+		{
+			ReturnValue.RowIndex = -1;
+			ReturnValue.ColumnIndex = -1;
+			std::cout<<GetLastError()<<std::endl;
+		}
+#else
+
+#endif
+		return(ReturnValue);
+	}
+	void MBTerminal::SetCursorPosition(CursorPosition NewPosition)
+	{
+		std::string PositionString = std::to_string(NewPosition.RowIndex) + ";" + std::to_string(NewPosition.ColumnIndex)+"H";
+		std::cout << p_GetANSIEscapeSequence() << PositionString;
+		std::cout.flush();
+	}
+	const char* MBTerminal::p_GetANSIEscapeSequence()
+	{
+		return("\x1B[");
+	}
+	void MBTerminal::InitializeWindowMode()
+	{
+		std::cout << p_GetANSIEscapeSequence() << "?1049h";
+		std::cout.flush();
+	}
+	void MBTerminal::DisableWindowMode()
+	{
+		std::cout << p_GetANSIEscapeSequence() << "?1049l";
+		std::cout.flush();
+	}
+	TerminalInfo MBTerminal::GetTerminalInfo()
+	{
+		TerminalInfo ReturnValue;
+#ifdef MBWindows
+		HANDLE hStdin = GetStdHandle(STD_OUTPUT_HANDLE);
+		CONSOLE_SCREEN_BUFFER_INFO CurrentBuffer;
+		bool Result = GetConsoleScreenBufferInfo(hStdin, &CurrentBuffer);
+		if (Result)
+		{
+			ReturnValue.Width =		CurrentBuffer.dwSize.X;
+			ReturnValue.Height =	CurrentBuffer.dwSize.Y;
+		}
+		else
+		{
+			throw std::runtime_error("Failed retrieving terminal info");
+		}
+#else
+		struct winsize w;
+		ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
+		ReturnValue.Height = w.ws_row;
+		ReturnValue.Width = w.ws_col;
+#endif
+
+
+		return(ReturnValue);
+	}
+	TerminalWindowBuffer const& MBTerminal::GetRenderedBuffer()
+	{
+		return(m_CurrentRenderedBuffer);
+	}
+	TerminalWindowBuffer const& MBTerminal::GetCurrentBuffer() const
+	{
+		return(m_RenderTargetBuffer);
+	}
+	void MBTerminal::SwitchBuffers()
+	{
+
 	}
 }
