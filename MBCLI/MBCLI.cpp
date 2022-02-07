@@ -11,7 +11,10 @@
 #include <unistd.h>
 #include <sys/ioctl.h>
 #endif // WIN32 || _WIN32
+#include <assert.h>
 
+#include <MBUtility/MBStrings.h>
+#include <MBUtility/MBFunctional.h>
 namespace MBCLI
 {
 	//BEGIN ProcessedCLInput
@@ -191,7 +194,45 @@ namespace MBCLI
 	}
 	void MBTerminal::GetLine(std::string& OutLine)
 	{
-		std::cin >> OutLine;
+		if (m_InputBuffer.size() - m_InputBufferOffset == 0)
+		{
+			std::cin >> OutLine;
+		}
+		else
+		{
+			while (m_InputBuffer.find("\r\n") == m_InputBuffer.npos && m_InputBuffer.find('\n') == m_InputBuffer.npos)
+			{
+				std::string NewInput = std::string(1024, 0);
+				size_t ReadBytes = std::cin.read(NewInput.data(), NewInput.size()).gcount();
+				NewInput.resize(ReadBytes);
+				m_InputBuffer += NewInput;
+			}
+			std::string ValueToReturn = "";
+			size_t NewlinePosition = m_InputBuffer.find('\n');
+			size_t CarriegeNewlinePosition = m_InputBuffer.find("\r\n");
+			if (CarriegeNewlinePosition < NewlinePosition)
+			{
+				ValueToReturn = m_InputBuffer.substr(m_InputBufferOffset, CarriegeNewlinePosition - m_InputBufferOffset);
+				m_InputBufferOffset = CarriegeNewlinePosition + 2;
+			}
+			else if (NewlinePosition < CarriegeNewlinePosition)
+			{
+				ValueToReturn = m_InputBuffer.substr(m_InputBufferOffset, NewlinePosition - m_InputBufferOffset);
+				m_InputBufferOffset = NewlinePosition + 1;
+			}
+			else if (NewlinePosition == m_InputBuffer.npos && CarriegeNewlinePosition == m_InputBuffer.npos)
+			{
+				ValueToReturn = m_InputBuffer.substr(m_InputBufferOffset);
+				m_InputBufferOffset = 0;
+				m_InputBuffer.resize(0);
+			}
+			OutLine = std::move(ValueToReturn);
+			if (m_InputBufferOffset > m_InputBuffer.size() / 2)
+			{
+				m_InputBuffer = m_InputBuffer.substr(m_InputBufferOffset);
+				m_InputBufferOffset = 0;
+			}
+		}
 	}
 	void MBTerminal::SetPasswordInput(bool IsPassword)
 	{
@@ -361,8 +402,49 @@ namespace MBCLI
 			ReturnValue.ColumnIndex = -1;
 			std::cout<<GetLastError()<<std::endl;
 		}
+		//"\033"
+		//std::toi
 #else
+		//std::cin.flush();
+		std::cout.flush();
+		termios PrevTermios;
+		//fileno(stdin)
+		int Result = tcgetattr(fileno(stdin), &PrevTermios);
+		if (Result != 0)
+		{
+			return(ReturnValue);
+		}
+		termios temporary = PrevTermios;
+		temporary.c_lflag &= ~ICANON;
+		temporary.c_lflag &= ~ECHO;
+		temporary.c_cflag &= ~CREAD;
+		Result = tcsetattr(fileno(stdin), TCSANOW, &temporary);
+		if (Result != 0)
+		{
+			tcsetattr(fileno(stdin), TCSANOW, &PrevTermios);
+			return(ReturnValue);
+		}
+		std::cout << p_GetANSIEscapeSequence() << "6n";
+		std::cout.flush();
+		std::string TempBuffer = std::string(100, 0);
+		size_t ReadBytes =size_t(std::cin.read(TempBuffer.data(), 6).gcount());
+		assert(TempBuffer[0] == 0x1B);
+		TempBuffer.resize(ReadBytes);
+		while (TempBuffer.back() != 'R')
+		{
+			char NewByte;
+			ReadBytes = std::cin.read(&NewByte, 1).gcount();
+			assert(ReadBytes == 1);
+			TempBuffer += NewByte;
+		}
 
+		size_t Offset = 2;
+		size_t FirstSemiColon = TempBuffer.find(';');
+		ReturnValue.RowIndex = std::stoi(TempBuffer.substr(Offset, FirstSemiColon - Offset));
+		Offset = FirstSemiColon + 1;
+		size_t RPosition = TempBuffer.find('R', Offset);
+		ReturnValue.ColumnIndex = std::stoi(TempBuffer.substr(Offset, RPosition - Offset));
+		tcsetattr(fileno(stdin), TCSANOW, &PrevTermios);
 #endif
 		return(ReturnValue);
 	}
@@ -424,4 +506,58 @@ namespace MBCLI
 	{
 
 	}
+
+
+	//BEGIN TerminalWindow
+	TerminalWindow::TerminalWindow(int Width, int Height)
+	{
+		m_Width = Width;
+		m_Height = height;
+		m_WindowBuffer = TerminalWindowBuffer(Width, Height);
+	}
+
+
+	void TerminalWindow::Print(std::string const& StringToPrint)
+	{
+		std::vector<std::string> LinesToPrint = MBUtility::Split(StringToPrint, "\r\n");
+
+	}
+	void TerminalWindow::PrintLine(std::string const& StringToPrint)
+	{
+
+	}
+	void TerminalWindow::SetTextColor(ANSITerminalColor ColorToSet)
+	{
+		m_CurrentColor = ColorToSet;
+	}
+
+	CursorPosition TerminalWindow::GetCursorPosition()
+	{
+		return(m_CurrentCursorPosition);
+	}
+	void TerminalWindow::SetCursorPosition(CursorPosition NewPosition)
+	{
+		m_CurrentCursorPosition = NewPosition;
+	}
+
+	TerminalInfo TerminalWindow::GetTerminalInfo()
+	{
+		TerminalInfo ReturnValue;
+		ReturnValue.Height = m_Height;
+		ReturnValue.Width = m_Width;
+		return(ReturnValue);
+	}
+	void TerminalWindow::DisableScrollback()
+	{
+		m_ScrollBackEnabled = false;
+	}
+	void TerminalWindow::EnableScrollback()
+	{
+		m_ScrollBackEnabled = true;
+	}
+	TerminalWindowBuffer const& TerminalWindow::GetWindowBuffer()
+	{
+		return(m_WindowBuffer);
+	}
+	//END TerminalWindow
 }

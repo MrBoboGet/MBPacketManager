@@ -44,4 +44,4 @@ servern crashar om man försöker ladda upp packet med namn ""
 
 ta bort den gammla "downloadfilelist" och använd bara den nya, gör bland annat så att allt får en fin download bar samt att det inte är lika jobbigt att uppdatera
 
-fixa så att den märker av duplicate exported exeutables, samt att den uppdaterar executabeln bara om den finns
+fixa så att den märker av duplicate exported exeutables, samt att den uppdaterar executabeln bara om den finns, och att den gör det när den är förkompilerad

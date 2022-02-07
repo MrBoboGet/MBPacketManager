@@ -475,7 +475,7 @@ namespace MBPM
 		std::unique_ptr<MBSockets::ConnectSocket> m_ServerConnection = nullptr;
 		MBPP_ComputerInfo m_CurrentComputerInfo = MBPP_ComputerInfo();
 		MBCLI::MBTerminal* m_LogTerminal = nullptr;
-		bool m_LoggingEnabled = false;
+		bool m_LoggingEnabled = true;
 
 		MBError p_DownloadFileList(std::string const& InitialData, size_t DataOffset, MBSockets::ConnectSocket* SocketToUse, std::string const& OutputTopDirectory
 			, std::vector<std::string> const& OutputFileNames = {});
