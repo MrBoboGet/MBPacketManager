@@ -8,6 +8,7 @@ set(MBPM_DEPENDENCIES
 	MBCrypto
 	cryptopp
 	MrBigInt
+	MBMIME
 	MBParsing
 	MrBoboSockets
 )

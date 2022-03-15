@@ -28,7 +28,7 @@ namespace MBPM
 	struct PacketIdentifier
 	{
 		std::string PacketName = "";
-		std::string PacketURI = "";//Default/"" implicerar att man använder default remoten
+		std::string PacketURI = "";//Default/"" implicerar att man anvï¿½nder default remoten
 		PacketLocationType PacketLocation = PacketLocationType::Null;
 	};
 	class MBPM_ClI
@@ -59,7 +59,7 @@ namespace MBPM
 
 		void p_UploadPacketsLocal(std::vector<PacketIdentifier> const& PacketsToUpload,MBCLI::MBTerminal* AssociatedTerminal);
 	
-		MBError p_UpdateCmake(std::string const& PacketDirectory,std::string const& OptionalMBPMStaticData);//fyller bara i MBPM variablar och skriver inte över filen
+		MBError p_UpdateCmake(std::string const& PacketDirectory,std::string const& OptionalMBPMStaticData);//fyller bara i MBPM variablar och skriver inte ï¿½ver filen
 		MBError p_CreateCmake(std::string const& PacketDirectory);
 		MBError p_CompilePacket(std::string const& PacketDirectory);
 		std::string p_GetPacketInstallDirectory();
@@ -77,7 +77,7 @@ namespace MBPM
 
 		//std::string p_GetInstalledPacketDirectory();
 		std::vector<PacketIdentifier> p_GetInstalledPacketsDependancyOrder(std::vector<std::string>* MissingPackets);
-		std::vector<PacketIdentifier> p_GetUserPackets();//ingen garanti på dependancy order
+		std::vector<PacketIdentifier> p_GetUserPackets();//ingen garanti pï¿½ dependancy order
 		std::vector<PacketIdentifier> p_GetInstalledPackets();//implicit tar den i installed dependancy order
 
 		//std::string p_GetInstalledPacketDirectory(std::string const& PacketName);

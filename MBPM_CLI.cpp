@@ -11,7 +11,7 @@ namespace MBPM
 	//BEGIN DownloadPrinter
 	MBError DownloadPrinter::NotifyFiles(std::vector<std::string> const& FileToNotify)
 	{
-		//gör inget egentligen
+		//gï¿½r inget egentligen
 		return(true);
 	}
 	MBError DownloadPrinter::Open(std::string const& FileToDownloadName)
@@ -180,7 +180,7 @@ namespace MBPM
 				if (std::filesystem::exists(InfoPath))
 				{
 					MBPM::MBPM_PacketInfo PacketInfo = MBPM::ParseMBPM_PacketInfo(InfoPath);
-					if (PacketInfo.PacketName == "") //kanske också borde asserta att packetens folder är samma som dess namn
+					if (PacketInfo.PacketName == "") //kanske ocksï¿½ borde asserta att packetens folder ï¿½r samma som dess namn
 					{
 						continue;
 					}
@@ -243,7 +243,7 @@ namespace MBPM
 		std::vector<PacketIdentifier> ReturnValue = {};
 		std::set<std::string> SearchDirectories = {};
 		std::string PacketInstallDirectory = p_GetPacketInstallDirectory();
-		//läser in config filen
+		//lï¿½ser in config filen
 		if (std::filesystem::exists(PacketInstallDirectory + "/LocalUploadPackets.txt"))
 		{
 			std::ifstream UploadPacketsFile = std::ifstream(PacketInstallDirectory + "/LocalUploadPackets.txt",std::ios::in);
@@ -301,7 +301,7 @@ namespace MBPM
 	}
 	PacketIdentifier MBPM_ClI::p_GetUserPacket(std::string const& PacketName)
 	{
-		//aningn långsamt men walla, har man inte många packets är det väl inga problem
+		//aningn lï¿½ngsamt men walla, har man inte mï¿½nga packets ï¿½r det vï¿½l inga problem
 		PacketIdentifier ReturnValue;
 		std::vector<PacketIdentifier> AllUserPackets = p_GetUserPackets();
 		for (size_t i = 0; i < AllUserPackets.size(); i++)
@@ -541,7 +541,7 @@ namespace MBPM
 					std::string Filename		= DirectoryIterator.GetCurrentDirectory() + (*DirectoryIterator).FileName;
 					std::string FileHash		= MBUtility::ReplaceAll(MBUtility::HexEncodeString((*DirectoryIterator).FileHash), " ", "");
 					std::string FileSizeString	= h_FileSizeToString((*DirectoryIterator).FileSize);
-					//förutsätter såklart ascii B)
+					//fï¿½rutsï¿½tter sï¿½klart ascii B)
 					if (Filename.size() > LargestPath)
 					{
 						LargestPath = Filename.size();
@@ -814,7 +814,7 @@ namespace MBPM
 				MissingPackets.push_back(PacketsToUpdate[i].PacketName);
 				continue;
 			}
-			//ANTAGANDE det här gör bara för packets som man inte ändrar på, annars kommer MBPM_FileInfo behöva uppdateras först, får se hur lång tid det tar för grejer
+			//ANTAGANDE det hï¿½r gï¿½r bara fï¿½r packets som man inte ï¿½ndrar pï¿½, annars kommer MBPM_FileInfo behï¿½va uppdateras fï¿½rst, fï¿½r se hur lï¿½ng tid det tar fï¿½r grejer
 			AssociatedTerminal->PrintLine("Updating packet " + PacketsToUpdate[i].PacketName);
 			MBError UpdateResult = m_ClientToUse.UpdatePacket(PacketsToUpdate[i].PacketURI, PacketsToUpdate[i].PacketName);
 			if (!UpdateResult)
@@ -929,7 +929,7 @@ namespace MBPM
 		}
 		if (RemotePacket + LocalPacket + UserPacket + InstalledPacket == 0)
 		{
-			//implicit att det är remote packet
+			//implicit att det ï¿½r remote packet
 			RemotePacket = true;
 		}
 		//std::string ObjectToGet = CommandInput.TopCommandArguments[1];
@@ -1124,7 +1124,7 @@ namespace MBPM
 				return (ReturnValue);
 			}
 			std::string DirectoryToSend = CommandInput.TotalCommandTokens[CommandPosition[i] + 1];
-			//ANTAGANDE denna funktion används för att specificera directorys som annars kanske inte tas upp af FileInfoIgnoren, och går därför igenom hela directoryn
+			//ANTAGANDE denna funktion anvï¿½nds fï¿½r att specificera directorys som annars kanske inte tas upp af FileInfoIgnoren, och gï¿½r dï¿½rfï¿½r igenom hela directoryn
 			std::vector<std::string> NewFiles = h_GetDirectoryFiles(PacketPath + DirectoryToSend, DirectoryToSend);
 			for(std::string const& Paths : NewFiles)
 			{
@@ -1135,7 +1135,7 @@ namespace MBPM
 	}
 	void h_GetUpdateToSend(MBCLI::ProcessedCLInput const& CommandInput, MBPP_FileInfoReader const& ServerFileInfo, std::string const& PacketDirectory, std::vector<std::string>& OutFilesToSend, std::vector<std::string>& OutFilesToDelete, MBCLI::MBTerminal* AssociatedTerminal)
 	{
-		//aningen innefektivt iomed all kopiering av data men är viktigare med korrekthet just nu
+		//aningen innefektivt iomed all kopiering av data men ï¿½r viktigare med korrekthet just nu
 		std::set<std::string> FilesToSend = {};
 		std::set<std::string> ObjectsToDelete = {};
 		
@@ -1242,7 +1242,7 @@ namespace MBPM
 				std::filesystem::create_directories(PacketInstallPath);
 				MBPM::CreatePacketFilesData(PacketInstallPath);
 			}
-			//OBS antar här att packets inte är up to date, vi kan om vi vill optimera göra det men blir relevant när det blir relevant
+			//OBS antar hï¿½r att packets inte ï¿½r up to date, vi kan om vi vill optimera gï¿½ra det men blir relevant nï¿½r det blir relevant
 			MBPM::UpdateFileInfo(PacketInstallPath); // redundant med det ovan men men
 			MBPM::UpdateFileInfo(PacketsToUpload[i].PacketURI);
 			MBPM::MBPP_FileInfoReader InstalledInfo = MBPM::MBPP_FileInfoReader(PacketInstallPath+"/MBPM_FileInfo");
@@ -1314,7 +1314,7 @@ namespace MBPM
 	}
 	void MBPM_ClI::p_HandleUpload(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
 	{
-		//först så behöver vi skicka data för att se login typen
+		//fï¿½rst sï¿½ behï¿½ver vi skicka data fï¿½r att se login typen
 		MBPM::MBPP_ComputerInfo PreviousComputerInfo = m_ClientToUse.GetComputerInfo();
 		if (CommandInput.TopCommandArguments.size() < 2 && CommandInput.CommandOptions.find("all") == CommandInput.CommandOptions.end() && CommandInput.CommandOptions.find("user") 
 			== CommandInput.CommandOptions.end() && CommandInput.CommandOptions.find("allinstalled") == CommandInput.CommandOptions.end() 
@@ -1486,7 +1486,7 @@ namespace MBPM
 			while (RequestResponse.Result != MBPP_ErrorCode::Ok || !UploadError)
 			{
 				AssociatedTerminal->PrintLine("Need verification for " + RequestResponse.DomainToLogin + ":");
-				//Borde egentligen kolla vilka typer den stödjer
+				//Borde egentligen kolla vilka typer den stï¿½djer
 				AssociatedTerminal->Print("Username: ");
 				std::string Username;
 				AssociatedTerminal->GetLine(Username);
@@ -1664,7 +1664,7 @@ namespace MBPM
 		}
 		else if (CommandInput.TopCommandArguments[0] == "diff")
 		{
-			//två strängar som båda leder till en MBPM_FileInfo
+			//tvï¿½ strï¿½ngar som bï¿½da leder till en MBPM_FileInfo
 			std::vector<std::pair<PacketIdentifier,int>> PacketsToDiff = {};
 			std::vector<std::pair<std::string, int>> LocalPacketsSpecifiers = CommandInput.GetSingleArgumentOptionList("p");
 			std::vector<std::pair<std::string, int>> RemotePacketsSpecifiers = CommandInput.GetSingleArgumentOptionList("r");
@@ -1771,7 +1771,7 @@ namespace MBPM
 		if (CommandInput.CommandOptions.find("allinstalled") != CommandInput.CommandOptions.end())
 		{
 			std::vector<std::string> MissingPackets = {};
-			PacketDirectories = p_GetInstalledPacketsDependancyOrder(&MissingPackets); // ska den göra något om vi inte har alla packet dependancys?
+			PacketDirectories = p_GetInstalledPacketsDependancyOrder(&MissingPackets); // ska den gï¿½ra nï¿½got om vi inte har alla packet dependancys?
 			if (MissingPackets.size() != 0)
 			{
 				AssociatedTerminal->PrintLine("Missing following packets in order to compile all packets:");
@@ -1790,7 +1790,7 @@ namespace MBPM
 			//	PacketDirectories.push_back(UserPackets[i].second);
 			//}
 		}
-		//kanske blir att vi uppdaterar pakcets dubbelt, men är ju användarsen ansvar
+		//kanske blir att vi uppdaterar pakcets dubbelt, men ï¿½r ju anvï¿½ndarsen ansvar
 		for (size_t i = 0; i < CommandInput.TopCommandArguments.size(); i++)
 		{
 			std::string CurrentInput = CommandInput.TopCommandArguments[i];
@@ -1845,7 +1845,7 @@ namespace MBPM
 			}
 			MBPMStaticData = h_ReadMBPMStaticData(Filepath);
 		}
-		//allinstalled är incompatible med att uppdatera packets manuellt, eftersom den gör det i dependancy ordning
+		//allinstalled ï¿½r incompatible med att uppdatera packets manuellt, eftersom den gï¿½r det i dependancy ordning
 		if (CommandInput.CommandOptions.find("cmake") != CommandInput.CommandOptions.end())
 		{
 			bool UpdateCmake = true;
@@ -1859,7 +1859,7 @@ namespace MBPM
 			{
 				UpdateCmake = true;
 			}
-			//börjar med compile sen update
+			//bï¿½rjar med compile sen update
 			for (size_t i = 0; i < PacketDirectories.size(); i++)
 			{
 				std::string CurrentDirectory = PacketDirectories[i].PacketURI;
@@ -1914,7 +1914,7 @@ namespace MBPM
 				}
 				if (UpdateCmake)
 				{
-					MBError UpdateResult = p_UpdateCmake(CurrentDirectory, MBPMStaticData);//ska om packetet följer MBPM standard inte påverka packetet
+					MBError UpdateResult = p_UpdateCmake(CurrentDirectory, MBPMStaticData);//ska om packetet fï¿½ljer MBPM standard inte pï¿½verka packetet
 					if (!UpdateResult)
 					{
 						AssociatedTerminal->PrintLine("Failed updating CMake for \"" + CurrentDirectory + "\": " + UpdateResult.ErrorMessage);
@@ -1997,7 +1997,7 @@ namespace MBPM
 	}
 	void MBPM_ClI::HandleCommand(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
 	{
-		//denna är en global inställning
+		//denna ï¿½r en global instï¿½llning
 		if (CommandInput.CommandOptions.find("computerdiff") != CommandInput.CommandOptions.end())
 		{
 			m_ClientToUse.SetComputerInfo(MBPM::MBPP_Client::GetSystemComputerInfo());

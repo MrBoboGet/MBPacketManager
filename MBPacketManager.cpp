@@ -31,7 +31,7 @@ namespace MBPM
 		{
 			if (Entries.is_regular_file())
 			{
-				//Kommer ge fel på windows med paths som har u8, får lägga till den dependancyn
+				//Kommer ge fel pï¿½ windows med paths som har u8, fï¿½r lï¿½gga till den dependancyn
 				std::string RelativeFilePath = std::filesystem::relative(Entries.path(),ProjectDirectory).generic_u8string();
 				std::string FilePacketPath = +"/" + RelativeFilePath;
 				std::string Filename = Entries.path().filename().generic_u8string();	
@@ -59,7 +59,7 @@ namespace MBPM
 	}
 	MBError h_EmbeddPacket_CmakeFile(MBPM_CmakeProject& ProjectToPopulate, MBPM_MakefileGenerationOptions const& CompileConfiguration, MBPM_PacketInfo const& PacketInfo, std::string const& PacketDirectory)
 	{
-		//Just nu lägger vi bara till om det går, annars tar bort, i framtiden kanske vi vill lägga till
+		//Just nu lï¿½gger vi bara till om det gï¿½r, annars tar bort, i framtiden kanske vi vill lï¿½gga till
 		MBError ReturnValue = "";
 		if (PacketInfo.Attributes.find(MBPM_PacketAttribute::TriviallyEmbedabble) != PacketInfo.Attributes.end())
 		{
@@ -280,7 +280,7 @@ namespace MBPM
 					}
 				}
 			}
-			//För include
+			//Fï¿½r include
 			if (ParsedJson.HasAttribute("ExtraIncludeDirectories"))
 			{
 				MBParsing::JSONObject const& IncludeDirectoryObjects = ParsedJson.GetAttribute("ExtraIncludeDirectories");
@@ -301,7 +301,7 @@ namespace MBPM
 					ReturnValue.ExtraIncludeDirectories.push_back(IncludeDirectories[i].GetStringData());
 				}
 			}
-			//För sub libraries
+			//Fï¿½r sub libraries
 			if (ParsedJson.HasAttribute("SubLibraries"))
 			{
 				std::vector<MBParsing::JSONObject> const& SubLibraries = ParsedJson.GetAttribute("SubLibraries").GetArrayData();
@@ -319,7 +319,7 @@ namespace MBPM
 			}
 			//
 
-			//för outout configuratuions
+			//fï¿½r outout configuratuions
 			MBParsing::JSONObject OutputConfiguration = ParsedJson.GetAttribute("OutputTargetNames");
 			if (OutputConfiguration.HasAttribute("StaticDebug"))
 			{
@@ -453,7 +453,7 @@ namespace MBPM
 				"Mfuuid.lib\n	"
 				"Strmiids.lib\n)\n";
 		}
-		else//ska egentligen kolla om det är unix...
+		else//ska egentligen kolla om det ï¿½r unix...
 		{
 			OutputFile <<	"pthread\n"
 							"dl\n"
@@ -479,7 +479,7 @@ namespace MBPM
 		OutputFile << "set(MBPM_TARGET_EXTPACKET_LIBRARIES )\n";
 		OutputFile << "set(MBPM_TARGET_COMPILE_OPTIONS )\n";
 		OutputFile << "set(MBPM_TARGET_LINK_OPTIONS )\n";
-		//Output för att overrida CMAKE_CXX_FLAGS
+		//Output fï¿½r att overrida CMAKE_CXX_FLAGS
 		//OutputFile << "set(MBPM_CXX_FLAGS ${CMAKE_CXX_FLAGS})\n";
 		//OutputFile << "set(MBPM_CXX_FLAGS_DEBUG ${CMAKE_CXX_FLAGS_DEBUG})\n";
 		//OutputFile << "set(MBPM_CXX_FLAGS_RELEASE ${CMAKE_CXX_FLAGS_RELEASE})\n";
@@ -585,7 +585,7 @@ namespace MBPM
 			//
 
 			//librarys to link
-			//OutputFile << "MBPM_UpdateTargetLibraries("; //bara nödvändig om vi ska skapa en executable
+			//OutputFile << "MBPM_UpdateTargetLibraries("; //bara nï¿½dvï¿½ndig om vi ska skapa en executable
 			//OutputFile << IsStatic ? "\"Static\"" : "\"Dynamic\"";
 			//OutputFile << IsDebug ? " \"Debug\")\n" : " \"Release\")\n";
 			//OutputFile << "target_link_libraries(" << CmakeTargetName << " ${MBPM_EXTPACKET_LIBRARIES} ${COMMON_LIBRARIES})\n";
@@ -769,7 +769,7 @@ namespace MBPM
 			{
 				std::filesystem::create_directories(PacketDirectory + "/MBPM_Builds/");
 			}
-			//nu ska vi ta och flytta den till dess korrekta ställe
+			//nu ska vi ta och flytta den till dess korrekta stï¿½lle
 			std::filesystem::rename(PacketDirectory + "/" + TargetInfo.OutputPath, PacketDirectory + "/MBPM_Builds/" + TargetInfo.NewName);
 		}
 		return(ReturnValue);
@@ -996,7 +996,7 @@ namespace MBPM
 					}
 				}
 			}
-			//Antar nu att det är linux eller unix
+			//Antar nu att det ï¿½r linux eller unix
 			else
 			{
 				std::map<std::string, MBParsing::JSONObject> CurrentTargets = {};

@@ -1,47 +1,47 @@
-MBPM_FileInfoIgnore: Inkluderar inte faktikst filer som blivit include. Inget använder det än, men kanske i framtiden?
+MBPM_FileInfoIgnore: Inkluderar inte faktikst filer som blivit include. Inget anvï¿½nder det ï¿½n, men kanske i framtiden?
 
-Upload local stödjer inte alla funktioner som remote gör, till exempel går det inte att specificera vissa filer/directories
+Upload local stï¿½djer inte alla funktioner som remote gÃ¶r, till exempel gÃ¶r det inte att specificera vissa filer/directories
 
-På raspberry pi:en när jag installar något får jag alltid 
+Pï¿½ raspberry pi:en nï¿½r jag installar nÃ¥got fÃ¶r jag alltid 
 "Error Att connecta Bad file descriptor
 Segmentation fault" 
-efter den är klar att ha laddat ner något. Den har inte senaste variationen men värt att undersöka.
+efter den ï¿½r klar att ha laddat ner nï¿½got. Den har inte senaste variationen men vï¿½rt att undersï¿½ka.
 
-Läg till mbpm index list {LokaltPaket} --user
+Lï¿½g till mbpm index list {LokaltPaket} --user
 
 
-om man har att MBPM_PACKETS_INSTALL_DIRECTORY inte slutar med / kajkar väldigt mycket.
+om man har att MBPM_PACKETS_INSTALL_DIRECTORY inte slutar med / kajkar vï¿½ldigt mycket.
 
-Fixa support för semantic versioning och vilka packets man beror på samt vilken man vill hämta
+Fixa support fï¿½r semantic versioning och vilka packets man beror pï¿½ samt vilken man vill hï¿½mta
 
-fixa så att install om man har alla executable/library targets inte fortsätter
+fixa sï¿½ att install om man har alla executable/library targets inte fortsï¿½tter
 
-fixa så att install kan uppdatera / känner av om inte alla packets är hämtade
+fixa sï¿½ att install kan uppdatera / kï¿½nner av om inte alla packets ï¿½r hï¿½mtade
 
 uploada installerat packet
 
-default librarys för operativsystem, specifikt pthread, winsock, dl  osv.
+default librarys fï¿½r operativsystem, specifikt pthread, winsock, dl  osv.
 
-option för att istället för att se allt som downloadas så visar bara totala tiden
+option fï¿½r att istï¿½llet fï¿½r att se allt som downloadas sï¿½ visar bara totala tiden
 
 kunna lisa specifika delar av ett index med index list
 
-för att göra semantiken lite smidiagre 
+fï¿½r att gï¿½ra semantiken lite smidiagre 
 
-dokumentera allt, framförallt internet protokollet och MBMP_FileInfo formatet...
+dokumentera allt, framfï¿½rallt internet protokollet och MBMP_FileInfo formatet...
 
-fixa så att get har att man ser download tiden
+fixa sï¿½ att get har att man ser download tiden
 
-command för att uppdatera alla dependancies
+command fï¿½r att uppdatera alla dependancies
 
-tog extremt mycket minne att jämföra den installerade ffmpegen och den lokala, borde kolla upp det där
+tog extremt mycket minne att jï¿½mfï¿½ra den installerade ffmpegen och den lokala, borde kolla upp det dï¿½r
 
-upload fastnar ibland på vissa ställen
+upload fastnar ibland pï¿½ vissa stï¿½llen
 
 mbpm upload MBSearchEngine --installed -d /MBPM_Builds/ --computerdiff
 
-servern crashar om man försöker ladda upp packet med namn ""
+servern crashar om man fï¿½rsï¿½ker ladda upp packet med namn ""
 
-ta bort den gammla "downloadfilelist" och använd bara den nya, gör bland annat så att allt får en fin download bar samt att det inte är lika jobbigt att uppdatera
+ta bort den gammla "downloadfilelist" och anvï¿½nd bara den nya, gï¿½r bland annat sï¿½ att allt fï¿½r en fin download bar samt att det inte ï¿½r lika jobbigt att uppdatera
 
-fixa så att den märker av duplicate exported exeutables, samt att den uppdaterar executabeln bara om den finns, och att den gör det när den är förkompilerad
+fixa sï¿½ att den mï¿½rker av duplicate exported exeutables, samt att den uppdaterar executabeln bara om den finns, och att den gï¿½r det nï¿½r den ï¿½r fï¿½rkompilerad

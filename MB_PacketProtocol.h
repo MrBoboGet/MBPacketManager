@@ -13,7 +13,7 @@
 namespace MBPM
 {
 	
-	//protocol antagande: Request Response, varje client skick måste efterväntas av ett svar 
+	//protocol antagande: Request Response, varje client skick mï¿½ste eftervï¿½ntas av ett svar 
 	//
 	enum class MBPP_TransferProtocol
 	{
@@ -54,9 +54,9 @@ namespace MBPM
 	};
 	struct MBPP_FileData
 	{
-		std::string FileName = "";//kan vara relativt till en directory för att spara plats / vara mer intuitivt
+		std::string FileName = "";//kan vara relativt till en directory fï¿½r att spara plats / vara mer intuitivt
 		uint64_t FileSize = 0;
-		std::string FileData = "";//binär data
+		std::string FileData = "";//binï¿½r data
 	};
 
 	enum class MBPP_ComputerInfoType : uint8_t
@@ -154,10 +154,10 @@ namespace MBPM
 	};
 	struct MBPP_VerificationData
 	{
-		MBPP_UserCredentialsType CredentialsType = MBPP_UserCredentialsType::Null;//structuren beror på denna
+		MBPP_UserCredentialsType CredentialsType = MBPP_UserCredentialsType::Null;//structuren beror pï¿½ denna
 		uint16_t PacketNameStringLength = -1;
 		std::string PacketName = "";
-		uint32_t CredentialsDataLength = -1;//tillåter
+		uint32_t CredentialsDataLength = -1;//tillï¿½ter
 		std::string CredentialsData = "";
 		//
 		//std::string Password = "";
@@ -167,7 +167,7 @@ namespace MBPM
 	{
 		MBPP_ErrorCode Result = MBPP_ErrorCode::Null;
 		std::string DomainToLogin = "";
-		std::vector<MBPP_UserCredentialsType> SupportedLoginTypes = {};//storleken av UserCredentialsType avgör storleken av vetkor size headern
+		std::vector<MBPP_UserCredentialsType> SupportedLoginTypes = {};//storleken av UserCredentialsType avgï¿½r storleken av vetkor size headern
 	};
 	struct MBPP_UploadChanges_Response
 	{
@@ -242,7 +242,7 @@ namespace MBPM
 	{
 	private:
 		friend class MBPP_FileInfoReader;
-		MBPP_DirectoryInfoNode* m_ParentDirectory = nullptr;//enbart till för att kunna iterera enkelt över filler/directories
+		MBPP_DirectoryInfoNode* m_ParentDirectory = nullptr;//enbart till fï¿½r att kunna iterera enkelt ï¿½ver filler/directories
 	public:
 		std::string DirectoryName = "";
 		std::string StructureHash = "";
@@ -373,7 +373,7 @@ namespace MBPM
 	{
 		std::string URL = "";
 		MBPP_TransferProtocol TransferProtocol = MBPP_TransferProtocol::Null;
-		uint16_t Port = -1; //-1 står för default port i förhållande till en transfer protocol
+		uint16_t Port = -1; //-1 stï¿½r fï¿½r default port i fï¿½rhï¿½llande till en transfer protocol
 	};
 
 	class MBPM_FileInfoExcluder
@@ -413,7 +413,7 @@ namespace MBPM
 
 		}
 	};
-	//laddar ner tills den fått alla filer, *inte* efter att den 
+	//laddar ner tills den fï¿½tt alla filer, *inte* efter att den 
 	class MBPP_FileListDownloader : public MBPP_FileListDownloadHandler
 	{
 	private:
@@ -506,7 +506,7 @@ namespace MBPM
 		static MBPP_ComputerInfo GetSystemComputerInfo();
 
 
-		MBError DownloadPacket(std::string const& OutputDirectory, std::string const& PacketName); //semantiken av denna funktion är att den laddar ner totalt nytt, medans update tar diffen
+		MBError DownloadPacket(std::string const& OutputDirectory, std::string const& PacketName); //semantiken av denna funktion ï¿½r att den laddar ner totalt nytt, medans update tar diffen
 		
 		MBError UpdatePacket(std::string const& OutputDirectory, std::string const& PacketName);
 		
@@ -528,7 +528,7 @@ namespace MBPM
 
 
 
-	//Implicit antagande här är att servern aldrig riktigt kommer få en stor request
+	//Implicit antagande hï¿½r ï¿½r att servern aldrig riktigt kommer fï¿½ en stor request
 	class MBPP_Server;
 	enum class MBPP_ServerResponseIterator_Type
 	{
@@ -550,7 +550,7 @@ namespace MBPM
 		friend class MBPP_Server;
 		size_t m_MaxBytesInMemory = 300000000; //300mb, helt godtyckligt just nu
 		MBPP_Server* m_AssociatedServer = nullptr;
-		//void* m_IterationData = nullptr; //ägs inte av iteratorn
+		//void* m_IterationData = nullptr; //ï¿½gs inte av iteratorn
 		std::string m_CurrentResponse = "";
 		bool m_Finished = false;
 		MBPP_GenericRecord m_HeaderToSend;
@@ -582,7 +582,7 @@ namespace MBPM
 			}
 			else
 			{
-				//borde gör mer checks
+				//borde gï¿½r mer checks
 				return(false);
 			}
 		}
@@ -596,7 +596,7 @@ namespace MBPM
 	struct MBPP_GetFileList_ResponseData
 	{
 		MBPP_ComputerInfo ComputerInfo;
-		uint32_t PacketNameSize = -1; //totala sizen är egentligen 2, men utifall att
+		uint32_t PacketNameSize = -1; //totala sizen ï¿½r egentligen 2, men utifall att
 		std::string PacketName = "";
 
 		uint32_t TotalFileListSize = -1;
@@ -755,7 +755,7 @@ namespace MBPM
 
 		MBError p_ParseRequestVerificationData();
 		MBError p_ParseFileList(MBPP_FileList& FileListToUpdate,bool* BoolToUpdate);
-		MBError p_DownloadClientFileList(MBPP_FileListDownloadState* DownloadState ,MBPP_FileListDownloadHandler* DownloadHandler,bool* DownloadFinished);//antar att fillistan redan är parsad
+		MBError p_DownloadClientFileList(MBPP_FileListDownloadState* DownloadState ,MBPP_FileListDownloadHandler* DownloadHandler,bool* DownloadFinished);//antar att fillistan redan ï¿½r parsad
 
 		std::string p_GetPacketDirectory(std::string const& PacketName);
 		std::string p_GetPacketDomain(std::string const& PacketName);
@@ -765,7 +765,7 @@ namespace MBPM
 		MBPP_ErrorCode p_VerifyRequest(std::string const& PacketName);
 
 		void p_CreateEmptyComputerDiffDirectory(std::string const& Packetname,MBPP_ComputerInfo NewComputerInfo);//skapar den om den inte existerar
-		void p_CreateEmptyComputerDiffDirectory(std::string const& Packetname);//skapar den helt nytt om den inte än existerar
+		void p_CreateEmptyComputerDiffDirectory(std::string const& Packetname);//skapar den helt nytt om den inte ï¿½n existerar
 	public:
 		MBPP_Server(std::string const& PacketDirectory, MBPP_UploadChangesIncorporator* UploadChangesHandler);
 		void SetUserAuthenticator(MBUtility::MBBasicUserAuthenticator* AuthenticatorToSet);
@@ -773,7 +773,7 @@ namespace MBPM
 
 		void AddPacketSearchDirectory(std::string const& PacketSearchDirectoryToAdd);
 
-		//om stora saker skickas kan inte allt sparas i minnet, så detta api så insertas dem rakt in i klassen, 
+		//om stora saker skickas kan inte allt sparas i minnet, sï¿½ detta api sï¿½ insertas dem rakt in i klassen, 
 		MBError InsertClientData(const void* ClientData, size_t DataSize);
 		MBError InsertClientData(std::string const& ClientData);
 		bool ClientRequestFinished();
