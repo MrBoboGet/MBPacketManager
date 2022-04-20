@@ -1,12 +1,13 @@
 #pragma once
 #include <string>
-#include <MBUtility/MBErrorHandling.h>
 #include <cstdint>
-#include <MrBoboSockets/MrBoboSockets.h>
 #include <memory>
 #include <vector>
 #include <stack>
 #include <set>
+#include <map>
+#include <MBUtility/MBErrorHandling.h>
+#include <MrBoboSockets/MrBoboSockets.h>
 #include <MBUtility/MBInterfaces.h>
 #include <MBCLI/MBCLI.h>
 
@@ -392,8 +393,8 @@ namespace MBPM
 	};
 	void CreatePacketFilesData(std::string const& PacketToHashDirectory,std::string const& FileName = "MBPM_FileInfo");
 	void CreatePacketFilesData(std::string const& PacketToHashDirectory,MBUtility::MBSearchableOutputStream* OutputStream);
-	void UpdateFileInfo(std::string const& PacketToIndexm, std::string const& FileName = "MBPM_FileInfo");
-	void UpdateFileInfo(std::string const& PacketToIndexm, MBUtility::MBSearchableOutputStream* OutputStream);
+	void UpdateFileInfo(std::string const& PacketToIndex, std::string const& FileName = "MBPM_FileInfo");
+	void UpdateFileInfo(std::string const& PacketToIndex, MBUtility::MBSearchableOutputStream* OutputStream);
 	MBPP_FileInfoReader CreateFileInfo(std::string const& DirectoryToIterate);
 	//generella
 	class MBPP_FileListDownloadHandler

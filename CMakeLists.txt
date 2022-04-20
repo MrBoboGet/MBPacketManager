@@ -2,21 +2,22 @@ project(MBPacketManager)
 set(PROJECT_NAME "MBPacketManager")
 ##BEGIN MBPM_VARIABLES
 set(MBPM_DEPENDENCIES 
-	MBCLI
-	MBUtility
-	MBUnicode
-	MBCrypto
-	cryptopp
-	MrBigInt
-	MBMIME
-	MBParsing
-	MrBoboSockets
+	"MBCLI"
+	"MBUnicode"
+	"MBUtility"
+	"MBCrypto"
+	"cryptopp"
+	"MrBigInt"
+	"MBParsing"
+	"MrBoboSockets"
+	"MBMime"
 )
 set(MBPM_SystemLibraries
 Ws2_32.lib
 Secur32.lib
 Bcrypt.lib
 Mfplat.lib
+opengl32
 Mfuuid.lib
 	Strmiids.lib
 )
@@ -40,9 +41,9 @@ macro(MBPM_UpdateLibraries TargetToUpdate LinkType BuildType)
 		set(PacketName ${PACKET})
 		set(LibraryName ${PACKET})
 		if(${PACKET} MATCHES "#")
-			string(REPLACE " " ";" PACKET_PART_LIST ${PACKET})
-			set(PacketName list(GET ${PACKET_PART_LIST} 0))
-			set(LibraryName list(GET ${PACKET_PART_LIST} 1))
+			string(REPLACE "#" ";" PACKET_PART_LIST ${PACKET})
+			list(GET PACKET_PART_LIST 0 PacketName)
+			list(GET PACKET_PART_LIST 1 LibraryName)
 		endif()
 		set(NewLibraryToAdd "$ENV{MBPM_PACKETS_INSTALL_DIRECTORY}/${PacketName}/MBPM_Builds/")
 		if(${LinkType} STREQUAL "STATIC")
@@ -117,8 +118,8 @@ macro(MBPM_SetTargetIncludeDirectories Target)
 	target_include_directories(${Target} PUBLIC 
 	"${CMAKE_CURRENT_SOURCE_DIR}/"
 	"$ENV{MBPM_PACKETS_INSTALL_DIRECTORY}/"
-	"$ENV{MBPM_PACKETS_INSTALL_DIRECTORY}/MBUtility/"
 	)
+	target_include_directories(${Target} PUBLIC ${MBPM_DependanciesIncludeDirectories})
 endmacro()
 
 macro(MBPM_ApplyTargetConfiguration TargetToUpdate LinkType BuildType)
