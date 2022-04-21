@@ -19,6 +19,9 @@ Excludes:
 /FileInfoWithTest
 
 
+/TestIndexOld
+/TestIndexNew
+
 /TestMergeDirectory/
 /FileInfoWithoutTest
 /.mbpm/

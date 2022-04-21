@@ -205,6 +205,8 @@ namespace MBPM
 		std::string FileName = "";
 		std::string FileHash = "";
 		uint64_t FileSize = 0;
+		//
+		uint64_t LastWriteTime = 0;
 		bool operator<(MBPP_FileInfo const& OtherFileInfo) const
 		{
 			return(FileName < OtherFileInfo.FileName);
@@ -249,6 +251,8 @@ namespace MBPM
 		std::string StructureHash = "";
 		std::string ContentHash = "";
 		uint64_t Size = 0;
+		//
+		uint64_t LastWriteTime = 0;
 		std::vector<MBPP_FileInfo> Files = {};
 		std::vector<MBPP_DirectoryInfoNode> Directories = {};
 		bool operator<(MBPP_DirectoryInfoNode const& OtherDirectory) const
@@ -293,7 +297,7 @@ namespace MBPM
 	public:
 		std::string ArbitrarySniffData = "\x07\xEB\x13\x37MBG_MBPP_FileInfo\x13\x37";
 		//static length part
-		uint16_t Version[3] = { 0,1,0 };
+		uint16_t Version[3] = { 0,2,0 };
 		MBCrypto::HashFunction HashFunction = MBCrypto::HashFunction::SHA1;//4 bytes
 		//
 		uint32_t ExtensionDataSize = 0;
@@ -303,59 +307,139 @@ namespace MBPM
 		std::string StructureHash = "";
 		std::string ContentHash = "";
 	};
+	enum class MBPP_ExtensionType : uint16_t
+	{
+		FileAndDirectoryProperties,
+	};
+	struct MBPP_ExtensionInfo
+	{
+		MBPP_ExtensionType Type;
+		uint32_t Size;
+	};
+	enum class MBPP_FSEntryPropertyType : uint16_t
+	{
+		Null,
+
+		Name,
+		ContentHash,
+		StructureHash,
+		Size,
+		LastWrite,
+		SkipPointer
+	};
+	struct MBPP_FSEntryProperyInfo
+	{
+		MBPP_FSEntryPropertyType Type;
+		uint16_t PropertySize;//last byte set means that the size can vary, and that the rest of the bytes indicates how large the integer that denotes it's size is
+	};
+	struct MBPP_FileInfoExtensionData
+	{
+		//FileAndDirectoryProperties
+		std::vector<MBPP_FSEntryProperyInfo> FileProperties;
+		std::vector<MBPP_FSEntryProperyInfo> DirectoryProperties;
+	};
+	class MBPM_FileInfoExcluder
+	{
+	private:
+		std::vector<std::string> m_ExcludeStrings = {};
+		std::vector<std::string> m_IncludeStrings = {};
+		bool p_MatchDirectory(std::string const& Directory, std::string const& StringToMatch) const;
+		bool p_MatchFile(std::string const& StringToCompare, std::string const& StringToMatch) const;
+	public:
+		MBPM_FileInfoExcluder(std::string const& PathPosition);
+		MBPM_FileInfoExcluder() {};
+		void AddExcludeFile(std::string const& FileToExlude);
+
+		bool Includes(std::string const& StringToMatch) const;
+		bool Excludes(std::string const& StringToMatch) const;
+	};
+
+
 	class MBPP_FileInfoReader
 	{
 
 	private:
-
-
-		friend MBPP_FileInfoDiff GetFileInfoDifference(MBPP_FileInfoReader const& ClientInfo, MBPP_FileInfoReader const& ServerInfo);
 		MBPP_DirectoryInfoNode m_TopNode = MBPP_DirectoryInfoNode();
 		MBPP_FileInfoHeader m_InfoHeader;
+		MBPP_FileInfoExtensionData m_ExtensionData;
+
+		friend MBPP_FileInfoDiff GetFileInfoDifference(MBPP_FileInfoReader const& ClientInfo, MBPP_FileInfoReader const& ServerInfo);
 		static std::vector<std::string> sp_GetPathComponents(std::string const& PathToDecompose);
-		MBPP_DirectoryInfoNode p_ReadDirectoryInfoFromFile(MBUtility::MBOctetInputStream* FileToReadFrom,size_t HashSize);
-		MBPP_FileInfo p_ReadFileInfoFromFile(MBUtility::MBOctetInputStream* FileToReadFrom,size_t HashSize);
+
 		const MBPP_DirectoryInfoNode* p_GetTargetDirectory(std::vector<std::string> const& PathComponents) const;
 		MBPP_DirectoryInfoNode* p_GetTargetDirectory(std::vector<std::string> const& PathComponents);
 		MBPP_DirectoryInfoNode* p_GetTargetDirectory_Impl(std::vector<std::string> const& PathComponents);
-
-	
-		void p_UpdateDirectoriesParents(MBPP_DirectoryInfoNode* DirectoryToUpdate);
 		
+		void p_UpdateDirectoriesParents(MBPP_DirectoryInfoNode* DirectoryToUpdate);
 		void p_UpdateDirectoryInfo(MBPP_DirectoryInfoNode& NodeToUpdate, MBPP_DirectoryInfoNode const& UpdatedNode);
 		void p_DeleteObject(std::string const& ObjectPath);
 		void p_UpdateHashes();
-
 		MBPP_DirectoryHashData p_UpdateDirectoryStructureHash(MBPP_DirectoryInfoNode& NodeToUpdate);
-
-		void p_WriteHeader(MBPP_FileInfoHeader const& HeaderToWrite, MBUtility::MBOctetOutputStream* OutputStream);
-		void p_WriteFileInfo(MBPP_FileInfo const& InfoToWrite, MBUtility::MBOctetOutputStream* OutputStream);
-		void p_WriteDirectoryInfo(MBPP_DirectoryInfoNode const& InfoToWrite, MBUtility::MBSearchableOutputStream* OutputStream);
 
 		bool p_ObjectIsFile(std::string const& ObjectToCheck);
 		MBPP_FileInfo* p_GetObjectFileData(std::string const& ObjectToCheck);
 		MBPP_DirectoryInfoNode* p_GetObjectDirectoryData(std::string const& ObjectToCheck);
+
+		static uint64_t p_GetPathWriteTime(std::filesystem::path const& PathToInspect);
+
+		static MBPP_FileInfo p_CreateFileInfo(std::filesystem::path const& FilePath, MBPP_FileInfoHeader const& Header, MBPP_FileInfoExtensionData const& ExtensionData);
+		static MBPP_DirectoryInfoNode p_CreateDirectoryInfo(
+			std::filesystem::path const& TopDirectoryPath,
+			std::filesystem::path const& DirectoryPath,
+			MBPP_FileInfoHeader const& Header,
+			MBPP_FileInfoExtensionData const& ExtensionData,
+			MBPM_FileInfoExcluder const& FileExcluder,
+			MBPP_FileInfoReader const* ReaderToCompare
+		);
+	
+		static MBPP_FileInfoHeader p_ReadFileInfoHeader(MBUtility::MBOctetInputStream* StreamToReadFrom);
+		static MBPP_FileInfoExtensionData p_ReadExtensionData(MBUtility::MBOctetInputStream* InputStream,uint32_t ExtensionSize);
+		static MBPP_FileInfo p_ReadFileInfoFromFile(MBUtility::MBOctetInputStream* FileToReadFrom,MBPP_FileInfoHeader const& Header,MBPP_FileInfoExtensionData const& ExtensionData);
+		static MBPP_DirectoryInfoNode p_ReadDirectoryInfoFromFile(MBUtility::MBOctetInputStream* FileToReadFrom, MBPP_FileInfoHeader const& Header, MBPP_FileInfoExtensionData const& ExtensionData);
+	
+		static std::string p_ReadPropertyFromStream(MBUtility::MBOctetInputStream* InputStream, MBPP_FSEntryProperyInfo const& PropertyToRead);
+
+		static void p_WriteHeader(MBPP_FileInfoHeader const& HeaderToWrite, MBUtility::MBOctetOutputStream* OutputStream);
+		static void p_WriteExtensionData(MBUtility::MBOctetOutputStream* OutputStream,MBPP_FileInfoExtensionData const& DataToWrite); 
+		static void p_WriteFileInfo(MBPP_FileInfo const& InfoToWrite, MBUtility::MBOctetOutputStream* OutputStream, MBPP_FileInfoHeader const& Header, MBPP_FileInfoExtensionData const& ExtensionData);
+		static void p_WriteDirectoryInfo(MBPP_DirectoryInfoNode const& InfoToWrite, MBUtility::MBSearchableOutputStream* OutputStream, MBPP_FileInfoHeader const& Header, MBPP_FileInfoExtensionData const& ExtensionData);
+		static std::string p_SerializeExtensionData(MBPP_FileInfoExtensionData const& DataToSerialise);
+
+		static MBPP_FileInfoExtensionData p_GetLatestVersionExtensionData();
+		static MBPM_FileInfoExcluder p_GetDirectoryFileInfoExcluder(std::string const& Directory);
 	public:
 		static MBPP_FileInfoDiff GetFileInfoDifference(MBPP_DirectoryInfoNode const& ClientInfo, MBPP_DirectoryInfoNode const& ServerInfo);
+		
+		friend void swap(MBPP_FileInfoReader& LeftInfoReader, MBPP_FileInfoReader& RightInfoReader) noexcept;
 		MBPP_FileInfoReader() {};
 		MBPP_FileInfoReader(std::string const& FileInfoPath);
 		MBPP_FileInfoReader(const void* DataToRead, size_t DataSize);
+		MBPP_FileInfoReader(MBUtility::MBOctetInputStream* InputStream);
+		MBPP_FileInfoReader(MBPP_FileInfoReader&& ReaderToSteal) noexcept;
+		MBPP_FileInfoReader(MBPP_FileInfoReader const& ReaderToCopy);
+		MBPP_FileInfoReader& operator=(MBPP_FileInfoReader ReaderToCopy);
+		
+		static void CreateFileInfo(std::string const& PacketToHashDirectory, MBPM_FileInfoExcluder const& Excluder, MBPP_FileInfoReader* OutReader);
+		static void CreateFileInfo(std::string const& PacketToHashDirectory, MBPP_FileInfoReader* OutReader);
+		static void CreateFileInfo(std::string const& PacketToHashDirectory, std::string const& FileName = "MBPM_FileInfo");
+		static void CreateFileInfo(std::string const& PacketToHashDirectory, MBUtility::MBSearchableOutputStream* OutputStream);
+
+		static void UpdateFileInfo(MBPP_FileInfoReader& ReaderToUpdate, std::string const& FileInfoDirectory);
+		
 		bool ObjectExists(std::string const& ObjectToSearch) const;
 		const MBPP_FileInfo* GetFileInfo(std::string const& ObjectToSearch) const;
 		const MBPP_DirectoryInfoNode * GetDirectoryInfo(std::string const& ObjectToSearch) const;
 		bool operator==(MBPP_FileInfoReader const& OtherReader) const;
 		
 		//copy grejer
-		friend void swap(MBPP_FileInfoReader& LeftInfoReader, MBPP_FileInfoReader& RightInfoReader) noexcept;
-		MBPP_FileInfoReader(MBPP_FileInfoReader&& ReaderToSteal) noexcept;
-		MBPP_FileInfoReader(MBPP_FileInfoReader const& ReaderToCopy);
-		MBPP_FileInfoReader& operator=(MBPP_FileInfoReader ReaderToCopy);
 
 		//output grejer
 		std::string GetBinaryString();
 		void WriteData(MBUtility::MBSearchableOutputStream* OutputStream);
 
 		//static grejer 
+		void UpdateInfo(MBPP_DirectoryInfoNode const& NewInfo);
+		void UpdateInfo(MBPP_DirectoryInfoNode const& NewInfo,std::string const& MountPoint);
 		void UpdateInfo(MBPP_FileInfoReader const& NewInfo);
 		void UpdateInfo(MBPP_FileInfoReader const& NewInfo,std::string const& MountPoint);
 		template<typename T>
@@ -375,21 +459,6 @@ namespace MBPM
 		std::string URL = "";
 		MBPP_TransferProtocol TransferProtocol = MBPP_TransferProtocol::Null;
 		uint16_t Port = -1; //-1 st�r f�r default port i f�rh�llande till en transfer protocol
-	};
-
-	class MBPM_FileInfoExcluder
-	{
-	private:
-		std::vector<std::string> m_ExcludeStrings = {};
-		std::vector<std::string> m_IncludeStrings = {};
-		bool p_MatchDirectory(std::string const& Directory,std::string const& StringToMatch);
-		bool p_MatchFile(std::string const& StringToCompare, std::string const& StringToMatch);
-	public:
-		MBPM_FileInfoExcluder(std::string const& PathPosition);
-		MBPM_FileInfoExcluder() {};
-		bool Excludes(std::string const& StringToMatch);
-		bool Includes(std::string const& StringToMatch);
-		void AddExcludeFile(std::string const& FileToExlude);
 	};
 	void CreatePacketFilesData(std::string const& PacketToHashDirectory,std::string const& FileName = "MBPM_FileInfo");
 	void CreatePacketFilesData(std::string const& PacketToHashDirectory,MBUtility::MBSearchableOutputStream* OutputStream);

@@ -45,3 +45,4 @@ servern crashar om man f�rs�ker ladda upp packet med namn ""
 ta bort den gammla "downloadfilelist" och anv�nd bara den nya, g�r bland annat s� att allt f�r en fin download bar samt att det inte �r lika jobbigt att uppdatera
 
 fixa s� att den m�rker av duplicate exported exeutables, samt att den uppdaterar executabeln bara om den finns, och att den g�r det n�r den �r f�rkompilerad
+   

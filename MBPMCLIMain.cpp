@@ -21,5 +21,25 @@ int main(int argc,char** argv)
 	//argc = argc2;
 	//argv = argv2;
 	
+	//Test grejer
+	//std::filesystem::current_path("C:/Users/emanu/Desktop/Program/C++/MBPM_ExternalPackets/cryptopp/");
+	//MBPM::MBPP_FileInfoReader OldInfo = MBPM::CreateFileInfo("./");
+	//MBPM::MBPP_FileInfoReader NewInfo; 
+	//MBPM::MBPP_FileInfoReader::CreateFileInfo("./", &NewInfo);
+	
+	std::filesystem::current_path(std::filesystem::current_path().parent_path());
+
+	//MBPM::MBPP_FileInfoReader::CreateFileInfo("./", "./TestIndexNew");
+	MBPM::MBPP_FileInfoReader OldInfo = MBPM::MBPP_FileInfoReader("./TestIndexNew");
+	MBPM::MBPP_FileInfoReader UpdatedInfo = OldInfo;
+	MBPM::MBPP_FileInfoReader::UpdateFileInfo(UpdatedInfo, "./");
+	MBPM::MBPP_FileInfoReader NewIndex;
+	MBPM::MBPP_FileInfoReader::CreateFileInfo("./", &NewIndex);
+
+	std::cout << bool(UpdatedInfo == NewIndex) << std::endl;
+	
+
+	std::exit(0);
+
 	return(MBPM::MBCLI_Main(argc, argv));
 }
