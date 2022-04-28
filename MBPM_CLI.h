@@ -92,5 +92,5 @@ namespace MBPM
 	public:
 		void HandleCommand(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
 	};
-	int MBCLI_Main(int argv, char** args);
+	int MBCLI_Main(int argv,const char** args);
 }

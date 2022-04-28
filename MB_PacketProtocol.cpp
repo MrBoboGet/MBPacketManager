@@ -257,7 +257,7 @@ namespace MBPM
 		DirectoryExcluder.AddExcludeFile("/" + FileName);
 		MBPP_FileInfoReader NewInfo;
 		CreateFileInfo(PacketToHashDirectory, DirectoryExcluder, &NewInfo);
-		std::ofstream FileStream(FileName, std::ios::out | std::ios::binary);
+		std::ofstream FileStream(PacketToHashDirectory+"/"+FileName, std::ios::out | std::ios::binary);
 		MBUtility::MBFileOutputStream OutStream(&FileStream);
 		NewInfo.WriteData(&OutStream);
 	}
@@ -268,14 +268,213 @@ namespace MBPM
 		CreateFileInfo(PacketToHashDirectory, DirectoryExcluder, &NewInfo);
 		NewInfo.WriteData(OutputStream);
 	}
-
-	void MBPP_FileInfoReader::UpdateFileInfo(MBPP_FileInfoReader& ReaderToUpdate, std::string const& FileInfoDirectory)
+	void MBPP_FileInfoReader::UpdateFileInfo(std::string const& FileInfoTopDirectory, MBPM_FileInfoExcluder const& Excluder, MBPP_FileInfoReader& ReaderToUpdate)
 	{
-		MBPM_FileInfoExcluder Excluder = p_GetDirectoryFileInfoExcluder(FileInfoDirectory);
-		MBPP_DirectoryInfoNode DiffNode = p_CreateDirectoryInfo(FileInfoDirectory, FileInfoDirectory, ReaderToUpdate.m_InfoHeader, ReaderToUpdate.m_ExtensionData, Excluder, &ReaderToUpdate);
+		//Inneficient and ugly as it iterats through the directory twice, but here until a better way to unravel the functionality is concieved
+		MBPP_DirectoryInfoNode DiffNode = p_CreateDirectoryInfo(FileInfoTopDirectory, FileInfoTopDirectory, ReaderToUpdate.m_InfoHeader, ReaderToUpdate.m_ExtensionData, Excluder, &ReaderToUpdate);
+		MBPP_FileInfoDiff FileInfoDiff = GetLocalInfoDiff(FileInfoTopDirectory, Excluder, ReaderToUpdate);
+		ReaderToUpdate.DeleteObjects(FileInfoDiff.DeletedDirectories);
+		ReaderToUpdate.DeleteObjects(FileInfoDiff.RemovedFiles);
 		ReaderToUpdate.UpdateInfo(DiffNode);
 	}
+	void MBPP_FileInfoReader::UpdateFileInfo(std::string const& FileInfoDirectory,MBPP_FileInfoReader& ReaderToUpdate)
+	{
+		MBPM_FileInfoExcluder Excluder = p_GetDirectoryFileInfoExcluder(FileInfoDirectory);
+		UpdateFileInfo(FileInfoDirectory, Excluder, ReaderToUpdate);
+		//MBPP_DirectoryInfoNode DiffNode = p_CreateDirectoryInfo(FileInfoDirectory, FileInfoDirectory, ReaderToUpdate.m_InfoHeader, ReaderToUpdate.m_ExtensionData, Excluder, &ReaderToUpdate);
+		//ReaderToUpdate.UpdateInfo(DiffNode);
+	}
 
+	void MBPP_FileInfoReader::UpdateFileInfo(std::string const& DirectoryToIndex, std::string const& FileName)
+	{
+		if (!std::filesystem::exists(DirectoryToIndex + "/" + FileName))
+		{
+			CreateFileInfo(DirectoryToIndex, FileName);
+		}
+		else
+		{
+			MBPP_FileInfoReader StoredFileInfo = MBPP_FileInfoReader(DirectoryToIndex + "/" + FileName);
+			if (StoredFileInfo.ObjectExists("/"))
+			{
+				UpdateFileInfo(DirectoryToIndex, StoredFileInfo);
+				std::ofstream OutFile(DirectoryToIndex + "/" + FileName,std::ios::out|std::ios::binary);
+				if (OutFile.is_open())
+				{
+					MBUtility::MBFileOutputStream OutStream(&OutFile);
+					StoredFileInfo.WriteData(&OutStream);
+				}
+			}
+			else
+			{
+				CreateFileInfo(DirectoryToIndex, FileName);
+			}
+		}
+	}
+	MBPP_FileInfoReader MBPP_FileInfoReader::GetLocalUpdatedFiles(std::string const& DirectoryToIndex,std::string const& IndexName)
+	{
+		MBPP_FileInfoReader ReturnValue;
+		if (std::filesystem::exists(DirectoryToIndex + "/" + IndexName) && std::filesystem::directory_entry(DirectoryToIndex + "/" + IndexName).is_regular_file())
+		{
+			MBPP_FileInfoReader StoredInfo(DirectoryToIndex + "/" + IndexName);
+			if (StoredInfo.ObjectExists("/"))
+			{
+				MBPM_FileInfoExcluder Excluder = p_GetDirectoryFileInfoExcluder(DirectoryToIndex);
+				ReturnValue.m_InfoHeader = MBPP_FileInfoHeader();
+				ReturnValue.m_ExtensionData = p_GetLatestVersionExtensionData();
+				ReturnValue.m_InfoHeader.ExtensionDataSize = p_SerializeExtensionData(ReturnValue.m_ExtensionData).size();
+				ReturnValue.m_TopNode = p_CreateDirectoryInfo(DirectoryToIndex, DirectoryToIndex, ReturnValue.m_InfoHeader, ReturnValue.m_ExtensionData, Excluder, &StoredInfo);
+				ReturnValue.p_UpdateDirectoriesParents(&ReturnValue.m_TopNode);
+			}
+			else
+			{
+				CreateFileInfo(DirectoryToIndex, &ReturnValue);
+			}
+		}
+		else
+		{
+			CreateFileInfo(DirectoryToIndex, &ReturnValue);
+		}
+		return(ReturnValue);
+	}
+	MBPP_FileInfoDiff MBPP_FileInfoReader::GetLocalInfoDiff(std::string const& DirectoryToIndex, MBPM_FileInfoExcluder const& Excluder, MBPP_FileInfoReader const& InfoToCompare)
+	{
+		MBPP_FileInfoDiff ReturnValue;
+		if (InfoToCompare.GetDirectoryInfo("/") == nullptr)
+		{
+			return ReturnValue;
+		}
+		p_GetLocalInfoDiff_UpdateDirectory(ReturnValue, Excluder, *InfoToCompare.GetDirectoryInfo("/"), DirectoryToIndex, "/");
+		return(ReturnValue);
+	}
+	MBPP_FileInfoDiff MBPP_FileInfoReader::GetLocalInfoDiff(std::string const& DirectoryToIndex, std::string const& IndexName)
+	{
+		MBPP_FileInfoDiff ReturnValue;
+		if (std::filesystem::exists(DirectoryToIndex + "/" + IndexName) && std::filesystem::directory_entry(DirectoryToIndex + "/" + IndexName).is_regular_file())
+		{
+			MBPP_FileInfoReader StoredInfo(DirectoryToIndex + "/" + IndexName);
+			if (StoredInfo.ObjectExists("/"))
+			{
+				MBPM_FileInfoExcluder Excluder = p_GetDirectoryFileInfoExcluder(DirectoryToIndex);
+				ReturnValue = GetLocalInfoDiff(DirectoryToIndex, Excluder, StoredInfo);
+			}
+		}
+		return(ReturnValue);
+	}
+	void MBPP_FileInfoReader::p_GetLocalInfoDiff_UpdateDirectory(MBPP_FileInfoDiff& OutResult,MBPM_FileInfoExcluder const& Excluder,MBPP_DirectoryInfoNode const& 
+		StoredNode, std::filesystem::path const& LocalDirectory,std::string const& CurrentIndexPath)
+	{
+		std::set<std::string> FilePaths;
+		std::set<std::string> DirectoryPaths;
+		std::filesystem::directory_iterator DirectoryIterator(LocalDirectory);
+		for (auto const& Entry : DirectoryIterator)
+		{
+			std::string EntryName = MBUnicode::PathToUTF8(Entry.path().filename());
+			if (!(Entry.is_regular_file() || Entry.is_directory()))
+			{
+				continue;
+			}
+			if (Excluder.Excludes(EntryName) && !Excluder.Includes(EntryName))
+			{
+				continue;
+			}
+			if (Entry.is_regular_file())
+			{
+				FilePaths.insert(EntryName);
+			}
+			else if (Entry.is_directory())
+			{
+				DirectoryPaths.insert(EntryName);
+			}
+		}
+
+		auto LocalFilesIterator= FilePaths.begin();
+		auto LocalFilesEnd= FilePaths.end();
+		auto StoredFilesIterator = StoredNode.Files.begin();
+		auto StoredFilesEnd = StoredNode.Files.end();
+		while (StoredFilesIterator != StoredFilesEnd && LocalFilesIterator != LocalFilesEnd)
+		{
+			if (*LocalFilesIterator < StoredFilesIterator->FileName)
+			{
+				//More files
+				OutResult.AddedFiles.push_back(CurrentIndexPath + *LocalFilesIterator);
+				LocalFilesIterator++;
+			}
+			else if (*LocalFilesIterator > StoredFilesIterator->FileName)
+			{
+				OutResult.RemovedFiles.push_back(CurrentIndexPath + *LocalFilesIterator);
+				StoredFilesIterator++;
+			}
+			else
+			{
+				//Equal
+				if (std::filesystem::exists(LocalDirectory/ *LocalFilesIterator))
+				{
+					uint64_t LocalLastWriteTime = p_GetPathWriteTime(LocalDirectory/ *LocalFilesIterator);
+					uint64_t StoredLastWriteTime = StoredFilesIterator->LastWriteTime;
+					if (!(StoredLastWriteTime == 0 || LocalLastWriteTime == 0))
+					{
+						if (LocalLastWriteTime > StoredLastWriteTime)
+						{
+							OutResult.UpdatedFiles.push_back(CurrentIndexPath + *LocalFilesIterator);
+						}
+					}
+					else
+					{
+						std::string LocalHash = MBCrypto::GetFileHash(MBUnicode::PathToUTF8(LocalDirectory) + "/" + *LocalFilesIterator, MBCrypto::HashFunction::SHA1);
+						if (LocalHash != StoredFilesIterator->FileHash)
+						{
+							OutResult.UpdatedFiles.push_back(CurrentIndexPath+*LocalFilesIterator);
+						}
+					}
+				}
+				StoredFilesIterator++;
+				LocalFilesIterator++;
+			}
+		}
+		while (LocalFilesIterator != LocalFilesEnd)
+		{
+			OutResult.AddedFiles.push_back(CurrentIndexPath+*LocalFilesIterator);
+			LocalFilesIterator++;
+		}
+		while (StoredFilesIterator != StoredFilesEnd)
+		{
+			OutResult.RemovedFiles.push_back(CurrentIndexPath + StoredFilesIterator->FileName);
+			StoredFilesIterator++;
+		}
+		auto LocalDirectoriesIterator = DirectoryPaths.begin();
+		auto LocalDirectoriesEnd = DirectoryPaths.end();
+		auto StoredDirectoriesIterator = StoredNode.Directories.begin();
+		auto StoredDirectoriesEnd = StoredNode.Directories.end();
+		while (LocalDirectoriesIterator != LocalDirectoriesEnd && StoredDirectoriesIterator != StoredDirectoriesEnd)
+		{
+			if (*LocalDirectoriesIterator < StoredDirectoriesIterator->DirectoryName)
+			{
+				OutResult.AddedDirectories.push_back(CurrentIndexPath + *LocalDirectoriesIterator);
+				LocalDirectoriesIterator++;
+			}
+			else if (*LocalDirectoriesIterator > StoredDirectoriesIterator->DirectoryName)
+			{
+				OutResult.DeletedDirectories.push_back(CurrentIndexPath + *LocalDirectoriesIterator);
+				StoredDirectoriesIterator++;
+			}
+			else
+			{
+				p_GetLocalInfoDiff_UpdateDirectory(OutResult, Excluder, *StoredDirectoriesIterator, LocalDirectory/StoredDirectoriesIterator->DirectoryName, CurrentIndexPath + StoredDirectoriesIterator->DirectoryName + "/");
+				LocalDirectoriesIterator++;
+				StoredDirectoriesIterator++;
+			}
+		}
+		while (LocalDirectoriesIterator != LocalDirectoriesEnd)
+		{
+			OutResult.AddedDirectories.push_back(CurrentIndexPath + *LocalDirectoriesIterator);
+			LocalDirectoriesIterator++;
+		}
+		while (StoredDirectoriesIterator != StoredDirectoriesEnd)
+		{
+			OutResult.DeletedDirectories.push_back(CurrentIndexPath + StoredDirectoriesIterator->DirectoryName);
+			StoredDirectoriesEnd++;
+		}
+	}
 	void CreatePacketFilesData(std::string const& PacketToHashDirectory,std::string const& OutputName)
 	{
 		std::ofstream OutputFile = std::ofstream(PacketToHashDirectory +"/"+ OutputName,std::ios::out|std::ios::binary);
@@ -1401,7 +1600,6 @@ namespace MBPM
 			{MBPP_FSEntryPropertyType::ContentHash,20},
 			{MBPP_FSEntryPropertyType::Size,8},
 			{MBPP_FSEntryPropertyType::Name,uint16_t((1ll << 15ll) + 2)},
-			{MBPP_FSEntryPropertyType::LastWrite,8},
 		};
 		return(ReturnValue);
 	}
@@ -1451,7 +1649,7 @@ namespace MBPM
 		{
 			ReturnValue.DirectoryName = "/";
 		}
-		ReturnValue.LastWriteTime = p_GetPathWriteTime(DirectoryPath);
+		ReturnValue.LastWriteTime = -1;//TODO implement correctly
 		std::set<std::filesystem::path> FilePaths;
 		std::set<std::filesystem::path> DirectoryPaths;
 		std::filesystem::directory_iterator DirectoryIterator(DirectoryPath);
@@ -1482,18 +1680,18 @@ namespace MBPM
 			}
 			else if (Entry.is_directory())
 			{
-				if (ReaderToCompare != nullptr)
-				{
-					if (ReaderToCompare->GetDirectoryInfo(AbsolutePacketPath) != nullptr)
-					{
-						uint64_t LocalWriteTime = p_GetPathWriteTime(Entry.path());
-						uint64_t CompareWriteTime = ReaderToCompare->GetDirectoryInfo(AbsolutePacketPath)->LastWriteTime;
-						if (CompareWriteTime != 0 && CompareWriteTime >= LocalWriteTime)
-						{
-							continue;
-						}
-					}
-				}
+				//if (ReaderToCompare != nullptr)
+				//{
+				//	if (ReaderToCompare->GetDirectoryInfo(AbsolutePacketPath) != nullptr)
+				//	{
+				//		uint64_t LocalWriteTime = p_GetPathWriteTime(Entry.path());
+				//		uint64_t CompareWriteTime = ReaderToCompare->GetDirectoryInfo(AbsolutePacketPath)->LastWriteTime;
+				//		if (CompareWriteTime != 0 && CompareWriteTime >= LocalWriteTime)
+				//		{
+				//			continue;
+				//		}
+				//	}
+				//}
 				DirectoryPaths.insert(Entry.path());
 			}
 		}
@@ -1662,7 +1860,7 @@ namespace MBPM
 		}
 		while (OtherNodeFiles != OtherNodeFilesEnd)
 		{
-			NewFileList.push_back(std::move(*OtherNodeFiles));
+			NewFileList.push_back(*OtherNodeFiles);
 			OtherNodeFiles++;
 		}
 		NodeToUpdate.Files = std::move(NewFileList);

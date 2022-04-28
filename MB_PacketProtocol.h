@@ -405,6 +405,8 @@ namespace MBPM
 		static void p_WriteDirectoryInfo(MBPP_DirectoryInfoNode const& InfoToWrite, MBUtility::MBSearchableOutputStream* OutputStream, MBPP_FileInfoHeader const& Header, MBPP_FileInfoExtensionData const& ExtensionData);
 		static std::string p_SerializeExtensionData(MBPP_FileInfoExtensionData const& DataToSerialise);
 
+		static void p_GetLocalInfoDiff_UpdateDirectory(MBPP_FileInfoDiff& OutResult,MBPM_FileInfoExcluder const& Excluder,MBPP_DirectoryInfoNode const& StoredNode,std::filesystem::path const& LocalDirectory,std::string const& CurrentIndexPath);
+
 		static MBPP_FileInfoExtensionData p_GetLatestVersionExtensionData();
 		static MBPM_FileInfoExcluder p_GetDirectoryFileInfoExcluder(std::string const& Directory);
 	public:
@@ -414,18 +416,31 @@ namespace MBPM
 		MBPP_FileInfoReader() {};
 		MBPP_FileInfoReader(std::string const& FileInfoPath);
 		MBPP_FileInfoReader(const void* DataToRead, size_t DataSize);
+		[[SemanticallyAuthoritative]]
 		MBPP_FileInfoReader(MBUtility::MBOctetInputStream* InputStream);
 		MBPP_FileInfoReader(MBPP_FileInfoReader&& ReaderToSteal) noexcept;
 		MBPP_FileInfoReader(MBPP_FileInfoReader const& ReaderToCopy);
 		MBPP_FileInfoReader& operator=(MBPP_FileInfoReader ReaderToCopy);
 		
+		[[SemanticallyAuthoritative]]
 		static void CreateFileInfo(std::string const& PacketToHashDirectory, MBPM_FileInfoExcluder const& Excluder, MBPP_FileInfoReader* OutReader);
+		
 		static void CreateFileInfo(std::string const& PacketToHashDirectory, MBPP_FileInfoReader* OutReader);
 		static void CreateFileInfo(std::string const& PacketToHashDirectory, std::string const& FileName = "MBPM_FileInfo");
 		static void CreateFileInfo(std::string const& PacketToHashDirectory, MBUtility::MBSearchableOutputStream* OutputStream);
 
-		static void UpdateFileInfo(MBPP_FileInfoReader& ReaderToUpdate, std::string const& FileInfoDirectory);
+		[[SemanticallyAuthoritative]]
+		static void UpdateFileInfo(std::string const& FileInfoTopDirectory, MBPM_FileInfoExcluder const& Excluder, MBPP_FileInfoReader& ReaderToUpdate);
 		
+		static void UpdateFileInfo(std::string const& FileInfoTopDirectory,MBPP_FileInfoReader& ReaderToUpdate);
+		static void UpdateFileInfo(std::string const& DirectoryToIndex, std::string const& FileName = "MBPM_FileInfo");
+
+		static MBPP_FileInfoReader GetLocalUpdatedFiles(std::string const& DirectoryToIndex,std::string const& IndexName = "MBPM_FileInfo");
+		[[SemanticallyAuthoritative]]
+		static MBPP_FileInfoDiff GetLocalInfoDiff(std::string const& DirectoryToIndex,MBPM_FileInfoExcluder const& Excluder,MBPP_FileInfoReader const& InfoToCompare);
+		
+		static MBPP_FileInfoDiff GetLocalInfoDiff(std::string const& DirectoryToIndex,std::string const& IndexName = "MBPM_FileInfo");
+
 		bool ObjectExists(std::string const& ObjectToSearch) const;
 		const MBPP_FileInfo* GetFileInfo(std::string const& ObjectToSearch) const;
 		const MBPP_DirectoryInfoNode * GetDirectoryInfo(std::string const& ObjectToSearch) const;
@@ -434,8 +449,10 @@ namespace MBPM
 		//copy grejer
 
 		//output grejer
-		std::string GetBinaryString();
+		[[SemanticallyAuthoritative]]
 		void WriteData(MBUtility::MBSearchableOutputStream* OutputStream);
+		
+		std::string GetBinaryString();
 
 		//static grejer 
 		void UpdateInfo(MBPP_DirectoryInfoNode const& NewInfo);

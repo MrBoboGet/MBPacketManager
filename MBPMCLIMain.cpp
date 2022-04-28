@@ -5,7 +5,7 @@
 #include <MB_PacketProtocol.h>
 #include <MBPM_CLI.h>
 
-int main(int argc,char** argv)
+int main(int argc,const char** argv)
 {
 	//DEBUG GREJER
 	//mbpm upload --allinstalled -d /MBPM_Builds/ --computerdiff
@@ -26,20 +26,24 @@ int main(int argc,char** argv)
 	//MBPM::MBPP_FileInfoReader OldInfo = MBPM::CreateFileInfo("./");
 	//MBPM::MBPP_FileInfoReader NewInfo; 
 	//MBPM::MBPP_FileInfoReader::CreateFileInfo("./", &NewInfo);
-	
-	std::filesystem::current_path(std::filesystem::current_path().parent_path());
+	//std::cout << bool(OldInfo == NewInfo) << std::endl;
+	//std::filesystem::current_path("C:\\Users\\emanu\\Desktop\\BackupReplayDolphin\\Slippi");
 
+	//const char* NewArgv[] = { "mbpm","index","list","./" };
+	//argc = sizeof(NewArgv) / sizeof(const char*);
+	//argv = NewArgv;
 	//MBPM::MBPP_FileInfoReader::CreateFileInfo("./", "./TestIndexNew");
-	MBPM::MBPP_FileInfoReader OldInfo = MBPM::MBPP_FileInfoReader("./TestIndexNew");
-	MBPM::MBPP_FileInfoReader UpdatedInfo = OldInfo;
-	MBPM::MBPP_FileInfoReader::UpdateFileInfo(UpdatedInfo, "./");
-	MBPM::MBPP_FileInfoReader NewIndex;
-	MBPM::MBPP_FileInfoReader::CreateFileInfo("./", &NewIndex);
-
-	std::cout << bool(UpdatedInfo == NewIndex) << std::endl;
+	
+	
+	//MBPM::MBPP_FileInfoReader OldInfo = MBPM::MBPP_FileInfoReader("./TestIndexNew");
+	//MBPM::MBPP_FileInfoReader UpdatedInfo = OldInfo;
+	//MBPM::MBPP_FileInfoReader::UpdateFileInfo("./",UpdatedInfo);
+	//MBPM::MBPP_FileInfoReader NewIndex;
+	//MBPM::MBPP_FileInfoReader::CreateFileInfo("./", &NewIndex);
+	//std::cout << bool(UpdatedInfo == NewIndex) << std::endl;
 	
 
-	std::exit(0);
+	//std::exit(0);
 
 	return(MBPM::MBCLI_Main(argc, argv));
 }

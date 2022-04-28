@@ -28,21 +28,27 @@ kunna lisa specifika delar av ett index med index list
 
 f�r att g�ra semantiken lite smidiagre 
 
-dokumentera allt, framf�rallt internet protokollet och MBMP_FileInfo formatet...
+dokumentera allt, framförallt internet protokollet och MBMP_FileInfo formatet...
 
-fixa s� att get har att man ser download tiden
+fixa så att get har att man ser download tiden
 
-command f�r att uppdatera alla dependancies
+command för att uppdatera alla dependancies
 
-tog extremt mycket minne att j�mf�ra den installerade ffmpegen och den lokala, borde kolla upp det d�r
+tog extremt mycket minne att jämföra den installerade ffmpegen och den lokala, borde kolla upp det där
 
-upload fastnar ibland p� vissa st�llen
+upload fastnar ibland på vissa ställen
 
 mbpm upload MBSearchEngine --installed -d /MBPM_Builds/ --computerdiff
 
-servern crashar om man f�rs�ker ladda upp packet med namn ""
+servern crashar om man försöker ladda upp packet med namn ""
 
-ta bort den gammla "downloadfilelist" och anv�nd bara den nya, g�r bland annat s� att allt f�r en fin download bar samt att det inte �r lika jobbigt att uppdatera
+ta bort den gammla "downloadfilelist" och använd bara den nya, gör bland annat så att allt får en fin download bar samt att det inte är lika jobbigt att uppdatera
 
-fixa s� att den m�rker av duplicate exported exeutables, samt att den uppdaterar executabeln bara om den finns, och att den g�r det n�r den �r f�rkompilerad
+fixa så att den märker av duplicate exported executables, samt att den uppdaterar executabeln bara om den finns, och att den gör det när den är förkompilerad
    
+MBPM_CompileInfo eller något, ett system för skriva vilka versioner av dependancys och deras struktur etc för som användes för att compila, så man vet att det är samma, samt ett system
+för att compila/updatera alla ett packets dependancys/ dem som skiljer sig från annan compile info etc. mbpm update MBWebsite --dependancies exempelvis
+
+Fixa så att MBPP_FileInfoReader GetDifference eller vad den heter också ger vad som tagits bort, nu ger den bara vad som har ändrats utan att indikera på vad som är borta
+
+Lägg även till mbpm compile MBWebsite --dependants, dvs compila alla packets som beror på MBWebsite

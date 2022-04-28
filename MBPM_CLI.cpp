@@ -2042,7 +2042,7 @@ namespace MBPM
 	}
 	//END MBPM_CLI
 
-	int MBCLI_Main(int argc, char** argv)
+	int MBCLI_Main(int argc,const char** argv)
 	{
 		try
 		{
