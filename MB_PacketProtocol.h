@@ -462,9 +462,9 @@ namespace MBPM
 		template<typename T>
 		void DeleteObjects(T const& ObjectsToDelete)
 		{
-			for (std::string const& ObjectToDelete : ObjectsToDelete)
+			for (std::string const& CurrentObject : ObjectsToDelete)
 			{
-				p_DeleteObject(ObjectsToDelete);
+				p_DeleteObject(CurrentObject);
 			}
 			p_UpdateDirectoriesParents(&m_TopNode);
 			p_UpdateHashes();

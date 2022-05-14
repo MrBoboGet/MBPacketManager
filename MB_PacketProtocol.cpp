@@ -344,6 +344,11 @@ namespace MBPM
 			return ReturnValue;
 		}
 		p_GetLocalInfoDiff_UpdateDirectory(ReturnValue, Excluder, *InfoToCompare.GetDirectoryInfo("/"), DirectoryToIndex, "/");
+		assert(std::is_sorted(ReturnValue.AddedDirectories.begin(), ReturnValue.AddedDirectories.end()));
+		assert(std::is_sorted(ReturnValue.DeletedDirectories.begin(), ReturnValue.DeletedDirectories.end()));
+		assert(std::is_sorted(ReturnValue.AddedFiles.begin(), ReturnValue.AddedFiles.end()));
+		assert(std::is_sorted(ReturnValue.UpdatedFiles.begin(), ReturnValue.UpdatedFiles.end()));
+		assert(std::is_sorted(ReturnValue.RemovedFiles.begin(), ReturnValue.RemovedFiles.end()));
 		return(ReturnValue);
 	}
 	MBPP_FileInfoDiff MBPP_FileInfoReader::GetLocalInfoDiff(std::string const& DirectoryToIndex, std::string const& IndexName)
@@ -958,7 +963,14 @@ namespace MBPM
 
 	//END MBPP_ComputerDiffInfo
 
-
+	bool h_FileLessThan(MBPP_FileInfo const& Left, MBPP_FileInfo const& Right)
+	{
+		return(Left.FileName < Right.FileName);
+	}
+	bool h_DirectoryLessThan(MBPP_DirectoryInfoNode const& Left, MBPP_DirectoryInfoNode const& Right)
+	{
+		return(Left.DirectoryName < Right.DirectoryName);
+	}
 	//BEGIN MBPP_FileInfoReader
 	MBPP_DirectoryInfoNode MBPP_FileInfoReader::p_ReadDirectoryInfoFromFile(MBUtility::MBOctetInputStream* FileToReadFrom, MBPP_FileInfoHeader const& Header, MBPP_FileInfoExtensionData const& ExtensionData)
 	{
@@ -1016,10 +1028,18 @@ namespace MBPM
 		{
 			ReturnValue.Files.push_back(p_ReadFileInfoFromFile(FileToReadFrom,Header,ExtensionData));
 		}
+		if (!std::is_sorted(ReturnValue.Files.begin(), ReturnValue.Files.end(),h_FileLessThan))
+		{
+			throw std::runtime_error("Invalid FileInfo data: File names not sorted");
+		}
 		uint32_t NumberOfDirectories = h_ReadBigEndianInteger(FileToReadFrom, 4);
 		for (size_t i = 0; i < NumberOfDirectories; i++)
 		{
 			ReturnValue.Directories.push_back(p_ReadDirectoryInfoFromFile(FileToReadFrom, Header, ExtensionData));
+		}
+		if (!std::is_sorted(ReturnValue.Directories.begin(), ReturnValue.Directories.end(),h_DirectoryLessThan))
+		{
+			throw std::runtime_error("Invalid FileInfo data: File names not sorted");
 		}
 		return(ReturnValue);
 	}
