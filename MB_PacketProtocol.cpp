@@ -5,6 +5,8 @@
 #include <MBUtility/MBAlgorithms.h>
 #include <MBUtility/MBCompileDefinitions.h>
 #include <algorithm>
+
+#include <sstream>
 namespace MBPM
 {
 	std::string h_PathToUTF8(std::filesystem::path const& PathToConvert)
@@ -239,12 +241,32 @@ namespace MBPM
 		ReturnValue.m_InfoHeader;
 		ReturnValue.m_ExtensionData = p_GetLatestVersionExtensionData();
 		ReturnValue.m_InfoHeader.ExtensionDataSize = p_SerializeExtensionData(ReturnValue.m_ExtensionData).size();
+
 		ReturnValue.m_TopNode = p_CreateDirectoryInfo(PacketToHashDirectory, PacketToHashDirectory,ReturnValue.m_InfoHeader, ReturnValue.m_ExtensionData, Excluder, nullptr);
 		ReturnValue.p_UpdateDirectoriesParents(&ReturnValue.m_TopNode);
 		if (OutReader)
 		{
 			*OutReader = std::move(ReturnValue);
 		}
+	}
+	void MBPP_FileInfoReader::CreateFileInfo(MBUtility::Filesystem& TopDirectoryToIndex, MBPP_FileInfoReader* OutReader)
+	{
+		MBPP_FileInfoReader Result;
+
+		MBPM_FileInfoExcluder Excluder;
+		MBUtility::FilesystemError FSError = MBUtility::FilesystemError::Ok;
+		std::unique_ptr<MBUtility::MBOctetInputStream> InStream = TopDirectoryToIndex.GetFileInputStream("MBPM_FileInfoIgnore",&FSError);
+		if (!!FSError)
+		{
+			Excluder = MBPM_FileInfoExcluder(InStream.get());
+		}
+
+		Result.m_InfoHeader;
+		Result.m_ExtensionData = p_GetLatestVersionExtensionData();
+		Result.m_InfoHeader.ExtensionDataSize = p_SerializeExtensionData(Result.m_ExtensionData).size();
+		Result.m_TopNode = p_CreateDirectoryInfo("/", TopDirectoryToIndex, Result.m_InfoHeader, Result.m_ExtensionData, Excluder, nullptr);
+		Result.p_UpdateDirectoriesParents(&Result.m_TopNode);
+		*OutReader = std::move(Result);
 	}
 	void MBPP_FileInfoReader::CreateFileInfo(std::string const& PacketToHashDirectory, MBPP_FileInfoReader* OutReader)
 	{
@@ -652,6 +674,58 @@ namespace MBPM
 	void MBPM_FileInfoExcluder::AddExcludeFile(std::string const& FileToExlude)
 	{
 		m_ExcludeStrings.push_back(FileToExlude);
+	}
+
+	MBPM_FileInfoExcluder::MBPM_FileInfoExcluder(MBUtility::MBOctetInputStream* InputStream)
+	{
+		std::string TotalData;
+		constexpr size_t ReadChunkSize = 4096;
+		uint8_t ReadBuffer[ReadChunkSize];
+		while (true)
+		{
+			size_t ReadBytes = InputStream->Read(ReadBuffer, ReadChunkSize);
+			TotalData.append(ReadBuffer, ReadBuffer + ReadBytes);
+			if (ReadBytes < ReadChunkSize)
+			{
+				break;
+			}
+		}
+		std::stringstream Stream(TotalData);
+		std::string CurrentLine = "";
+		bool IsInclude = false;
+		bool IsExclude = false;
+		while (std::getline(Stream, CurrentLine))
+		{
+			if (CurrentLine.size() == 0)
+			{
+				continue;
+			}
+			if (CurrentLine.back() == '\r')
+			{
+				CurrentLine = CurrentLine.substr(0, CurrentLine.size() - 1);
+			}
+			if (CurrentLine == "Excludes:")
+			{
+				IsExclude = true;
+				IsInclude = false;
+			}
+			else if (CurrentLine == "Includes:")
+			{
+				IsExclude = false;
+				IsInclude = true;
+			}
+			else if (CurrentLine != "")
+			{
+				if (IsInclude)
+				{
+					m_IncludeStrings.push_back(CurrentLine);
+				}
+				else
+				{
+					m_ExcludeStrings.push_back(CurrentLine);
+				}
+			}
+		}
 	}
 	MBPM_FileInfoExcluder::MBPM_FileInfoExcluder(std::string const& PathPosition)
 	{
@@ -1644,6 +1718,26 @@ namespace MBPM
 	{
 		return(std::filesystem::directory_entry(PathToInspect).last_write_time().time_since_epoch().count());
 	}
+	MBPP_FileInfo MBPP_FileInfoReader::p_CreateFileInfo(std::string const& FilePath, MBUtility::Filesystem& FS, MBPP_FileInfoHeader const& Header, MBPP_FileInfoExtensionData const& ExtensionData)
+	{
+		MBPP_FileInfo ReturnValue;
+		MBUtility::FilesystemError FSError = MBUtility::FilesystemError::Ok;
+		MBUtility::FSObjectInfo Info = FS.GetInfo(FilePath,&FSError);
+		if (!FSError)
+		{
+			throw std::exception();
+		}
+		std::unique_ptr<MBUtility::MBOctetInputStream> Input = FS.GetFileInputStream(FilePath,&FSError);
+		if (!FSError)
+		{
+			throw std::exception();
+		}
+		ReturnValue.FileName = FilePath.substr(FilePath.find_last_of('/') + 1);
+		ReturnValue.FileSize = Info.Size;
+		ReturnValue.LastWriteTime = Info.LastWriteTime;
+		ReturnValue.FileHash = MBCrypto::GetHash(Input.get(),Header.HashFunction);//MBCrypto::GetFileHash(MBUnicode::PathToUTF8(FilePath), Header.HashFunction);
+		return(ReturnValue);
+	}
 	MBPP_FileInfo MBPP_FileInfoReader::p_CreateFileInfo(std::filesystem::path const& FilePath, MBPP_FileInfoHeader const& Header, MBPP_FileInfoExtensionData const& ExtensionData)
 	{
 		MBPP_FileInfo ReturnValue;
@@ -1654,6 +1748,90 @@ namespace MBPM
 		ReturnValue.FileHash = MBCrypto::GetFileHash(MBUnicode::PathToUTF8(FilePath), Header.HashFunction);
 		return(ReturnValue);
 	}
+	MBPP_DirectoryInfoNode MBPP_FileInfoReader::p_CreateDirectoryInfo(
+		std::string const& CurrentPath,
+		MBUtility::Filesystem& AssociatedFilesystem,
+		MBPP_FileInfoHeader const& Header,
+		MBPP_FileInfoExtensionData const& ExtensionData,
+		MBPM_FileInfoExcluder const& FileExcluder,
+		MBPP_FileInfoReader const* ReaderToCompare
+	)
+	{
+		MBPP_DirectoryInfoNode ReturnValue;
+		assert(CurrentPath.find('/') != CurrentPath.npos);
+		ReturnValue.DirectoryName = CurrentPath.substr(CurrentPath.find_last_of('/')+1);
+		if (ReturnValue.DirectoryName == "")
+		{
+			ReturnValue.DirectoryName = "/";
+		}
+		ReturnValue.LastWriteTime = -1;//TODO implement correctly
+		std::set<std::string> FilePaths;
+		std::set<std::string> DirectoryPaths;
+		//std::filesystem::directory_iterator DirectoryIterator(DirectoryPath);
+		MBUtility::FilesystemError FSError = MBUtility::FilesystemError::Ok;
+		std::vector<MBUtility::FSObjectInfo> Contents = AssociatedFilesystem.ListDirectory(CurrentPath.substr(1), &FSError);
+		for (auto const& Entry : Contents)
+		{
+			//std::string AbsolutePacketPath = "/" + h_PathToUTF8(std::filesystem::relative(Entries.path(), TopPacketDirectory));
+			std::string AbsolutePacketPath = CurrentPath + "/" + Entry.Name;
+			//TEMP
+			if (AbsolutePacketPath.substr(0, 2) == "//")
+			{
+				AbsolutePacketPath = AbsolutePacketPath.substr(1);
+			}
+			if (FileExcluder.Excludes(AbsolutePacketPath) && !FileExcluder.Includes(AbsolutePacketPath))
+			{
+				continue;
+			}
+			if (Entry.Type == MBUtility::FileSystemType::File)
+			{
+				if (ReaderToCompare != nullptr)
+				{
+					if (ReaderToCompare->GetFileInfo(AbsolutePacketPath) != nullptr)
+					{
+						uint64_t LocalWriteTime = Entry.LastWriteTime;//p_GetPathWriteTime(Entry.path());
+						uint64_t CompareWriteTime = ReaderToCompare->GetFileInfo(AbsolutePacketPath)->LastWriteTime;
+						if (CompareWriteTime != 0 && CompareWriteTime >= LocalWriteTime)
+						{
+							continue;
+						}
+					}
+				}
+				FilePaths.insert(AbsolutePacketPath.substr(1));
+			}
+			else if (Entry.Type == MBUtility::FileSystemType::Directory)
+			{
+				DirectoryPaths.insert(AbsolutePacketPath.substr(1));
+			}
+		}
+		std::string StructureHashData;
+		std::vector<std::string> ContentHashData;
+		for(auto const& Path : FilePaths)
+		{
+			MBPP_FileInfo NewInfo = p_CreateFileInfo(Path, AssociatedFilesystem, Header, ExtensionData);
+			ReturnValue.Files.push_back(NewInfo);
+			ContentHashData.push_back(ReturnValue.Files.back().FileHash);
+			StructureHashData += ReturnValue.Files.back().FileName + ReturnValue.Files.back().FileHash;
+			ReturnValue.Size += ReturnValue.Files.back().FileSize;
+		}
+		for (auto const& Path : DirectoryPaths)
+		{
+			ReturnValue.Directories.push_back(p_CreateDirectoryInfo("/"+Path, AssociatedFilesystem, Header, ExtensionData, FileExcluder, ReaderToCompare));
+			ContentHashData.push_back(ReturnValue.Directories.back().ContentHash);
+			StructureHashData += ReturnValue.Directories.back().DirectoryName + ReturnValue.Directories.back().StructureHash;
+			ReturnValue.Size += ReturnValue.Directories.back().Size;
+		}
+		std::sort(ContentHashData.begin(), ContentHashData.end());
+		std::string TotalContentHash;
+		for (size_t i = 0; i < ContentHashData.size(); i++)
+		{
+			TotalContentHash += ContentHashData[i];
+		}
+		ReturnValue.ContentHash = MBCrypto::HashData(TotalContentHash, Header.HashFunction);
+		ReturnValue.StructureHash = MBCrypto::HashData(StructureHashData, Header.HashFunction);
+		return(ReturnValue);
+	}
+
 	MBPP_DirectoryInfoNode MBPP_FileInfoReader::p_CreateDirectoryInfo(
 		std::filesystem::path const& TopDirectoryPath,
 		std::filesystem::path const& DirectoryPath,
@@ -1677,7 +1855,7 @@ namespace MBPM
 		{
 			//std::string AbsolutePacketPath = "/" + h_PathToUTF8(std::filesystem::relative(Entries.path(), TopPacketDirectory));
 			std::filesystem::path RelativePath = std::filesystem::relative(Entry.path(), TopDirectoryPath);
-			std::string AbsolutePacketPath = "/" + MBUtility::ReplaceAll(MBUnicode::PathToUTF8(RelativePath),"\\","/");
+			std::string AbsolutePacketPath = "/" + MBUtility::ReplaceAll(MBUnicode::PathToUTF8(RelativePath), "\\", "/");
 			if (FileExcluder.Excludes(AbsolutePacketPath) && !FileExcluder.Includes(AbsolutePacketPath))
 			{
 				continue;
@@ -1700,24 +1878,12 @@ namespace MBPM
 			}
 			else if (Entry.is_directory())
 			{
-				//if (ReaderToCompare != nullptr)
-				//{
-				//	if (ReaderToCompare->GetDirectoryInfo(AbsolutePacketPath) != nullptr)
-				//	{
-				//		uint64_t LocalWriteTime = p_GetPathWriteTime(Entry.path());
-				//		uint64_t CompareWriteTime = ReaderToCompare->GetDirectoryInfo(AbsolutePacketPath)->LastWriteTime;
-				//		if (CompareWriteTime != 0 && CompareWriteTime >= LocalWriteTime)
-				//		{
-				//			continue;
-				//		}
-				//	}
-				//}
 				DirectoryPaths.insert(Entry.path());
 			}
 		}
 		std::string StructureHashData;
 		std::vector<std::string> ContentHashData;
-		for(auto const& Path : FilePaths)
+		for (auto const& Path : FilePaths)
 		{
 			ReturnValue.Files.push_back(p_CreateFileInfo(Path, Header, ExtensionData));
 			ContentHashData.push_back(ReturnValue.Files.back().FileHash);
@@ -1726,7 +1892,7 @@ namespace MBPM
 		}
 		for (auto const& Path : DirectoryPaths)
 		{
-			ReturnValue.Directories.push_back(p_CreateDirectoryInfo(TopDirectoryPath, Path, Header, ExtensionData,FileExcluder,ReaderToCompare));
+			ReturnValue.Directories.push_back(p_CreateDirectoryInfo(TopDirectoryPath, Path, Header, ExtensionData, FileExcluder, ReaderToCompare));
 			ContentHashData.push_back(ReturnValue.Directories.back().ContentHash);
 			StructureHashData += ReturnValue.Directories.back().DirectoryName + ReturnValue.Directories.back().StructureHash;
 			ReturnValue.Size += ReturnValue.Directories.back().Size;
@@ -1741,6 +1907,8 @@ namespace MBPM
 		ReturnValue.StructureHash = MBCrypto::HashData(StructureHashData, Header.HashFunction);
 		return(ReturnValue);
 	}
+
+
 	void MBPP_FileInfoReader::p_WriteFileInfo(MBPP_FileInfo const& InfoToWrite, MBUtility::MBOctetOutputStream* OutputStream, MBPP_FileInfoHeader const& Header, MBPP_FileInfoExtensionData const& ExtensionData)
 	{
 		//h_WriteBigEndianInteger(OutputStream, InfoToWrite.FileName.size(), 2);

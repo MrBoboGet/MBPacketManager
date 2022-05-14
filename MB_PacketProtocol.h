@@ -11,6 +11,9 @@
 #include <MBUtility/MBInterfaces.h>
 #include <MBCLI/MBCLI.h>
 
+
+#include <MBUtility/Filesystem.h>
+
 namespace MBPM
 {
 	
@@ -347,6 +350,7 @@ namespace MBPM
 		bool p_MatchFile(std::string const& StringToCompare, std::string const& StringToMatch) const;
 	public:
 		MBPM_FileInfoExcluder(std::string const& PathPosition);
+		MBPM_FileInfoExcluder(MBUtility::MBOctetInputStream* InputStream);
 		MBPM_FileInfoExcluder() {};
 		void AddExcludeFile(std::string const& FileToExlude);
 
@@ -383,9 +387,18 @@ namespace MBPM
 		static uint64_t p_GetPathWriteTime(std::filesystem::path const& PathToInspect);
 
 		static MBPP_FileInfo p_CreateFileInfo(std::filesystem::path const& FilePath, MBPP_FileInfoHeader const& Header, MBPP_FileInfoExtensionData const& ExtensionData);
+		static MBPP_FileInfo p_CreateFileInfo(std::string const& FilePath, MBUtility::Filesystem& FS, MBPP_FileInfoHeader const& Header, MBPP_FileInfoExtensionData const& ExtensionData);
 		static MBPP_DirectoryInfoNode p_CreateDirectoryInfo(
 			std::filesystem::path const& TopDirectoryPath,
 			std::filesystem::path const& DirectoryPath,
+			MBPP_FileInfoHeader const& Header,
+			MBPP_FileInfoExtensionData const& ExtensionData,
+			MBPM_FileInfoExcluder const& FileExcluder,
+			MBPP_FileInfoReader const* ReaderToCompare
+		);
+		static MBPP_DirectoryInfoNode p_CreateDirectoryInfo(
+			std::string const& CurrentPath,
+			MBUtility::Filesystem& AssociatedFilesystem,
 			MBPP_FileInfoHeader const& Header,
 			MBPP_FileInfoExtensionData const& ExtensionData,
 			MBPM_FileInfoExcluder const& FileExcluder,
@@ -424,6 +437,7 @@ namespace MBPM
 		
 		[[SemanticallyAuthoritative]]
 		static void CreateFileInfo(std::string const& PacketToHashDirectory, MBPM_FileInfoExcluder const& Excluder, MBPP_FileInfoReader* OutReader);
+		static void CreateFileInfo(MBUtility::Filesystem& TopDirectoryToIndex, MBPP_FileInfoReader* OutReader);
 		
 		static void CreateFileInfo(std::string const& PacketToHashDirectory, MBPP_FileInfoReader* OutReader);
 		static void CreateFileInfo(std::string const& PacketToHashDirectory, std::string const& FileName = "MBPM_FileInfo");
