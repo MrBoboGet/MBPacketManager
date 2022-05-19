@@ -52,3 +52,6 @@ för att compila/updatera alla ett packets dependancys/ dem som skiljer sig frå
 Fixa så att MBPP_FileInfoReader GetDifference eller vad den heter också ger vad som tagits bort, nu ger den bara vad som har ändrats utan att indikera på vad som är borta
 
 Lägg även till mbpm compile MBWebsite --dependants, dvs compila alla packets som beror på MBWebsite
+
+Eftersom linux linker är *trash* så måste man specificera libraries i en specifik ordning, den som resolvar mest dependancies sist. Detta är ännu ett skäl att låta MBPM sköta det,
+och borde implementeras.

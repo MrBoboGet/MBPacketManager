@@ -264,7 +264,31 @@ namespace MBPM
 		Result.m_InfoHeader;
 		Result.m_ExtensionData = p_GetLatestVersionExtensionData();
 		Result.m_InfoHeader.ExtensionDataSize = p_SerializeExtensionData(Result.m_ExtensionData).size();
-		Result.m_TopNode = p_CreateDirectoryInfo("/", TopDirectoryToIndex, Result.m_InfoHeader, Result.m_ExtensionData, Excluder, nullptr);
+		Result.m_TopNode = p_CreateDirectoryInfo("/",".", TopDirectoryToIndex, Result.m_InfoHeader, Result.m_ExtensionData, Excluder, nullptr);
+		Result.p_UpdateDirectoriesParents(&Result.m_TopNode);
+		*OutReader = std::move(Result);
+	}
+	void MBPP_FileInfoReader::CreateFileInfo(MBUtility::Filesystem& TopDirectoryToIndex, std::string const& PathToIndex, MBPP_FileInfoReader* OutReader)
+	{
+		MBPP_FileInfoReader Result;
+		MBPM_FileInfoExcluder Excluder;
+		MBUtility::FilesystemError FSError = MBUtility::FilesystemError::Ok;
+		std::unique_ptr<MBUtility::MBOctetInputStream> InStream = TopDirectoryToIndex.GetFileInputStream(PathToIndex+"/MBPM_FileInfoIgnore", &FSError);
+		if (!!FSError)
+		{
+			Excluder = MBPM_FileInfoExcluder(InStream.get());
+		}
+		Result.m_InfoHeader;
+		Result.m_ExtensionData = p_GetLatestVersionExtensionData();
+		Result.m_InfoHeader.ExtensionDataSize = p_SerializeExtensionData(Result.m_ExtensionData).size();
+		if (PathToIndex != "")
+		{
+			Result.m_TopNode = p_CreateDirectoryInfo("/",PathToIndex, TopDirectoryToIndex, Result.m_InfoHeader, Result.m_ExtensionData, Excluder, nullptr);
+		}
+		else
+		{
+			Result.m_TopNode = p_CreateDirectoryInfo("/", ".", TopDirectoryToIndex, Result.m_InfoHeader, Result.m_ExtensionData, Excluder, nullptr);
+		}
 		Result.p_UpdateDirectoriesParents(&Result.m_TopNode);
 		*OutReader = std::move(Result);
 	}
@@ -298,6 +322,10 @@ namespace MBPM
 		ReaderToUpdate.DeleteObjects(FileInfoDiff.DeletedDirectories);
 		ReaderToUpdate.DeleteObjects(FileInfoDiff.RemovedFiles);
 		ReaderToUpdate.UpdateInfo(DiffNode);
+	}
+	static void UpdateFileInfo(MBUtility::Filesystem& Filesystem, std::string const& DirectoryToUpdate, MBPP_FileInfoReader& ReaderToUpdate)
+	{
+
 	}
 	void MBPP_FileInfoReader::UpdateFileInfo(std::string const& FileInfoDirectory,MBPP_FileInfoReader& ReaderToUpdate)
 	{
@@ -1749,7 +1777,8 @@ namespace MBPM
 		return(ReturnValue);
 	}
 	MBPP_DirectoryInfoNode MBPP_FileInfoReader::p_CreateDirectoryInfo(
-		std::string const& CurrentPath,
+		std::string const& CurrentPacketPath,
+		std::string const& TopDirectoryPath,
 		MBUtility::Filesystem& AssociatedFilesystem,
 		MBPP_FileInfoHeader const& Header,
 		MBPP_FileInfoExtensionData const& ExtensionData,
@@ -1758,8 +1787,8 @@ namespace MBPM
 	)
 	{
 		MBPP_DirectoryInfoNode ReturnValue;
-		assert(CurrentPath.find('/') != CurrentPath.npos);
-		ReturnValue.DirectoryName = CurrentPath.substr(CurrentPath.find_last_of('/')+1);
+		assert(CurrentPacketPath.find('/') != CurrentPacketPath.npos);
+		ReturnValue.DirectoryName = CurrentPacketPath.substr(CurrentPacketPath.find_last_of('/')+1);
 		if (ReturnValue.DirectoryName == "")
 		{
 			ReturnValue.DirectoryName = "/";
@@ -1769,11 +1798,11 @@ namespace MBPM
 		std::set<std::string> DirectoryPaths;
 		//std::filesystem::directory_iterator DirectoryIterator(DirectoryPath);
 		MBUtility::FilesystemError FSError = MBUtility::FilesystemError::Ok;
-		std::vector<MBUtility::FSObjectInfo> Contents = AssociatedFilesystem.ListDirectory(CurrentPath.substr(1), &FSError);
+		std::vector<MBUtility::FSObjectInfo> Contents = AssociatedFilesystem.ListDirectory(TopDirectoryPath+CurrentPacketPath, &FSError);
 		for (auto const& Entry : Contents)
 		{
 			//std::string AbsolutePacketPath = "/" + h_PathToUTF8(std::filesystem::relative(Entries.path(), TopPacketDirectory));
-			std::string AbsolutePacketPath = CurrentPath + "/" + Entry.Name;
+			std::string AbsolutePacketPath = CurrentPacketPath + "/" + Entry.Name;
 			//TEMP
 			if (AbsolutePacketPath.substr(0, 2) == "//")
 			{
@@ -1808,7 +1837,7 @@ namespace MBPM
 		std::vector<std::string> ContentHashData;
 		for(auto const& Path : FilePaths)
 		{
-			MBPP_FileInfo NewInfo = p_CreateFileInfo(Path, AssociatedFilesystem, Header, ExtensionData);
+			MBPP_FileInfo NewInfo = p_CreateFileInfo(TopDirectoryPath+"/"+Path, AssociatedFilesystem, Header, ExtensionData);
 			ReturnValue.Files.push_back(NewInfo);
 			ContentHashData.push_back(ReturnValue.Files.back().FileHash);
 			StructureHashData += ReturnValue.Files.back().FileName + ReturnValue.Files.back().FileHash;
@@ -1816,7 +1845,7 @@ namespace MBPM
 		}
 		for (auto const& Path : DirectoryPaths)
 		{
-			ReturnValue.Directories.push_back(p_CreateDirectoryInfo("/"+Path, AssociatedFilesystem, Header, ExtensionData, FileExcluder, ReaderToCompare));
+			ReturnValue.Directories.push_back(p_CreateDirectoryInfo("/"+Path, TopDirectoryPath, AssociatedFilesystem, Header, ExtensionData, FileExcluder, ReaderToCompare));
 			ContentHashData.push_back(ReturnValue.Directories.back().ContentHash);
 			StructureHashData += ReturnValue.Directories.back().DirectoryName + ReturnValue.Directories.back().StructureHash;
 			ReturnValue.Size += ReturnValue.Directories.back().Size;

@@ -31,6 +31,9 @@ namespace MBPM
 		std::string PacketURI = "";//Default/"" implicerar att man anv�nder default remoten
 		PacketLocationType PacketLocation = PacketLocationType::Null;
 	};
+	void PrintFileInfo(MBPM::MBPP_FileInfoReader const& InfoToPrint, std::vector<std::string> const& FilesystemObjectsToPrint, MBCLI::MBTerminal* AssociatedTerminal);
+	void PrintFileInfoDiff(MBPM::MBPP_FileInfoDiff const& InfoToPrint, MBCLI::MBTerminal* AssociatedTerminal);
+
 	class MBPM_ClI
 	{
 	private:
@@ -87,8 +90,8 @@ namespace MBPM
 		PacketIdentifier p_GetLocalPacket(std::string const& PacketPath);
 		PacketIdentifier p_GetRemotePacketIdentifier(std::string const& PacketPath);
 
-		void p_PrintFileInfo(MBPM::MBPP_FileInfoReader const& InfoToPrint,std::vector<std::string> const& FilesystemObjectsToPrint,MBCLI::MBTerminal* AssociatedTerminal);
-		void p_PrintFileInfoDiff(MBPM::MBPP_FileInfoDiff const& InfoToPrint,MBCLI::MBTerminal* AssociatedTerminal);
+		//void p_PrintFileInfo(MBPM::MBPP_FileInfoReader const& InfoToPrint,std::vector<std::string> const& FilesystemObjectsToPrint,MBCLI::MBTerminal* AssociatedTerminal);
+		//void p_PrintFileInfoDiff(MBPM::MBPP_FileInfoDiff const& InfoToPrint,MBCLI::MBTerminal* AssociatedTerminal);
 	public:
 		void HandleCommand(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
 	};

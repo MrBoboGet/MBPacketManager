@@ -457,7 +457,7 @@ namespace MBPM
 		{
 			OutputFile <<	"pthread\n"
 							"dl\n"
-							"stdc++fs"
+							"stdc++fs\n"
 							"m\n)\n";
 		}
 		//

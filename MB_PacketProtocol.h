@@ -397,7 +397,8 @@ namespace MBPM
 			MBPP_FileInfoReader const* ReaderToCompare
 		);
 		static MBPP_DirectoryInfoNode p_CreateDirectoryInfo(
-			std::string const& CurrentPath,
+			std::string const& CurrentPacketPath,
+			std::string const& RelativeDirectoryPath,
 			MBUtility::Filesystem& AssociatedFilesystem,
 			MBPP_FileInfoHeader const& Header,
 			MBPP_FileInfoExtensionData const& ExtensionData,
@@ -438,6 +439,7 @@ namespace MBPM
 		[[SemanticallyAuthoritative]]
 		static void CreateFileInfo(std::string const& PacketToHashDirectory, MBPM_FileInfoExcluder const& Excluder, MBPP_FileInfoReader* OutReader);
 		static void CreateFileInfo(MBUtility::Filesystem& TopDirectoryToIndex, MBPP_FileInfoReader* OutReader);
+		static void CreateFileInfo(MBUtility::Filesystem& TopDirectoryToIndex,std::string const& PathToIndex, MBPP_FileInfoReader* OutReader);
 		
 		static void CreateFileInfo(std::string const& PacketToHashDirectory, MBPP_FileInfoReader* OutReader);
 		static void CreateFileInfo(std::string const& PacketToHashDirectory, std::string const& FileName = "MBPM_FileInfo");
@@ -445,7 +447,8 @@ namespace MBPM
 
 		[[SemanticallyAuthoritative]]
 		static void UpdateFileInfo(std::string const& FileInfoTopDirectory, MBPM_FileInfoExcluder const& Excluder, MBPP_FileInfoReader& ReaderToUpdate);
-		
+		static void UpdateFileInfo(MBUtility::Filesystem& Filesystem, std::string const& DirectoryToUpdate, MBPP_FileInfoReader& ReaderToUpdate);
+
 		static void UpdateFileInfo(std::string const& FileInfoTopDirectory,MBPP_FileInfoReader& ReaderToUpdate);
 		static void UpdateFileInfo(std::string const& DirectoryToIndex, std::string const& FileName = "MBPM_FileInfo");
 

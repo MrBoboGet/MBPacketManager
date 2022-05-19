@@ -511,7 +511,7 @@ namespace MBPM
 		}
 		return(ReturnValue);
 	}
-	void MBPM_ClI::p_PrintFileInfo(MBPM::MBPP_FileInfoReader const& InfoToPrint, std::vector<std::string> const& FilesystemObjectsToPrint, MBCLI::MBTerminal* AssociatedTerminal)
+	void PrintFileInfo(MBPM::MBPP_FileInfoReader const& InfoToPrint, std::vector<std::string> const& FilesystemObjectsToPrint, MBCLI::MBTerminal* AssociatedTerminal)
 	{
 		std::vector<std::string> ObjectsToprint = FilesystemObjectsToPrint;
 		if (ObjectsToprint.size() == 0)
@@ -593,7 +593,7 @@ namespace MBPM
 			}
 		}
 	}
-	void MBPM_ClI::p_PrintFileInfoDiff(MBPM::MBPP_FileInfoDiff const& InfoToPrint,MBCLI::MBTerminal* AssociatedTerminal)
+	void PrintFileInfoDiff(MBPM::MBPP_FileInfoDiff const& InfoToPrint,MBCLI::MBTerminal* AssociatedTerminal)
 	{
 		AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::Yellow);
 		AssociatedTerminal->PrintLine("New directories:");
@@ -1660,7 +1660,7 @@ namespace MBPM
 			{
 				ObjectsToPrint.push_back(CommandInput.TopCommandArguments[i]);
 			}
-			p_PrintFileInfo(InfoToPrint,ObjectsToPrint,AssociatedTerminal);
+			PrintFileInfo(InfoToPrint,ObjectsToPrint,AssociatedTerminal);
 		}
 		else if (CommandInput.TopCommandArguments[0] == "diff")
 		{
@@ -1734,7 +1734,7 @@ namespace MBPM
 				return;
 			}
 			MBPM::MBPP_FileInfoDiff InfoDiff = MBPM::GetFileInfoDifference(ClientFileInfo, ServerFileInfo);
-			p_PrintFileInfoDiff(InfoDiff,AssociatedTerminal);
+			PrintFileInfoDiff(InfoDiff,AssociatedTerminal);
 		}
 	}
 	std::string h_ReadMBPMStaticData(std::string const& Filepath)
