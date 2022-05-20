@@ -420,6 +420,7 @@ namespace MBPM
 		static std::string p_SerializeExtensionData(MBPP_FileInfoExtensionData const& DataToSerialise);
 
 		static void p_GetLocalInfoDiff_UpdateDirectory(MBPP_FileInfoDiff& OutResult,MBPM_FileInfoExcluder const& Excluder,MBPP_DirectoryInfoNode const& StoredNode,std::filesystem::path const& LocalDirectory,std::string const& CurrentIndexPath);
+		static void p_GetLocalInfoDiff_UpdateDirectory(MBPP_FileInfoDiff& OutResult,MBUtility::Filesystem& Filesystem,MBPM_FileInfoExcluder const& Excluder,MBPP_DirectoryInfoNode const& StoredNode,std::string const& CurrentDirectoryPath,std::string const& CurrentIndexPath);
 
 		static MBPP_FileInfoExtensionData p_GetLatestVersionExtensionData();
 		static MBPM_FileInfoExcluder p_GetDirectoryFileInfoExcluder(std::string const& Directory);
@@ -447,7 +448,7 @@ namespace MBPM
 
 		[[SemanticallyAuthoritative]]
 		static void UpdateFileInfo(std::string const& FileInfoTopDirectory, MBPM_FileInfoExcluder const& Excluder, MBPP_FileInfoReader& ReaderToUpdate);
-		static void UpdateFileInfo(MBUtility::Filesystem& Filesystem, std::string const& DirectoryToUpdate, MBPP_FileInfoReader& ReaderToUpdate);
+		static void UpdateFileInfo(MBUtility::Filesystem& Filesystem, std::string  DirectoryToUpdate, MBPP_FileInfoReader& ReaderToUpdate);
 
 		static void UpdateFileInfo(std::string const& FileInfoTopDirectory,MBPP_FileInfoReader& ReaderToUpdate);
 		static void UpdateFileInfo(std::string const& DirectoryToIndex, std::string const& FileName = "MBPM_FileInfo");
@@ -455,6 +456,7 @@ namespace MBPM
 		static MBPP_FileInfoReader GetLocalUpdatedFiles(std::string const& DirectoryToIndex,std::string const& IndexName = "MBPM_FileInfo");
 		[[SemanticallyAuthoritative]]
 		static MBPP_FileInfoDiff GetLocalInfoDiff(std::string const& DirectoryToIndex,MBPM_FileInfoExcluder const& Excluder,MBPP_FileInfoReader const& InfoToCompare);
+		static MBPP_FileInfoDiff GetLocalInfoDiff(MBUtility::Filesystem& Filesystem,std::string const& PathToIndex,MBPP_FileInfoReader const& InfoToCompare);
 		
 		static MBPP_FileInfoDiff GetLocalInfoDiff(std::string const& DirectoryToIndex,std::string const& IndexName = "MBPM_FileInfo");
 
