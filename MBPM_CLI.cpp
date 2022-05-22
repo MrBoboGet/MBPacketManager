@@ -4,6 +4,7 @@
 #include <MBUnicode/MBUnicode.h>
 #include <exception>
 #include <stdexcept>
+#include <algorithm>
 //#include "MBCLI/"
 
 namespace MBPM
@@ -116,22 +117,7 @@ namespace MBPM
 		}
 		return(ReturnValue);
 	}
-	struct MBPM_PacketDependancyRankInfo
-	{
-		size_t DependancyDepth = -1;
-		std::string PacketName = "";
-		std::vector<std::string> PacketDependancies = {};
-		bool operator<(MBPM_PacketDependancyRankInfo const& PacketToCompare) const
-		{
-			bool ReturnValue = DependancyDepth < PacketToCompare.DependancyDepth;
-			if (DependancyDepth == PacketToCompare.DependancyDepth)
-			{
-				ReturnValue = PacketName < PacketToCompare.PacketName;
-			}
-			return(ReturnValue);
-		}
-	};
-	size_t h_GetPacketDepth(std::map<std::string, MBPM_PacketDependancyRankInfo>& PacketInfoToUpdate,std::string const& PacketName,std::vector<std::string>* OutDependancies)
+	uint32_t h_GetPacketDepth(std::map<std::string, MBPM_PacketDependancyRankInfo>& PacketInfoToUpdate, std::string const& PacketName, std::vector<std::string>* OutDependancies)
 	{
 		if (PacketInfoToUpdate.find(PacketName) == PacketInfoToUpdate.end())
 		{
@@ -153,10 +139,10 @@ namespace MBPM
 			}
 			else
 			{
-				size_t DeepestDepth = 0;
+				uint32_t DeepestDepth = 0;
 				for (size_t i = 0; i < PacketDependancies.size(); i++)
 				{
-					size_t NewDepth = h_GetPacketDepth(PacketInfoToUpdate,PacketDependancies[i],OutDependancies) + 1;
+					uint32_t NewDepth = h_GetPacketDepth(PacketInfoToUpdate, PacketDependancies[i], OutDependancies) + 1;
 					if (NewDepth > DeepestDepth)
 					{
 						DeepestDepth = NewDepth;
@@ -195,7 +181,7 @@ namespace MBPM
 		std::set<MBPM_PacketDependancyRankInfo> OrderedPackets = {};
 		for (auto const& Packet : InstalledPackets)
 		{
-			Packets[Packet].DependancyDepth = h_GetPacketDepth(Packets, Packet,OutDependancies);
+			Packets[Packet].DependancyDepth = h_GetPacketDepth(Packets, Packet, OutDependancies);
 			OrderedPackets.insert(Packets[Packet]);
 		}
 		std::vector<PacketIdentifier> ReturnValue = {};
@@ -205,6 +191,143 @@ namespace MBPM
 			NewPacket.PacketName = Packet.PacketName;
 			NewPacket.PacketURI = p_GetPacketInstallDirectory() + "/" + Packet.PacketName + "/";
 			NewPacket.PacketLocation = PacketLocationType::Installed;
+			ReturnValue.push_back(std::move(NewPacket));
+		}
+		return(ReturnValue);
+	}
+
+
+	std::map<std::string, MBPM_PacketDependancyRankInfo> MBPM_ClI::p_GetPacketDependancieInfo(
+		std::vector<PacketIdentifier> const& InPacketsToCheck,
+		MBError& OutError,
+		std::vector<std::string>* OutMissing)
+	{
+		std::map<std::string, MBPM_PacketDependancyRankInfo> ReturnValue;
+		std::vector<PacketIdentifier> PacketsToCheck = InPacketsToCheck;
+		std::set<std::string> TotalPacketNames;
+		while (PacketsToCheck.size() > 0)
+		{
+			PacketIdentifier NewPacket = PacketsToCheck.back();
+			PacketsToCheck.pop_back();
+			if (ReturnValue.find(NewPacket.PacketName) != ReturnValue.end())
+			{
+				continue;
+			}
+			MBPM_PacketInfo PacketInfo = p_GetPacketInfo(NewPacket, &OutError);
+			assert(PacketInfo.PacketName != "");//contract by p_GetPacketInfo
+			if (!OutError)
+			{
+				return(ReturnValue);
+			}
+			//TotalPacketNames.push_back(PacketInfo.PacketName);
+			TotalPacketNames.insert(PacketInfo.PacketName);
+			MBPM_PacketDependancyRankInfo NewDependancyInfo;
+			NewDependancyInfo.PacketName = PacketInfo.PacketName;
+			NewDependancyInfo.PacketDependancies = PacketInfo.PacketDependancies;
+			for (auto const& Dependancy : NewDependancyInfo.PacketDependancies)
+			{
+				if (TotalPacketNames.find(Dependancy) == TotalPacketNames.end())
+				{
+					PacketIdentifier NewPacketToCheck;
+					NewPacketToCheck = p_GetInstalledPacket(Dependancy);
+					if (NewPacketToCheck.PacketName == "")
+					{
+						OutMissing->push_back(Dependancy);
+					}
+					else
+					{
+						TotalPacketNames.insert(Dependancy);
+						PacketsToCheck.push_back(std::move(NewPacketToCheck));
+					}
+				}
+			}
+			ReturnValue[NewDependancyInfo.PacketName] = std::move(NewDependancyInfo);
+		}
+		for (auto const& Name : TotalPacketNames)
+		{
+			h_GetPacketDepth(ReturnValue, Name, OutMissing);
+		}
+		if (OutMissing->size() > 0)
+		{
+			OutError = false;
+			OutError.ErrorMessage = "Missing dependancies";
+		}
+		return(ReturnValue);
+	}
+
+	std::vector<PacketIdentifier> MBPM_ClI::p_GetPacketDependants_DependancyOrder(std::vector<PacketIdentifier> const& InPacketsToCheck, MBError& OutError, std::vector<std::string>* MissingPackets)
+	{
+		std::vector<PacketIdentifier> ReturnValue;
+
+		std::vector<PacketIdentifier> TotalDependants = {};
+
+		std::vector<PacketIdentifier> InstalledPackets = p_GetInstalledPackets();
+		std::set<std::string> Dependants;
+		for (size_t i = 0; i < InPacketsToCheck.size(); i++)
+		{
+			Dependants.insert(InPacketsToCheck[i].PacketName);
+		}
+		for (auto const& Packet : InstalledPackets)
+		{
+			MBPM_PacketInfo CurrentPacketInfo = p_GetPacketInfo(Packet, &OutError);
+			if (!OutError)
+			{
+				return(ReturnValue);
+			}
+			for (auto const& Dependancy : CurrentPacketInfo.PacketDependancies)
+			{
+				if (Dependants.find(Dependancy) != Dependants.end())
+				{
+					TotalDependants.push_back(Packet);
+					Dependants.insert(Packet.PacketName);
+					break;
+				}
+			}
+		}
+		std::map<std::string, MBPM_PacketDependancyRankInfo> PacketDependancyInfo = p_GetPacketDependancieInfo(TotalDependants, OutError, MissingPackets);
+		if (!OutError)
+		{
+			return(ReturnValue);
+		}
+		//TODO ineffiecient
+		std::set<MBPM_PacketDependancyRankInfo> DependantsOrder;
+		for (auto const& Packet : TotalDependants)
+		{
+			DependantsOrder.insert(PacketDependancyInfo[Packet.PacketName]);
+		}
+		for (auto const& Packet : DependantsOrder)
+		{
+			ReturnValue.push_back(p_GetInstalledPacket(Packet.PacketName));
+		}
+		return(ReturnValue);
+	}
+	std::vector<PacketIdentifier> MBPM_ClI::p_GetPacketDependancies_DependancyOrder(std::vector<PacketIdentifier> const& InPacketsToCheck,MBError& OutError, std::vector<std::string>* MissingPackets)
+	{
+		std::vector<PacketIdentifier> ReturnValue;
+
+		std::map<std::string, MBPM_PacketDependancyRankInfo> PacketDependancyInfo = p_GetPacketDependancieInfo(InPacketsToCheck, OutError, MissingPackets);
+		std::set<MBPM_PacketDependancyRankInfo> OrderedPackets;
+		for (auto const& Packet : PacketDependancyInfo)
+		{
+			OrderedPackets.insert(Packet.second);
+		}
+		for (auto const& Packet : OrderedPackets)
+		{
+			bool Continue = false;
+			PacketIdentifier NewIdentifier = p_GetInstalledPacket(Packet.PacketName);
+			for (size_t i = 0; i < InPacketsToCheck.size(); i++)
+			{
+				if (Packet.PacketName == InPacketsToCheck[i].PacketName)
+				{
+					Continue = true;
+					break;
+				}
+			}
+			if (Continue)
+			{
+				continue;
+			}
+			ReturnValue.push_back(NewIdentifier);
 		}
 		return(ReturnValue);
 	}
@@ -340,6 +463,214 @@ namespace MBPM
 	{
 		//MBPP_PacketHost ReturnValue = { "mrboboget.se/MBPM/",MBPP_TransferProtocol::HTTPS,443 };
 		MBPP_PacketHost ReturnValue = { "mrboboget.se/MBPM/",MBPP_TransferProtocol::HTTPS,443 };
+		return(ReturnValue);
+	}
+
+	std::vector<PacketIdentifier> MBPM_ClI::p_GetCommandPackets(MBCLI::ProcessedCLInput const& CLIInput, PacketLocationType DefaultType,MBError& OutError)
+	{
+		std::vector<PacketIdentifier> ReturnValue;
+		//individual packet specifiers
+		int DefaultSpecifications = 0;
+		if (CLIInput.CommandOptions.find("user") != CLIInput.CommandOptions.end())
+		{
+			DefaultType = PacketLocationType::User;
+			DefaultSpecifications += 1;
+		}
+		if (CLIInput.CommandOptions.find("installed") != CLIInput.CommandOptions.end())
+		{
+			DefaultType = PacketLocationType::Installed;
+			DefaultSpecifications += 1;
+		}
+		if (CLIInput.CommandOptions.find("remote") != CLIInput.CommandOptions.end())
+		{
+			DefaultType = PacketLocationType::Remote;
+			DefaultSpecifications += 1;
+		}
+		if (CLIInput.CommandOptions.find("local") != CLIInput.CommandOptions.end())
+		{
+			DefaultType = PacketLocationType::Local;
+			DefaultSpecifications += 1;
+		}
+		if (DefaultSpecifications > 0)
+		{
+			OutError = false;
+			OutError.ErrorMessage = "More than 1 default packet type specification";
+			return(ReturnValue);
+		}
+		for (size_t i = 0; i < CLIInput.TopCommandArguments.size(); i++)
+		{
+			PacketIdentifier NewPacket = p_GetPacketIdentifier(CLIInput.TopCommandArguments[i], DefaultType, OutError);
+			if (!OutError)
+			{
+				return(ReturnValue);
+			}
+			ReturnValue.push_back(std::move(NewPacket));
+		}
+		auto InstalledSpecifications = CLIInput.GetSingleArgumentOptionList("i");
+		for (auto const& PacketName : InstalledSpecifications)
+		{
+			PacketIdentifier NewIdentifier = p_GetPacketIdentifier(PacketName.first, PacketLocationType::Installed, OutError);
+			if (!OutError)
+			{
+				return(ReturnValue);
+			}
+			ReturnValue.push_back(std::move(NewIdentifier));
+		}
+		auto LocalSpecifications = CLIInput.GetSingleArgumentOptionList("l");
+		for (auto const& PacketName : LocalSpecifications)
+		{
+			PacketIdentifier NewIdentifier = p_GetPacketIdentifier(PacketName.first, PacketLocationType::Local, OutError);
+			if (!OutError)
+			{
+				return(ReturnValue);
+			}
+			ReturnValue.push_back(std::move(NewIdentifier));
+		}
+		auto RemoteSpecifications = CLIInput.GetSingleArgumentOptionList("r");
+		for (auto const& PacketName : RemoteSpecifications)
+		{
+			PacketIdentifier NewIdentifier = p_GetPacketIdentifier(PacketName.first, PacketLocationType::Remote, OutError);
+			if (!OutError)
+			{
+				return(ReturnValue);
+			}
+			ReturnValue.push_back(std::move(NewIdentifier));
+		}
+		auto UserSpecifications = CLIInput.GetSingleArgumentOptionList("u");
+		for (auto const& PacketName : UserSpecifications)
+		{
+			PacketIdentifier NewIdentifier = p_GetPacketIdentifier(PacketName.first, PacketLocationType::User, OutError);
+			if (!OutError)
+			{
+				return(ReturnValue);
+			}
+			ReturnValue.push_back(std::move(NewIdentifier));
+		}
+		//total packet specifiers
+		if (CLIInput.CommandOptions.find("allinstalled") != CLIInput.CommandOptions.end())
+		{
+			std::vector<PacketIdentifier> InstalledPackets = p_GetInstalledPackets();
+			for (size_t i = 0; i < InstalledPackets.size(); i++)
+			{
+				ReturnValue.push_back(std::move(InstalledPackets[i]));
+			}
+		}
+		if (CLIInput.CommandOptions.find("alluser") != CLIInput.CommandOptions.end())
+		{
+			std::vector<PacketIdentifier> UserPackets = p_GetUserPackets();
+			for (size_t i = 0; i < UserPackets.size(); i++)
+			{
+				ReturnValue.push_back(std::move(UserPackets[i]));
+			}
+		}
+		//specified packet modifiers
+		int PacketModifiers = 0;
+		if (CLIInput.CommandOptions.find("dependants") != CLIInput.CommandOptions.end())
+		{
+			PacketModifiers += 1;
+			std::vector<std::string> MissingPackets;
+			ReturnValue = p_GetPacketDependants_DependancyOrder(ReturnValue,OutError, &MissingPackets);
+			if (MissingPackets.size() != 0)
+			{
+				OutError = false;
+				OutError.ErrorMessage = "Missing packet dependancies: ";
+				for (auto const& Packet : MissingPackets)
+				{
+					OutError.ErrorMessage += Packet + " ";
+				}
+				return(ReturnValue);
+			}
+		}
+		if (CLIInput.CommandOptions.find("dependancies") != CLIInput.CommandOptions.end())
+		{
+			PacketModifiers += 1;
+			std::vector<std::string> MissingPackets;
+			ReturnValue = p_GetPacketDependancies_DependancyOrder(ReturnValue,OutError,&MissingPackets);
+			if (MissingPackets.size() != 0)
+			{
+				OutError = false;
+				OutError.ErrorMessage = "Missing packet dependancies: ";
+				for (auto const& Packet : MissingPackets)
+				{
+					OutError.ErrorMessage += Packet+ " ";
+				}
+				return(ReturnValue);
+			}
+		}
+		if (PacketModifiers > 1)
+		{
+			OutError = false;
+			OutError.ErrorMessage = "Can only specify at 1 packet modifier";
+		}
+
+		return(ReturnValue);
+	}
+	PacketIdentifier MBPM_ClI::p_GetPacketIdentifier(std::string const& PacketName, PacketLocationType Type, MBError& OutError)
+	{
+		PacketIdentifier ReturnValue;
+
+
+		//Implicitly interpreting invalid packet names as a local packet
+		bool IsLocalPath = false;
+		if (PacketName == "."|| (PacketName.size() >= 2 && (PacketName.substr(0,2) == "./" || PacketName.substr(0,2) == ".\\" || PacketName.substr(0,2) == ".." || PacketName[0] == '/' || PacketName[1] == ':')))
+		{
+			IsLocalPath = true;
+		}
+		if (Type == PacketLocationType::Local || IsLocalPath)
+		{
+			ReturnValue = p_GetLocalPacket(PacketName);
+			if (ReturnValue.PacketName == "")
+			{
+				OutError = false;
+				OutError.ErrorMessage = "Couldn't find local packet: " + PacketName;
+				return ReturnValue;
+			}
+		}
+		else if (Type == PacketLocationType::User)
+		{
+			ReturnValue = p_GetUserPacket(PacketName);
+			if (ReturnValue.PacketName == "")
+			{
+				OutError = false;
+				OutError.ErrorMessage = "Couldn't find user packet: " + PacketName;
+				return ReturnValue;
+			}
+		}
+		else if (Type == PacketLocationType::Installed)
+		{
+			ReturnValue = p_GetInstalledPacket(PacketName);
+			if (ReturnValue.PacketName == "")
+			{
+				OutError = false;
+				OutError.ErrorMessage = "Couldn't find installed packet: " + PacketName;
+				return ReturnValue;
+			}
+		}
+		else if (Type == PacketLocationType::Remote)
+		{
+			ReturnValue = p_GetRemotePacketIdentifier(PacketName);
+			if (ReturnValue.PacketName == "")
+			{
+				OutError = false;
+				OutError.ErrorMessage = "Couldn't find remote packet: " + PacketName;
+				return ReturnValue;
+			}
+		}
+		else if (Type == PacketLocationType::Local)
+		{
+			ReturnValue = p_GetLocalPacket(PacketName);
+			if (ReturnValue.PacketName == "")
+			{
+				OutError = false;
+				OutError.ErrorMessage = "Couldn't find local packet: " + PacketName;
+				return ReturnValue;
+			}
+		}
+		else
+		{
+			assert(false);
+			throw std::runtime_error("Invalid packet type in p_GetPacketIdentifier");
+		}
 		return(ReturnValue);
 	}
 
@@ -1526,6 +1857,38 @@ namespace MBPM
 		//	AssociatedTerminal->PrintLine("Upload packet sucessful");
 		//}
 	}
+
+	void MBPM_ClI::p_HandlePackets(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
+	{
+		MBError ParseResult = true;
+		std::vector<PacketIdentifier> SpecifiedPackets = p_GetCommandPackets(CommandInput, PacketLocationType::Installed,ParseResult);
+		if (!ParseResult)
+		{
+			AssociatedTerminal->PrintLine("Error parsing command packets: " + ParseResult.ErrorMessage);
+			return;
+		}
+		for (auto const& Packet : SpecifiedPackets)
+		{
+			AssociatedTerminal->Print(Packet.PacketName + " ");
+			if (Packet.PacketLocation == PacketLocationType::Remote)
+			{
+				AssociatedTerminal->Print("Remote ");
+			}
+			else if (Packet.PacketLocation == PacketLocationType::Installed)
+			{
+				AssociatedTerminal->Print("Installed ");
+			}
+			else if (Packet.PacketLocation == PacketLocationType::User)
+			{
+				AssociatedTerminal->Print("User ");
+			}
+			else if (Packet.PacketLocation == PacketLocationType::Local)
+			{
+				AssociatedTerminal->Print("Local ");
+			}
+			AssociatedTerminal->PrintLine(Packet.PacketURI);
+		}
+	}
 	void MBPM_ClI::p_HandleIndex(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
 	{
 		if (CommandInput.TopCommandArguments.size() < 1)
@@ -2034,6 +2397,10 @@ namespace MBPM
 		else if(CommandInput.TopCommand == "compile")
 		{
 			p_HandleCompile(CommandInput, AssociatedTerminal);
+		}
+		else if (CommandInput.TopCommand == "packets")
+		{
+			p_HandlePackets(CommandInput, AssociatedTerminal);
 		}
 		else
 		{

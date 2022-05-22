@@ -7,6 +7,24 @@
 
 int main(int argc,const char** argv)
 {
+	//arbitrary commands test
+
+	//mbpm packets MBUtility -r:MBParsing -u:MBRadio -l:../ -i:cryptopp
+	//mbpm packets -l:../ --dependancies
+	//mbpm packets MBCLI --dependants
+	std::string Input;
+	std::getline(std::cin, Input);
+	std::vector<std::string> Strings = MBUtility::Split(Input, " ");
+	std::vector<const char*> CharArrays;
+	for (size_t i = 0; i < Strings.size(); i++)
+	{
+		CharArrays.push_back(Strings[i].c_str());
+	}
+	argc = Strings.size();
+	argv = CharArrays.data();
+
+	//
+
 	//DEBUG GREJER
 	//mbpm upload --allinstalled -d /MBPM_Builds/ --computerdiff
 	//std::filesystem::current_path("C:/Users/emanu/Desktop/Program/C++/MBPM_ExternalPackets/cryptopp/");

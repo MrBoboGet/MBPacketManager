@@ -1,26 +1,22 @@
-MBPM_FileInfoIgnore: Inkluderar inte faktikst filer som blivit include. Inget anv�nder det �n, men kanske i framtiden?
+MBPM_FileInfoIgnore: Inkluderar inte faktikst filer som blivit include. Inget använder det än, men kanske i framtiden?
 
-Upload local st�djer inte alla funktioner som remote gör, till exempel gör det inte att specificera vissa filer/directories
+Upload local stödjer inte alla funktioner som remote gör, till exempel gör det inte att specificera vissa filer/directories
 
-P� raspberry pi:en n�r jag installar något för jag alltid 
+På raspberry pi:en n�r jag installar något för jag alltid 
 "Error Att connecta Bad file descriptor
 Segmentation fault" 
 efter den �r klar att ha laddat ner n�got. Den har inte senaste variationen men v�rt att unders�ka.
-
-L�g till mbpm index list {LokaltPaket} --user
 
 
 om man har att MBPM_PACKETS_INSTALL_DIRECTORY inte slutar med / kajkar v�ldigt mycket.
 
 Fixa support f�r semantic versioning och vilka packets man beror p� samt vilken man vill h�mta
 
-fixa s� att install om man har alla executable/library targets inte forts�tter
+fixa så att install om man har alla executable/library targets inte fortsätter
 
 fixa s� att install kan uppdatera / k�nner av om inte alla packets �r h�mtade
 
 uploada installerat packet
-
-default librarys f�r operativsystem, specifikt pthread, winsock, dl  osv.
 
 option f�r att ist�llet f�r att se allt som downloadas s� visar bara totala tiden
 
@@ -48,8 +44,6 @@ fixa så att den märker av duplicate exported executables, samt att den uppdate
    
 MBPM_CompileInfo eller något, ett system för skriva vilka versioner av dependancys och deras struktur etc för som användes för att compila, så man vet att det är samma, samt ett system
 för att compila/updatera alla ett packets dependancys/ dem som skiljer sig från annan compile info etc. mbpm update MBWebsite --dependancies exempelvis
-
-Fixa så att MBPP_FileInfoReader GetDifference eller vad den heter också ger vad som tagits bort, nu ger den bara vad som har ändrats utan att indikera på vad som är borta
 
 Lägg även till mbpm compile MBWebsite --dependants, dvs compila alla packets som beror på MBWebsite
 

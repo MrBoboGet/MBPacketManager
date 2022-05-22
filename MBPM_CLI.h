@@ -30,9 +30,42 @@ namespace MBPM
 		std::string PacketName = "";
 		std::string PacketURI = "";//Default/"" implicerar att man anv�nder default remoten
 		PacketLocationType PacketLocation = PacketLocationType::Null;
+		bool operator==(PacketIdentifier const& rhs) const
+		{
+			bool ReturnValue = true;
+			if (PacketName != rhs.PacketName)
+			{
+				ReturnValue = false;
+			}
+			if (PacketURI != rhs.PacketURI)
+			{
+				ReturnValue = false;
+			}
+			if (PacketLocation != rhs.PacketLocation)
+			{
+				ReturnValue = false;
+			}
+			return(ReturnValue);
+		}
 	};
 	void PrintFileInfo(MBPM::MBPP_FileInfoReader const& InfoToPrint, std::vector<std::string> const& FilesystemObjectsToPrint, MBCLI::MBTerminal* AssociatedTerminal);
 	void PrintFileInfoDiff(MBPM::MBPP_FileInfoDiff const& InfoToPrint, MBCLI::MBTerminal* AssociatedTerminal);
+
+	struct MBPM_PacketDependancyRankInfo
+	{
+		uint32_t DependancyDepth = -1;
+		std::string PacketName = "";
+		std::vector<std::string> PacketDependancies = {};
+		bool operator<(MBPM_PacketDependancyRankInfo const& PacketToCompare) const
+		{
+			bool ReturnValue = DependancyDepth < PacketToCompare.DependancyDepth;
+			if (DependancyDepth == PacketToCompare.DependancyDepth)
+			{
+				ReturnValue = PacketName < PacketToCompare.PacketName;
+			}
+			return(ReturnValue);
+		}
+	};
 
 	class MBPM_ClI
 	{
@@ -55,10 +88,13 @@ namespace MBPM
 		
 		void p_HandleUpdate(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
 		void p_HandleInstall(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
-		void p_HandleGet(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
 		void p_HandleUpload(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
-		void p_HandleIndex(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
 		void p_HandleCompile(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
+
+		void p_HandleGet(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
+		void p_HandleIndex(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
+
+		void p_HandlePackets(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
 
 		void p_UploadPacketsLocal(std::vector<PacketIdentifier> const& PacketsToUpload,MBCLI::MBTerminal* AssociatedTerminal);
 	
@@ -79,7 +115,20 @@ namespace MBPM
 		bool p_PacketExists(PacketIdentifier const& PacketToCheck);
 
 		//std::string p_GetInstalledPacketDirectory();
+		std::vector<PacketIdentifier> p_GetCommandPackets(MBCLI::ProcessedCLInput const& CLIInput, PacketLocationType DefaultType,MBError& OutError);
+		PacketIdentifier p_GetPacketIdentifier(std::string const& PacketName, PacketLocationType Type, MBError& OutError);
+
 		std::vector<PacketIdentifier> p_GetInstalledPacketsDependancyOrder(std::vector<std::string>* MissingPackets);
+
+		std::map<std::string, MBPM_PacketDependancyRankInfo> p_GetPacketDependancieInfo(
+			std::vector<PacketIdentifier> const& InPacketsToCheck,
+			MBError& OutError,
+			std::vector<std::string>* OutMissing);
+
+		std::vector<PacketIdentifier> p_GetPacketDependants_DependancyOrder(std::vector<PacketIdentifier> const& PacketsToCheck,MBError& OutError, std::vector<std::string>* MissingPackets);
+		std::vector<PacketIdentifier> p_GetPacketDependancies_DependancyOrder(std::vector<PacketIdentifier> const& PacketsToCheck,MBError& OutError,std::vector<std::string>* MissingPackets);
+
+
 		std::vector<PacketIdentifier> p_GetUserPackets();//ingen garanti p� dependancy order
 		std::vector<PacketIdentifier> p_GetInstalledPackets();//implicit tar den i installed dependancy order
 
