@@ -491,7 +491,7 @@ namespace MBPM
 			DefaultType = PacketLocationType::Local;
 			DefaultSpecifications += 1;
 		}
-		if (DefaultSpecifications > 0)
+		if (DefaultSpecifications > 1)
 		{
 			OutError = false;
 			OutError.ErrorMessage = "More than 1 default packet type specification";
@@ -1113,20 +1113,19 @@ namespace MBPM
 	}
 	void MBPM_ClI::p_HandleUpdate(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
 	{
-		std::vector<PacketIdentifier> PacketsToUpdate = {};
-		if (CommandInput.CommandOptions.find("all") != CommandInput.CommandOptions.end())
+		MBError ParseError = true;
+		std::vector<PacketIdentifier> PacketsToUpdate = p_GetCommandPackets(CommandInput, PacketLocationType::Installed, ParseError);
+		if (!ParseError)
 		{
-			PacketsToUpdate = p_GetInstalledPackets();
+			AssociatedTerminal->PrintLine("Error retrieving command packets: " + ParseError.ErrorMessage);
+			return;
 		}
-		else
+		for (size_t i = 0; i < PacketsToUpdate.size(); i++)
 		{
-			for (size_t i = 0; i < CommandInput.TopCommandArguments.size(); i++)
+			if (PacketsToUpdate[i].PacketLocation != PacketLocationType::Installed)
 			{
-				PacketIdentifier NewPacket;
-				NewPacket.PacketLocation = PacketLocationType::Installed;
-				NewPacket.PacketName = CommandInput.TopCommandArguments[i];
-				NewPacket.PacketURI = p_GetPacketInstallDirectory() + "/" + NewPacket.PacketName + "/";
-				PacketsToUpdate.push_back(NewPacket);
+				AssociatedTerminal->PrintLine("Can only update installed packets");
+				return;
 			}
 		}
 		if (PacketsToUpdate.size() == 0)
@@ -1135,16 +1134,10 @@ namespace MBPM
 			return;
 		}
 		std::string InstallDirectory = p_GetPacketInstallDirectory();
-		std::vector<std::string> MissingPackets = {};
 		std::vector<std::string> FailedPackets = {};
 		m_ClientToUse.Connect(p_GetDefaultPacketHost());
 		for (size_t i = 0; i < PacketsToUpdate.size(); i++)
 		{
-			if (!p_PacketExists(PacketsToUpdate[i]))
-			{
-				MissingPackets.push_back(PacketsToUpdate[i].PacketName);
-				continue;
-			}
 			//ANTAGANDE det h�r g�r bara f�r packets som man inte �ndrar p�, annars kommer MBPM_FileInfo beh�va uppdateras f�rst, f�r se hur l�ng tid det tar f�r grejer
 			AssociatedTerminal->PrintLine("Updating packet " + PacketsToUpdate[i].PacketName);
 			MBError UpdateResult = m_ClientToUse.UpdatePacket(PacketsToUpdate[i].PacketURI, PacketsToUpdate[i].PacketName);
@@ -1647,86 +1640,12 @@ namespace MBPM
 	{
 		//f�rst s� beh�ver vi skicka data f�r att se login typen
 		MBPM::MBPP_ComputerInfo PreviousComputerInfo = m_ClientToUse.GetComputerInfo();
-		if (CommandInput.TopCommandArguments.size() < 2 && CommandInput.CommandOptions.find("all") == CommandInput.CommandOptions.end() && CommandInput.CommandOptions.find("user") 
-			== CommandInput.CommandOptions.end() && CommandInput.CommandOptions.find("allinstalled") == CommandInput.CommandOptions.end() 
-			&& CommandInput.CommandOptions.find("installed") == CommandInput.CommandOptions.end())
+		MBError ParseError = true;
+		std::vector<PacketIdentifier> PacketsToUpload = p_GetCommandPackets(CommandInput,PacketLocationType::Installed,ParseError);
+		if (!ParseError)
 		{
-			AssociatedTerminal->PrintLine("Invalid \"upload\" arguments, requires packet to upload and packet directory");
+			AssociatedTerminal->PrintLine("Error getting command packets: " + ParseError.ErrorMessage);
 			return;
-		}
-		std::vector<PacketIdentifier> PacketsToUpload = {};//packet name + packet directory
-		if (CommandInput.CommandOptions.find("alluser") != CommandInput.CommandOptions.end())
-		{
-			PacketsToUpload = p_GetUserPackets();
-		}
-		if (CommandInput.CommandOptions.find("allinstalled") != CommandInput.CommandOptions.end())
-		{
-			std::vector<PacketIdentifier> InstalledPackets = p_GetInstalledPackets();
-			for (size_t i = 0; i < InstalledPackets.size(); i++)
-			{
-				PacketsToUpload.push_back(InstalledPackets[i]);
-			}
-		}
-		if (CommandInput.TopCommandArguments.size() >= 2 && CommandInput.CommandOptions.find("user") == CommandInput.CommandOptions.end() &&
-			CommandInput.CommandOptions.find("installed") == CommandInput.CommandOptions.end())
-		{
-			if (CommandInput.TopCommandArguments.size() > 3)
-			{
-				AssociatedTerminal->PrintLine("Invalid number of arguments to upload: Only packet name and directory can be specified");
-				return;
-			}
-			PacketIdentifier PacketToUpload;
-			PacketToUpload.PacketName = CommandInput.TopCommandArguments[0];
-			PacketToUpload.PacketURI = CommandInput.TopCommandArguments[1];
-			PacketToUpload.PacketLocation = PacketLocationType::Local;
-			PacketsToUpload.push_back(PacketToUpload);
-		}
-		if (CommandInput.CommandOptions.find("user") != CommandInput.CommandOptions.end() && CommandInput.CommandOptions.find("installed") != CommandInput.CommandOptions.end())
-		{
-			AssociatedTerminal->PrintLine("Cannot specify --user and --installed at the same time");
-			return;
-		}
-		if (CommandInput.CommandOptions.find("user") != CommandInput.CommandOptions.end())
-		{
-			for (size_t i = 0; i < CommandInput.TopCommandArguments.size(); i++)
-			{
-				PacketsToUpload.push_back(p_GetUserPacket(CommandInput.TopCommandArguments[i]));
-			}
-		}
-		if (CommandInput.CommandOptions.find("installed") != CommandInput.CommandOptions.end())
-		{
-			for (size_t i = 0; i < CommandInput.TopCommandArguments.size(); i++)
-			{
-				PacketsToUpload.push_back(p_GetInstalledPacket(CommandInput.TopCommandArguments[i]));
-			}
-		}
-		if (CommandInput.GetSingleArgumentOptionList("i").size() != 0)
-		{
-			std::vector<std::pair<std::string, int>> InstalledPacketsToUpload = CommandInput.GetSingleArgumentOptionList("i");
-			for (size_t i = 0; i < InstalledPacketsToUpload.size(); i++)
-			{
-				PacketIdentifier NewPacket = p_GetInstalledPacket(InstalledPacketsToUpload[i].first);
-				if (NewPacket.PacketName == "")
-				{
-					AssociatedTerminal->PrintLine("Can't find installed packet: \"" + InstalledPacketsToUpload[i].first + "\"");
-					return;
-				}
-				PacketsToUpload.push_back(NewPacket);
-			}
-		}
-		if (CommandInput.GetSingleArgumentOptionList("u").size() != 0)
-		{
-			std::vector<std::pair<std::string, int>> InstalledPacketsToUpload = CommandInput.GetSingleArgumentOptionList("u");
-			for (size_t i = 0; i < InstalledPacketsToUpload.size(); i++)
-			{
-				PacketIdentifier NewPacket = p_GetUserPacket(InstalledPacketsToUpload[i].first);
-				if (NewPacket.PacketName == "")
-				{
-					AssociatedTerminal->PrintLine("Can't find installed packet: \"" + InstalledPacketsToUpload[i].first + "\"");
-					return;
-				}
-				PacketsToUpload.push_back(NewPacket);
-			}
 		}
 		//kollar att alla packets har unika namn
 		std::unordered_set<std::string> PacketNames = {};
@@ -2128,69 +2047,13 @@ namespace MBPM
 	}
 	void MBPM_ClI::p_HandleCompile(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
 	{
-		std::vector<PacketIdentifier> PacketDirectories = {};
-		//skapar packet directoriesen
-		bool UpdateInstalled = false;
-		if (CommandInput.CommandOptions.find("allinstalled") != CommandInput.CommandOptions.end())
+		MBError ParseError = true;
+		std::vector<PacketIdentifier> PacketDirectories = p_GetCommandPackets(CommandInput, PacketLocationType::Installed, ParseError);
+		if (!ParseError)
 		{
-			std::vector<std::string> MissingPackets = {};
-			PacketDirectories = p_GetInstalledPacketsDependancyOrder(&MissingPackets); // ska den g�ra n�got om vi inte har alla packet dependancys?
-			if (MissingPackets.size() != 0)
-			{
-				AssociatedTerminal->PrintLine("Missing following packets in order to compile all packets:");
-				for (size_t i = 0; i < MissingPackets.size(); i++)
-				{
-					AssociatedTerminal->PrintLine(MissingPackets[i]);
-				}
-			}
+			AssociatedTerminal->PrintLine("Error retrieving command packets: " + ParseError.ErrorMessage);
+			return;
 		}
-		if (CommandInput.CommandOptions.find("alluser") != CommandInput.CommandOptions.end())
-		{
-			std::vector<PacketIdentifier> UserPackets = p_GetUserPackets();
-			//std::vector<std::pair<std::string, std::string>> UserPackets = p_GetUserUploadPackets();
-			//for (size_t i = 0; i < UserPackets.size(); i++)
-			//{
-			//	PacketDirectories.push_back(UserPackets[i].second);
-			//}
-		}
-		//kanske blir att vi uppdaterar pakcets dubbelt, men �r ju anv�ndarsen ansvar
-		for (size_t i = 0; i < CommandInput.TopCommandArguments.size(); i++)
-		{
-			std::string CurrentInput = CommandInput.TopCommandArguments[i];
-			size_t DotPosition = CurrentInput.find('.');
-			size_t SlashPosition = CurrentInput.find('/');
-			size_t BackslashPosition = CurrentInput.find('\\');
-			if (CommandInput.CommandOptions.find("user") != CommandInput.CommandOptions.end())
-			{
-				if (p_GetUserPacket(CurrentInput).PacketURI != "" && (SlashPosition == CurrentInput.npos && DotPosition == CurrentInput.npos && BackslashPosition == CurrentInput.npos))
-				{
-					PacketDirectories.push_back(p_GetUserPacket(CurrentInput));
-				}
-				else
-				{
-					PacketIdentifier NewPacket;
-					NewPacket.PacketURI = CurrentInput;
-					NewPacket.PacketLocation = PacketLocationType::Local;
-					PacketDirectories.push_back(NewPacket);
-				}
-			}
-			else
-			{
-				if (p_GetInstalledPacket(CurrentInput).PacketURI != "" && (SlashPosition == CurrentInput.npos && DotPosition == CurrentInput.npos && BackslashPosition == CurrentInput.npos))
-				{
-					PacketDirectories.push_back(p_GetInstalledPacket(CurrentInput));
-				}
-				else
-				{
-					PacketIdentifier NewPacket;
-					NewPacket.PacketURI = CurrentInput;
-					NewPacket.PacketLocation = PacketLocationType::Local;
-					PacketDirectories.push_back(NewPacket);
-				}
-			}
-		}
-
-		
 		std::string MBPMStaticData = "";
 		if (CommandInput.CommandPositionalOptions.find("sdata") != CommandInput.CommandPositionalOptions.end())
 		{
@@ -2348,7 +2211,28 @@ namespace MBPM
 	}
 	MBError MBPM_ClI::p_UpdateCmake(std::string const& PacketDirectory, std::string const& OptionalMBPMStaticData)
 	{
-		return(MBPM::UpdateCmakeMBPMVariables(PacketDirectory,OptionalMBPMStaticData));
+		MBError ReturnValue = true;
+		PacketIdentifier Identifier = p_GetLocalPacket(PacketDirectory);
+		std::vector<PacketIdentifier> Identifiers;
+		Identifiers.push_back(Identifier);
+		std::vector<std::string> Missing;
+		auto Result = p_GetPacketDependancieInfo(Identifiers,ReturnValue,&Missing);
+		if (!ReturnValue)
+		{
+			return(ReturnValue);
+		}
+		std::set<MBPM_PacketDependancyRankInfo> OrderedPackets;
+		for (auto const& Packet : Result)
+		{
+			OrderedPackets.insert(Packet.second);
+		}
+		std::vector<std::string> TotalDependancies = {};
+		for (auto const Packet : OrderedPackets)
+		{
+			TotalDependancies.push_back(Packet.PacketName);
+		}
+		std::reverse(TotalDependancies.begin(), TotalDependancies.end());
+		return(MBPM::UpdateCmakeMBPMVariables(PacketDirectory, TotalDependancies,OptionalMBPMStaticData));
 	}
 	MBError MBPM_ClI::p_CreateCmake(std::string const& PacketDirectory)
 	{

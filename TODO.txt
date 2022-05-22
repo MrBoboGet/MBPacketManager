@@ -49,3 +49,5 @@ Lägg även till mbpm compile MBWebsite --dependants, dvs compila alla packets s
 
 Eftersom linux linker är *trash* så måste man specificera libraries i en specifik ordning, den som resolvar mest dependancies sist. Detta är ännu ett skäl att låta MBPM sköta det,
 och borde implementeras.
+
+--makelocal för upload, så upload local kan uploada dependancies, men ta dem lokala instället fgör insallerade

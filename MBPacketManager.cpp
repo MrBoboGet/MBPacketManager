@@ -602,7 +602,7 @@ namespace MBPM
 		}
 		return(ReturnValue);
 	}
-	MBError UpdateCmakeMBPMVariables(std::string const& PacketPath,std::string const& StaticMBPMData)
+	MBError UpdateCmakeMBPMVariables(std::string const& PacketPath, std::vector<std::string> const& TotalPacketDependancies, std::string const& StaticMBPMData)
 	{
 		MBError ReturnValue = true;
 		if (!std::filesystem::exists(PacketPath + "/MBPM_PacketInfo") || !std::filesystem::exists(PacketPath+"/CMakeLists.txt"))
@@ -642,8 +642,8 @@ namespace MBPM
 			ReturnValue.ErrorMessage = "File doesn't contain valid MBPM_Variables";
 			return(ReturnValue);
 		}
-		MBPM_PacketInfo PacketInfo = ParseMBPM_PacketInfo(PacketPath + "/MBPM_PacketInfo");
-		std::vector<std::string> TotalPacketDependancies = h_GetTotalPacketDependancies(PacketInfo,&ReturnValue);
+		//MBPM_PacketInfo PacketInfo = ParseMBPM_PacketInfo(PacketPath + "/MBPM_PacketInfo");
+		//std::vector<std::string> TotalPacketDependancies = h_GetTotalPacketDependancies(PacketInfo,&ReturnValue);
 		if (!ReturnValue)
 		{
 			return(ReturnValue);

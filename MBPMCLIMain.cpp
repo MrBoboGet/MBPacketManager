@@ -12,16 +12,16 @@ int main(int argc,const char** argv)
 	//mbpm packets MBUtility -r:MBParsing -u:MBRadio -l:../ -i:cryptopp
 	//mbpm packets -l:../ --dependancies
 	//mbpm packets MBCLI --dependants
-	std::string Input;
-	std::getline(std::cin, Input);
-	std::vector<std::string> Strings = MBUtility::Split(Input, " ");
-	std::vector<const char*> CharArrays;
-	for (size_t i = 0; i < Strings.size(); i++)
-	{
-		CharArrays.push_back(Strings[i].c_str());
-	}
-	argc = Strings.size();
-	argv = CharArrays.data();
+	//std::string Input;
+	//std::getline(std::cin, Input);
+	//std::vector<std::string> Strings = MBUtility::Split(Input, " ");
+	//std::vector<const char*> CharArrays;
+	//for (size_t i = 0; i < Strings.size(); i++)
+	//{
+	//	CharArrays.push_back(Strings[i].c_str());
+	//}
+	//argc = Strings.size();
+	//argv = CharArrays.data();
 
 	//
 
@@ -67,7 +67,7 @@ int main(int argc,const char** argv)
 	//MBUtility::OS_Filesystem FSToUse;
 	//MBPM::MBPP_FileInfoReader::CreateFileInfo(FSToUse, &VirtualDirectoryInfo);
 	//MBPM::MBPP_FileInfoReader SubVirtualDirectortInfo;
-	//FSToUse.ChangeDirectory("..");
+	//FSToUse.ChangeDirectory("..");TotalPacketDependancies
 	//MBPM::MBPP_FileInfoReader::CreateFileInfo(FSToUse, "MBPacketManager", &SubVirtualDirectortInfo);
 	//std::cout << bool(RawDirectoryInfo == VirtualDirectoryInfo) << std::endl;
 	//std::cout << bool(RawDirectoryInfo == SubVirtualDirectortInfo) << std::endl;

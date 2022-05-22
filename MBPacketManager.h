@@ -104,7 +104,7 @@ namespace MBPM
 
 	MBError WriteCMakeProjectToFile(MBPM_CmakeProject const& ProjectToWrite, std::string const& OutputFilePath);
 
-	MBError UpdateCmakeMBPMVariables(std::string const& PacketPath,std::string const& StaticMBPMData);
+	MBError UpdateCmakeMBPMVariables(std::string const& PacketPath,std::vector<std::string>const&  TotalPacketDependancies,std::string const& StaticMBPMData);
 
 	MBError GenerateCmakeFile(MBPM_PacketInfo const& PacketToConvert, std::string const& PacketDirectory, MBPM_MakefileGenerationOptions const& CompileConfiguration,std::string const& FileName);
 	MBError GenerateCmakeFile(std::string const& PacketPath, MBPM_MakefileGenerationOptions const& CompileConfiguration,std::string const& FileName);
