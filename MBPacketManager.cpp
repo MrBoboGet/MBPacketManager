@@ -45,11 +45,11 @@ namespace MBPM
 				{
 					FileEnding = Filename.substr(LastDot + 1);
 				}
-				if (FileEnding[0] == 'h' || FileEnding == "hpp")
+				if (FileEnding == "h" || FileEnding == "hpp")
 				{
 					ProjectToPopulate.CommonHeaders.push_back(ProjectName + "/" + RelativeFilePath);
 				}
-				if (FileEnding[0] == 'c' || FileEnding == "cpp")
+				if (FileEnding == "c" || FileEnding == "cpp")
 				{
 					ProjectToPopulate.CommonSources.push_back(ProjectName + "/" + RelativeFilePath);
 				}
@@ -543,7 +543,7 @@ namespace MBPM
 		}
 		OutputFile << ")\n";
 
-		OutputFile << "set(COMMON_LIBRARIES ${COMMON_STATIC_LIBRARIES} ${COMMON_DYNAMIC_LIBRARIES})\n";
+		OutputFile << "set(COMMON_LIBRARIES ${MBPM_SystemLibraries} ${COMMON_STATIC_LIBRARIES} ${COMMON_DYNAMIC_LIBRARIES})\n";
 
 
 		for (auto const& TargetData : ProjectToWrite.TargetsData)

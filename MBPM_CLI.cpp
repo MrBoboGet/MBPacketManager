@@ -486,7 +486,7 @@ namespace MBPM
 			DefaultType = PacketLocationType::Remote;
 			DefaultSpecifications += 1;
 		}
-		if (CLIInput.CommandOptions.find("local") != CLIInput.CommandOptions.end())
+		if (CLIInput.CommandOptions.find("path") != CLIInput.CommandOptions.end())
 		{
 			DefaultType = PacketLocationType::Local;
 			DefaultSpecifications += 1;
@@ -2216,18 +2216,13 @@ namespace MBPM
 		std::vector<PacketIdentifier> Identifiers;
 		Identifiers.push_back(Identifier);
 		std::vector<std::string> Missing;
-		auto Result = p_GetPacketDependancieInfo(Identifiers,ReturnValue,&Missing);
+		auto Result = p_GetPacketDependancies_DependancyOrder(Identifiers,ReturnValue,&Missing);
 		if (!ReturnValue)
 		{
 			return(ReturnValue);
 		}
-		std::set<MBPM_PacketDependancyRankInfo> OrderedPackets;
-		for (auto const& Packet : Result)
-		{
-			OrderedPackets.insert(Packet.second);
-		}
 		std::vector<std::string> TotalDependancies = {};
-		for (auto const Packet : OrderedPackets)
+		for (auto const Packet : Result)
 		{
 			TotalDependancies.push_back(Packet.PacketName);
 		}
