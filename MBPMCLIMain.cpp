@@ -86,9 +86,9 @@ int main(int argc,const char** argv)
 	//std::exit(0);
 
 	//debug för compile av locala packets
-	//std::filesystem::current_path("C:\\Users\\emanu\\Desktop\\Program\\C++\\MBDoc");
-	//const char* NewArgv[] = { "mbpm","compile","./"};
-	//argc = sizeof(NewArgv) / sizeof(const char*);
-	//argv = NewArgv;
+	//std::filesystem::current_path("C:\\Users\\emanu\\Desktop\\Program\\C++\\MBPlay");
+	const char* NewArgv[] = { "mbpm","compile","--index"};
+	argc = sizeof(NewArgv) / sizeof(const char*);
+	argv = NewArgv;
 	return(MBPM::MBCLI_Main(argc, argv));
 }

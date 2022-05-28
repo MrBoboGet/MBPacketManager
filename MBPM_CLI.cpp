@@ -5,6 +5,8 @@
 #include <exception>
 #include <stdexcept>
 #include <algorithm>
+
+#include <MBUtility/MBFiles.h>
 //#include "MBCLI/"
 
 namespace MBPM
@@ -2145,6 +2147,197 @@ namespace MBPM
 					{
 						AssociatedTerminal->PrintLine("Failed updating CMake for \"" + CurrentDirectory + "\": " + UpdateResult.ErrorMessage);
 					}
+				}
+			}
+		}
+		else if (CommandInput.CommandOptions.find("index") != CommandInput.CommandOptions.end())
+		{
+			std::vector<PacketIdentifier> InstalledPackets = p_GetInstalledPackets();
+			std::vector<MBParsing::JSONObject> AggregatedInfo;
+			for (auto const& Packet : InstalledPackets)
+			{
+				MBError CurrentPacketInfoResult = true;
+				MBPM_PacketInfo CurrentPacketInfo = p_GetPacketInfo(Packet,&CurrentPacketInfoResult);
+				if (!CurrentPacketInfoResult)
+				{
+					AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::Yellow);
+					AssociatedTerminal->PrintLine("WARNING: Error reading info for packet " + Packet.PacketName + ", "+CurrentPacketInfoResult.ErrorMessage);
+					AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::White);
+					continue;
+				}
+				if (CurrentPacketInfo.Attributes.find(MBPM_PacketAttribute::NonMBBuild) != CurrentPacketInfo.Attributes.end())
+				{
+					continue;
+				}
+				if (!std::filesystem::exists(Packet.PacketURI + "/compile_commands.json") || std::filesystem::is_directory(Packet.PacketURI + "/compile_commands.json"))
+				{
+					AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::Yellow);
+					AssociatedTerminal->PrintLine("WARNING: packet " + Packet.PacketName + " has no compile_commands.json, skipping it");
+					AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::White);
+					continue;
+				}
+				std::string JsonData = MBUtility::ReadWholeFile(Packet.PacketURI + "/compile_commands.json");
+				MBError ParseError = true;
+				MBParsing::JSONObject PacketCompileCommands = MBParsing::ParseJSONObject(JsonData, 0, nullptr, &ParseError);
+				if (!ParseError)
+				{
+					AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::Yellow);
+					AssociatedTerminal->PrintLine("WARNING: Error parsing compile_commands.json for packet "+Packet.PacketName+": "+ParseError.ErrorMessage + ", skipping it");
+					AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::White);
+					continue;
+				}
+				try
+				{
+					auto& CompileUnits = PacketCompileCommands.GetArrayData();
+					for (MBParsing::JSONObject& TranslationUnit : CompileUnits)
+					{
+						AggregatedInfo.push_back(std::move(TranslationUnit));
+					}
+				}
+				catch (std::exception const& e)
+				{
+					AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::Yellow);
+					AssociatedTerminal->PrintLine("WARNING: invalid compile_commands.json for packet "+Packet.PacketName+", skipping it");
+					AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::White);
+					continue;
+				}
+			}
+			std::string InstallDirectory = p_GetPacketInstallDirectory();
+			std::ofstream AggregateOutput = std::ofstream(InstallDirectory + "/compile_commands.json");
+			if (AggregateOutput.is_open() == false)
+			{
+				AssociatedTerminal->PrintLine("Error opening output for aggregate compile info");
+				return;
+			}
+			MBParsing::JSONObject TotalInfo = std::move(AggregatedInfo);
+			AggregateOutput << TotalInfo.ToString();
+			AggregateOutput.flush();
+			AggregateOutput.close();
+			int IndexResult = std::system(("clangd-indexer --executor=all-TUs " + InstallDirectory + "/compile_commands.json > "+InstallDirectory+"/InstallIndex.dex").c_str());
+			if (IndexResult != 0)
+			{
+				AssociatedTerminal->PrintLine("Error creating total index");
+			}
+			else
+			{
+				AssociatedTerminal->PrintLine("Successfully created total install index");
+			}
+		}
+		else if (CommandInput.CommandOptions.find("compilecommands") != CommandInput.CommandOptions.end())
+		{
+			std::vector<PacketIdentifier> FailedPackets;
+			for (auto const& Packet : PacketDirectories)
+			{
+				MBError CurrentPacketInfoResult = true;
+				MBPM_PacketInfo CurrentPacketInfo = p_GetPacketInfo(Packet,&CurrentPacketInfoResult);
+				if (!CurrentPacketInfoResult)
+				{
+					AssociatedTerminal->PrintLine("Skipping packet " + Packet.PacketName + ": couldn't read packet info, "+CurrentPacketInfoResult.ErrorMessage);
+					FailedPackets.push_back(Packet);
+					continue;
+				}
+				if (CurrentPacketInfo.Attributes.find(MBPM_PacketAttribute::NonMBBuild) != CurrentPacketInfo.Attributes.end())
+				{
+					continue;
+				}
+				if (Packet.PacketLocation == PacketLocationType::Remote)
+				{
+					AssociatedTerminal->PrintLine("Skipping packet " + Packet.PacketName+": packet is remote");
+					FailedPackets.push_back(Packet);
+					continue;
+				}
+				std::vector<MBParsing::JSONObject> CompileCommands;
+				if (!std::filesystem::exists(Packet.PacketURI) || !std::filesystem::is_directory(Packet.PacketURI))
+				{
+					AssociatedTerminal->PrintLine("Skipping packet " + Packet.PacketName+": filesystem error, couldnt find directory "+Packet.PacketURI);
+					FailedPackets.push_back(Packet);
+					continue; 
+				}
+				//eventuall method for including arbitrary defines too
+				std::vector<std::string> ExtraFlags;
+				//
+				ExtraFlags.push_back("--include-directory=" + p_GetPacketInstallDirectory());
+				std::vector<PacketIdentifier> PacketToCheck;
+				PacketToCheck.push_back(Packet);
+				//prolly a bit innefective as it requires alot of redundant reads, but easier to implement
+				MBError DependancyError = true;
+				std::vector<std::string> MissingPackets;
+				std::vector<PacketIdentifier> PacketDependancies = p_GetPacketDependancies_DependancyOrder(PacketToCheck, DependancyError, &MissingPackets);
+				if (!DependancyError)
+				{
+					AssociatedTerminal->PrintLine("Skipping packet " + Packet.PacketName + ": Error retrieving dependancys " + DependancyError.ErrorMessage);
+					FailedPackets.push_back(Packet);
+					continue;
+				}
+				for (auto const& Dependancy : PacketDependancies)
+				{
+					MBError InfoError = true;
+					MBPM_PacketInfo DependancyInfo = p_GetPacketInfo(Dependancy, &InfoError);
+					if (!InfoError)
+					{
+						AssociatedTerminal->PrintLine("Skipping packet " + Packet.PacketName + ": Error retrieving dependancy info for "+Dependancy.PacketName+","+ InfoError.ErrorMessage);
+						FailedPackets.push_back(Packet);
+						continue;
+					}
+					std::string InstallDirectory = p_GetPacketInstallDirectory();
+					for (std::string const& ExtraIncludes : DependancyInfo.ExtraIncludeDirectories)
+					{
+						ExtraFlags.push_back("--include-directory=" + InstallDirectory + Dependancy.PacketName + "/" + ExtraIncludes);
+					}
+				}
+				//
+
+				std::filesystem::directory_iterator Iterator(Packet.PacketURI);
+				MBPM_FileInfoExcluder Excluder;
+				if (std::filesystem::exists(Packet.PacketURI + "/MBPM_FileInfoExcluder"))
+				{
+					Excluder = MBPM_FileInfoExcluder(Packet.PacketURI + "/MBPM_FileInfoExcluder");
+				}
+				for (auto& Entry : Iterator)
+				{
+					std::string PacketPath = "/"+MBUnicode::PathToUTF8(std::filesystem::relative(Entry.path(), Packet.PacketURI));
+					if (Excluder.Excludes(PacketPath) && !Excluder.Includes(PacketPath))
+					{
+						continue;
+					}
+					std::string Extension = MBUnicode::PathToUTF8(Entry.path().extension());
+					if (!(Entry.path().extension() == ".cpp" || Entry.path().extension() == ".c"))
+					{
+						continue;
+					}
+					MBParsing::JSONObject CompilationUnit(MBParsing::JSONObjectType::Aggregate);
+					CompilationUnit["directory"] = MBUnicode::PathToUTF8(std::filesystem::absolute(Packet.PacketURI));
+					CompilationUnit["file"] = PacketPath.substr(1);
+					MBParsing::JSONObject Arguments(MBParsing::JSONObjectType::Array);
+					auto& ArgumentArray = Arguments.GetArrayData();
+					ArgumentArray.push_back("clang++");
+					ArgumentArray.push_back("--include-directory=./");
+					ArgumentArray.push_back("-std=c++17");
+					for (std::string const& Flag : ExtraFlags)
+					{
+						ArgumentArray.push_back(Flag);
+					}
+					ArgumentArray.push_back("-c");
+					ArgumentArray.push_back(PacketPath.substr(1));
+					CompilationUnit["arguments"] = std::move(Arguments);
+					CompileCommands.push_back(std::move(CompilationUnit));
+				}
+				MBParsing::JSONObject FinishedObject = MBParsing::JSONObject(std::move(CompileCommands));
+				std::ofstream OutStream = std::ofstream(Packet.PacketURI + "/compile_commands.json");
+				if (!OutStream.is_open())
+				{
+					AssociatedTerminal->PrintLine("Error opening output for " + Packet.PacketName);
+					FailedPackets.push_back(Packet);
+					continue;
+				}
+				OutStream << FinishedObject.ToString();
+			}
+			if (FailedPackets.size() > 0)
+			{
+				AssociatedTerminal->PrintLine("Failed creating compile_commands.json for following packets:");
+				for (auto const& Packet : FailedPackets)
+				{
+					AssociatedTerminal->PrintLine(Packet.PacketName + " " + Packet.PacketURI);
 				}
 			}
 		}
