@@ -1,4 +1,5 @@
 #include "MB_PacketProtocol.h"
+#include "MBUnicode/MBUnicode.h"
 #include <MBParsing/MBParsing.h>
 #include <set>
 #include <MBCrypto/MBCrypto.h>
@@ -7,12 +8,12 @@
 #include <algorithm>
 
 #include <sstream>
+
+#include <regex>
+#include <string>
+#include <iterator>
 namespace MBPM
 {
-	std::string h_PathToUTF8(std::filesystem::path const& PathToConvert)
-	{
-		return(PathToConvert.generic_u8string());
-	}
 	void h_WriteBigEndianInteger(std::ofstream& FileToWriteTo, uintmax_t IntegerToWrite,uint8_t IntegerSize)
 	{
 		char BigEndianData[sizeof(uintmax_t)];
@@ -98,7 +99,7 @@ namespace MBPM
 		std::filesystem::directory_iterator DirectoryIterator = std::filesystem::directory_iterator(SubPathToIterate);
 		for (auto const& Entries : DirectoryIterator)
 		{
-			std::string AbsolutePacketPath = "/"+h_PathToUTF8(std::filesystem::relative(Entries.path(),TopPacketDirectory));
+			std::string AbsolutePacketPath = "/"+MBUnicode::PathToUTF8(std::filesystem::relative(Entries.path(),TopPacketDirectory));
 			if (FileInfoExcluder.Excludes(AbsolutePacketPath) && !FileInfoExcluder.Includes(AbsolutePacketPath))
 			{
 				continue;
@@ -115,9 +116,9 @@ namespace MBPM
 		uint64_t SkipPointerPosition = FileToWriteTo->GetOutputPosition();
 		h_WriteBigEndianInteger(FileToWriteTo, 0, 8); //offset innan vi en l�st filen
 		//plats f�r directory hashet
-		char StructureHash[20]; //TODO hardcoda inte hash l�ngden...
+		char StructureHash[20]; //TODO hardcoda inte hash längden...
 		FileToWriteTo->Write(StructureHash, 20);
-		char ContentHash[20]; //TODO hardcoda inte hash l�ngden...
+		char ContentHash[20]; //TODO hardcoda inte hash längden...
 		FileToWriteTo->Write(ContentHash, 20);
 
 		//h�r har vi �ven directory sizen
@@ -135,7 +136,7 @@ namespace MBPM
 		{
 			uint64_t NewSize = 0;
 			std::string FileHash = h_WriteFileData(FileToWriteTo, Files, HashFunctionToUse, &NewSize);
-			std::string FileName = h_PathToUTF8(Files.filename());
+			std::string FileName = MBUnicode::PathToUTF8(Files.filename());
 			StructureHashData += FileName+FileHash; //sorterat p� filordning
 			ContentHashes.push_back(FileHash);
 			TotalDirectorySize += NewSize;
@@ -238,7 +239,6 @@ namespace MBPM
 			return;
 		}
 		MBPP_FileInfoReader	 ReturnValue;
-		ReturnValue.m_InfoHeader;
 		ReturnValue.m_ExtensionData = p_GetLatestVersionExtensionData();
 		ReturnValue.m_InfoHeader.ExtensionDataSize = p_SerializeExtensionData(ReturnValue.m_ExtensionData).size();
 
@@ -278,7 +278,6 @@ namespace MBPM
 		{
 			Excluder = MBPM_FileInfoExcluder(InStream.get());
 		}
-		Result.m_InfoHeader;
 		Result.m_ExtensionData = p_GetLatestVersionExtensionData();
 		Result.m_InfoHeader.ExtensionDataSize = p_SerializeExtensionData(Result.m_ExtensionData).size();
 		if (PathToIndex != "")
@@ -717,10 +716,6 @@ namespace MBPM
 			Excluder = MBPM_FileInfoExcluder(PacketToHashDirectory + "/MBPM_FileInfoIgnore");
 		}
 		Excluder.AddExcludeFile("/"+OutputName);
-		Excluder.AddExcludeFile("/MBPM_UploadedChanges/");
-		Excluder.AddExcludeFile("/MBPM_BuildFiles/");
-		Excluder.AddExcludeFile("/MBPM_Builds/");
-		Excluder.AddExcludeFile("/.mbpm/");
 		MBUtility::MBFileOutputStream OutputStream = MBUtility::MBFileOutputStream(&OutputFile);
 		h_WriteFileInfoHeader(MBPP_FileInfoHeader(), &OutputStream);
 		//DEBUG
@@ -739,10 +734,6 @@ namespace MBPM
 		{
 			Excluder = MBPM_FileInfoExcluder(PacketToHashDirectory + "/MBPM_FileInfoIgnore");
 		}
-		Excluder.AddExcludeFile("/MBPM_UploadedChanges/");
-		Excluder.AddExcludeFile("/MBPM_BuildFiles/");
-		Excluder.AddExcludeFile("/MBPM_Builds/");
-		Excluder.AddExcludeFile("/.mbpm/");
 		h_WriteFileInfoHeader(MBPP_FileInfoHeader(), OutputStream);
 		h_WriteDirectoryData_Recursive(OutputStream, PacketToHashDirectory, "/", PacketToHashDirectory, Excluder, MBCrypto::HashFunction::SHA1, nullptr);
 	}
@@ -755,10 +746,6 @@ namespace MBPM
 		{
 			Excluder = MBPM_FileInfoExcluder(DirectoryToIterate + "/MBPM_FileInfoIgnore");
 		}
-		Excluder.AddExcludeFile("/MBPM_UploadedChanges/");
-		Excluder.AddExcludeFile("/MBPM_BuildFiles/");
-		Excluder.AddExcludeFile("/MBPM_Builds/");
-		Excluder.AddExcludeFile("/.mbpm/");
 		MBUtility::MBStringOutputStream OutputStream = MBUtility::MBStringOutputStream(TemporaryBuffer);
 		h_WriteFileInfoHeader(MBPP_FileInfoHeader(), &OutputStream);
 
@@ -869,17 +856,61 @@ namespace MBPM
 		}
 		return(ProcessedStringToMatch.substr(0, Directory.size()) == Directory);
 	}
+   
+    bool MBPM_FileInfoExcluder::p_MatchRegex(std::regex const& RegexToCompare,std::string const& StringToMatch) const
+    {
+        bool ReturnValue = false;
+        std::sregex_iterator Begin = std::sregex_iterator(StringToMatch.begin(),StringToMatch.end(),RegexToCompare);
+        std::sregex_iterator End;
+        while(Begin != End)
+        {
+            if(Begin->position() > 0)
+            {
+                break; 
+            }
+            else
+            {
+                ReturnValue = true;
+                break;
+            }
+            ++Begin;
+        }
+        return(ReturnValue);
+    }
+
 	bool MBPM_FileInfoExcluder::p_MatchFile(std::string const& StringToCompare, std::string const& StringToMatch) const
 	{
 		return(StringToCompare == StringToMatch);
 	}
+    void MBPM_FileInfoExcluder::AddInclude(std::string const& IncludeString)
+    {
+        try
+        {
+            std::regex NewRegex = std::regex(IncludeString);
+            m_IncludeRegex.push_back(std::move(NewRegex));
+        }
+        catch(std::exception const& e)
+        {
+            m_IncludeStrings.push_back(IncludeString);
+        }
+    }
 	void MBPM_FileInfoExcluder::AddExcludeFile(std::string const& FileToExlude)
 	{
-		m_ExcludeStrings.push_back(FileToExlude);
+        //TODO determining wheter or not it's a valid regex by cathing exceptions is kind of hacky
+        try
+        {
+            std::regex NewRegex = std::regex(FileToExlude);
+            m_ExcludeRegex.push_back(std::move(NewRegex));
+        }
+        catch(std::exception const& e)
+        {
+            m_ExcludeStrings.push_back(FileToExlude);
+        }
 	}
 
 	MBPM_FileInfoExcluder::MBPM_FileInfoExcluder(MBUtility::MBOctetInputStream* InputStream)
 	{
+        p_AddDefaults();
 		std::string TotalData;
 		constexpr size_t ReadChunkSize = 4096;
 		uint8_t ReadBuffer[ReadChunkSize];
@@ -920,17 +951,25 @@ namespace MBPM
 			{
 				if (IsInclude)
 				{
-					m_IncludeStrings.push_back(CurrentLine);
+                    AddInclude(CurrentLine);
 				}
 				else
 				{
-					m_ExcludeStrings.push_back(CurrentLine);
+                    AddExcludeFile(CurrentLine);
 				}
 			}
 		}
 	}
-	MBPM_FileInfoExcluder::MBPM_FileInfoExcluder(std::string const& PathPosition)
+    void MBPM_FileInfoExcluder::p_AddDefaults()
+    {
+		AddExcludeFile("/MBPM_UploadedChanges/");
+		AddExcludeFile("/MBPM_BuildFiles/");
+		AddExcludeFile("/MBPM_Builds/");
+		AddExcludeFile("/\\..*");
+    }
+    MBPM_FileInfoExcluder::MBPM_FileInfoExcluder(std::string const& PathPosition)
 	{
+        p_AddDefaults();
 		std::ifstream InputStream = std::ifstream(PathPosition, std::ios::in);
 		std::string CurrentLine = "";
 		bool IsInclude = false;
@@ -949,13 +988,21 @@ namespace MBPM
 			}
 			else if(CurrentLine != "")
 			{
-				if (IsInclude)
+                if (CurrentLine.size() == 0)
+                {
+                    continue;
+                }
+                if (CurrentLine.back() == '\r')
+                {
+                    CurrentLine = CurrentLine.substr(0, CurrentLine.size() - 1);
+                }
+                if (IsInclude)
 				{
-					m_IncludeStrings.push_back(CurrentLine);
+                    AddInclude(CurrentLine);
 				}
 				else
 				{
-					m_ExcludeStrings.push_back(CurrentLine);
+                    AddExcludeFile(CurrentLine);
 				}
 			}
 		}
@@ -963,51 +1010,65 @@ namespace MBPM
 	bool MBPM_FileInfoExcluder::Excludes(std::string const& StringToMatch) const
 	{
 		bool ReturnValue = false;
-		for (size_t i = 0; i < m_ExcludeStrings.size(); i++)
+		for (std::string const& ExcludeString : m_ExcludeStrings)
 		{
-			std::string CurrentExludeString = m_ExcludeStrings[i];
-			if (CurrentExludeString.front() != '/')
+			if (ExcludeString.front() != '/')
 			{
 				continue;
 			}
-			if (CurrentExludeString.back() == '/')
+			if (ExcludeString.back() == '/')
 			{
-				ReturnValue = p_MatchDirectory(CurrentExludeString, StringToMatch);
+				ReturnValue = p_MatchDirectory(ExcludeString, StringToMatch);
 			}
 			else
 			{
-				ReturnValue = p_MatchFile(CurrentExludeString, StringToMatch);
+				ReturnValue = p_MatchFile(ExcludeString, StringToMatch);
 			}
 			if (ReturnValue)
 			{
 				break;
 			}
 		}
+        for(std::regex const& ExcludeRegex : m_ExcludeRegex)
+        {
+            if(p_MatchRegex(ExcludeRegex,StringToMatch))
+            {
+                ReturnValue = true;
+                break;   
+            }
+        }
 		return(ReturnValue);
 	}
 	bool MBPM_FileInfoExcluder::Includes(std::string const& StringToMatch) const
 	{
 		bool ReturnValue = false;
-		for (size_t i = 0; i < m_IncludeStrings.size(); i++)
+		for (std::string const& IncludeString : m_IncludeStrings)
 		{
-			std::string CurrentIncludeString = m_IncludeStrings[i];
-			if (CurrentIncludeString.front() != '/')
+			if (IncludeString.front() != '/')
 			{
 				continue;
 			}
-			if (CurrentIncludeString.back() == '/')
+			if (IncludeString.back() == '/')
 			{
-				ReturnValue = p_MatchDirectory(CurrentIncludeString, StringToMatch);
+				ReturnValue = p_MatchDirectory(IncludeString, StringToMatch);
 			}
 			else
 			{
-				ReturnValue = p_MatchFile(CurrentIncludeString, StringToMatch);
+				ReturnValue = p_MatchFile(IncludeString, StringToMatch);
 			}
 			if (ReturnValue)
 			{
 				break;
 			}
 		}
+        for(std::regex const& IncludeRegex : m_IncludeRegex)
+        {
+            if(p_MatchRegex(IncludeRegex,StringToMatch))
+            {
+                ReturnValue = true;
+                break;   
+            }
+        }
 		return(ReturnValue);
 	}
 	//END MBPM_FileInfoExcluder
@@ -1910,10 +1971,6 @@ namespace MBPM
 		{
 			Excluder = MBPM_FileInfoExcluder(Directory + "/MBPM_FileInfoIgnore");
 		}
-		Excluder.AddExcludeFile("/MBPM_UploadedChanges/");
-		Excluder.AddExcludeFile("/MBPM_BuildFiles/");
-		Excluder.AddExcludeFile("/.mbpm/");
-		Excluder.AddExcludeFile("/MBPM_Builds/");
 		return(Excluder);
 	}
 	void MBPP_FileInfoReader::p_WriteHeader(MBPP_FileInfoHeader const& HeaderToWrite, MBUtility::MBOctetOutputStream* OutputStream)
@@ -1979,7 +2036,6 @@ namespace MBPM
 		std::vector<MBUtility::FSObjectInfo> Contents = AssociatedFilesystem.ListDirectory(TopDirectoryPath+CurrentPacketPath, &FSError);
 		for (auto const& Entry : Contents)
 		{
-			//std::string AbsolutePacketPath = "/" + h_PathToUTF8(std::filesystem::relative(Entries.path(), TopPacketDirectory));
 			std::string AbsolutePacketPath = CurrentPacketPath + "/" + Entry.Name;
 			//TEMP
 			if (AbsolutePacketPath.substr(0, 2) == "//")
@@ -2060,7 +2116,6 @@ namespace MBPM
 		std::filesystem::directory_iterator DirectoryIterator(DirectoryPath);
 		for (auto const& Entry : DirectoryIterator)
 		{
-			//std::string AbsolutePacketPath = "/" + h_PathToUTF8(std::filesystem::relative(Entries.path(), TopPacketDirectory));
 			std::filesystem::path RelativePath = std::filesystem::relative(Entry.path(), TopDirectoryPath);
 			std::string AbsolutePacketPath = "/" + MBUtility::ReplaceAll(MBUnicode::PathToUTF8(RelativePath), "\\", "/");
 			if (FileExcluder.Excludes(AbsolutePacketPath) && !FileExcluder.Includes(AbsolutePacketPath))

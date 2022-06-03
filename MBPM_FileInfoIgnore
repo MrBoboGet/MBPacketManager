@@ -1,6 +1,4 @@
 Excludes:
-/.git/
-/.vs/
 /MBCLI/
 /out/
 /TestDirectory/
@@ -24,10 +22,8 @@ Excludes:
 
 /RawDirectoryIndex
 /VirtualDirectoryIndex
-/.clang
 
 
 /TestMergeDirectory/
 /FileInfoWithoutTest
-/.mbpm/
 Includes:

@@ -1,4 +1,5 @@
 #include "MBPM_CLI.h"
+#include "MBPacketManager.h"
 #include <filesystem>
 #include <map>
 #include <MBUnicode/MBUnicode.h>
@@ -7,6 +8,7 @@
 #include <algorithm>
 
 #include <MBUtility/MBFiles.h>
+#include <unordered_set>
 //#include "MBCLI/"
 
 namespace MBPM
@@ -604,6 +606,112 @@ namespace MBPM
 			OutError = false;
 			OutError.ErrorMessage = "Can only specify at 1 packet modifier";
 		}
+        //Packet filters
+        auto PositiveAttributeStrings = CLIInput.GetSingleArgumentOptionList("a");
+        auto NegativeAttributeStrings = CLIInput.GetSingleArgumentOptionList("na");
+        if(PositiveAttributeStrings.size() > 0 || NegativeAttributeStrings.size() > 0)
+        {
+            std::unordered_set<MBPM_PacketAttribute> PositiveAttributeFilters;
+            std::unordered_set<MBPM_PacketAttribute> NegativeAttributeFilters; 
+            for(auto const& String : PositiveAttributeStrings)
+            {
+                MBPM_PacketAttribute NewAttribute = StringToPacketAttribute(String.first); 
+                if(NewAttribute == MBPM_PacketAttribute::Null)
+                {
+                    OutError = false;
+                    OutError.ErrorMessage = "Invalid packet attribute: "+String.first;
+                    return(ReturnValue);
+                }
+                PositiveAttributeFilters.insert(NewAttribute);
+            }
+            for(auto const& String : NegativeAttributeStrings)
+            {
+                MBPM_PacketAttribute NewAttribute = StringToPacketAttribute(String.first); 
+                if(NewAttribute == MBPM_PacketAttribute::Null)
+                {
+                    OutError = false;
+                    OutError.ErrorMessage = "Invalid packet attribute: "+String.first;
+                    return(ReturnValue);
+                }
+                NegativeAttributeFilters.insert(NewAttribute);
+            }
+            std::vector<PacketIdentifier> NewReturnValue;
+            for(PacketIdentifier const& Packet : ReturnValue)
+            {
+                bool PacketHasPositiveAttribute = PositiveAttributeFilters.size() > 0 ? false : true; 
+                bool PacketHasNegativeAttribute = false;
+                MBPM_PacketInfo CurrentPacketInfo = p_GetPacketInfo(Packet,&OutError);
+                if(!OutError)
+                {
+                    return(ReturnValue);
+                }
+                for(MBPM_PacketAttribute Attribute : CurrentPacketInfo.Attributes)
+                {
+                    if(PositiveAttributeFilters.find(Attribute) != PositiveAttributeFilters.end())
+                    {
+                        PacketHasPositiveAttribute = true;
+                    }
+                    if(NegativeAttributeFilters.find(Attribute) != NegativeAttributeFilters.end())
+                    {
+                        PacketHasNegativeAttribute = true;
+                    }
+                }
+                if(PacketHasPositiveAttribute && !PacketHasNegativeAttribute)
+                {
+                    NewReturnValue.push_back(Packet);   
+                }
+            }
+            ReturnValue = std::move(NewReturnValue);
+        }
+        // 
+
+        //Make x grejer
+        int MakeCommandsCount = CLIInput.GetSingleArgumentOptionList("m").size(); 
+        if(MakeCommandsCount > 1)
+        {
+            OutError = false;
+            OutError.ErrorMessage = "Only one make command can be specified";   
+            return(ReturnValue);
+        }
+        if(MakeCommandsCount == 1)
+        {
+            std::string MakeString = CLIInput.GetSingleArgumentOptionList("m")[0].first;
+            PacketLocationType PacketType = PacketLocationType::Null;
+            if(MakeString == "installed")
+            {
+                PacketType = PacketLocationType::Installed; 
+            }
+            else if(MakeString == "user")
+            {
+                PacketType = PacketLocationType::User;
+            }
+            else if(MakeCommandsCount)
+            {
+                OutError = false;
+                OutError.ErrorMessage = "Invalid make type: "+MakeString +". Only \"installed\" and user \"allowed\""; 
+                return(ReturnValue);
+            }
+            if(PacketType != PacketLocationType::Null)
+            {
+                std::vector<PacketIdentifier> NewReturnValue;
+                for(PacketIdentifier const& Identifier : ReturnValue)
+                {
+                    if(Identifier.PacketLocation == PacketType)
+                    {
+                        NewReturnValue.push_back(Identifier);
+                        continue;   
+                    }
+                    PacketIdentifier NewPacket = p_GetPacketIdentifier(Identifier.PacketName,PacketType,OutError); 
+                    if(!OutError)
+                    {
+                        return(ReturnValue);  
+                    } 
+                    NewReturnValue.push_back(std::move(NewPacket));
+                } 
+                ReturnValue = NewReturnValue;
+            }
+        }
+        // 
 
 		return(ReturnValue);
 	}

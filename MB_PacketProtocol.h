@@ -10,6 +10,7 @@
 #include <MrBoboSockets/MrBoboSockets.h>
 #include <MBUtility/MBInterfaces.h>
 #include <MBCLI/MBCLI.h>
+#include <regex>
 
 
 #include <MBUtility/Filesystem.h>
@@ -345,13 +346,23 @@ namespace MBPM
 	{
 	private:
 		std::vector<std::string> m_ExcludeStrings = {};
+        std::vector<std::regex> m_ExcludeRegex = {};
 		std::vector<std::string> m_IncludeStrings = {};
+        std::vector<std::regex> m_IncludeRegex = {};
+        
+
+        void p_AddDefaults();
+
 		bool p_MatchDirectory(std::string const& Directory, std::string const& StringToMatch) const;
 		bool p_MatchFile(std::string const& StringToCompare, std::string const& StringToMatch) const;
+
+        bool p_MatchRegex(std::regex const& RegexToCompare,std::string const& StringToMatch) const;
 	public:
 		MBPM_FileInfoExcluder(std::string const& PathPosition);
 		MBPM_FileInfoExcluder(MBUtility::MBOctetInputStream* InputStream);
-		MBPM_FileInfoExcluder() {};
+		MBPM_FileInfoExcluder() {p_AddDefaults();};
+
+        void AddInclude(std::string const& IncludeString);
 		void AddExcludeFile(std::string const& FileToExlude);
 
 		bool Includes(std::string const& StringToMatch) const;

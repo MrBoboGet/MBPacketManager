@@ -2,15 +2,15 @@ project(MBPacketManager)
 set(PROJECT_NAME "MBPacketManager")
 ##BEGIN MBPM_VARIABLES
 set(MBPM_DEPENDENCIES 
-	"MBCLI"
-	"MBUnicode"
-	"MBUtility"
-	"MBCrypto"
-	"cryptopp"
-	"MrBigInt"
-	"MBParsing"
 	"MrBoboSockets"
 	"MBMime"
+	"MBCrypto"
+	"MBCLI"
+	"MrBigInt"
+	"MBUnicode"
+	"MBParsing"
+	"cryptopp"
+	"MBUtility"
 )
 set(MBPM_SystemLibraries
 Ws2_32.lib

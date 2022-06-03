@@ -170,6 +170,7 @@ namespace MBPM
 		if (Result == nullptr)
 		{
 			throw std::runtime_error("MBPM_PACKETS_INSTALL_DIRECTORY environment variable not set");
+            assert(false && "MBPM_PACKTETS_INSTALL_DIRECTORY not set");
 			return("");
 		}
 		else
@@ -210,7 +211,28 @@ namespace MBPM
 		}
 		return(ReturnValue);
 	}
-
+    
+    MBPM_PacketAttribute StringToPacketAttribute(std::string const& StringToConvert)
+    {
+        MBPM_PacketAttribute ReturnValue = MBPM_PacketAttribute::Null;
+        if (StringToConvert == "Embeddable")
+        {
+            ReturnValue = MBPM_PacketAttribute::Embedabble;
+        }
+        if (StringToConvert == "NonMBBuild")
+        {
+            ReturnValue = MBPM_PacketAttribute::NonMBBuild;
+        }
+        if (StringToConvert == "IncludeOnly")
+        {
+            ReturnValue = MBPM_PacketAttribute::IncludeOnly;
+        }
+        if (StringToConvert == "TriviallyCompilable")
+        {
+            ReturnValue = MBPM_PacketAttribute::TriviallyCompilable; 
+        }
+        return(ReturnValue);
+    }
 	MBPM_PacketInfo ParseMBPM_PacketInfo(std::string const& PacketPath)
 	{
 		std::string JsonData = std::string(std::filesystem::file_size(PacketPath), 0);
@@ -228,22 +250,11 @@ namespace MBPM
 			ReturnValue.PacketName = ParsedJson.GetAttribute("PacketName").GetStringData();
 			for (auto const& Attribute : ParsedJson.GetAttribute("Attributes").GetArrayData())
 			{
-				if (Attribute.GetStringData() == "Embeddable")
-				{
-					ReturnValue.Attributes.insert(MBPM_PacketAttribute::Embedabble);
-				}
-				if (Attribute.GetStringData() == "NonMBBuild")
-				{
-					ReturnValue.Attributes.insert(MBPM_PacketAttribute::NonMBBuild);
-				}
-				if (Attribute.GetStringData() == "IncludeOnly")
-				{
-					ReturnValue.Attributes.insert(MBPM_PacketAttribute::IncludeOnly);
-				}
-				if (Attribute.GetStringData() == "TriviallyCompilable")
-				{
-					ReturnValue.Attributes.insert(MBPM_PacketAttribute::TriviallyCompilable);
-				}
+                MBPM_PacketAttribute NewAttribute = StringToPacketAttribute(Attribute.GetStringData());
+                if(NewAttribute != MBPM_PacketAttribute::Null)
+                {
+                    ReturnValue.Attributes.insert(NewAttribute);   
+                }
 			}
 			for (auto const& OutputConfigurations : ParsedJson.GetAttribute("OutputConfigurations").GetArrayData())
 			{

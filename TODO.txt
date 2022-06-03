@@ -2,14 +2,6 @@ MBPM_FileInfoIgnore: Inkluderar inte faktikst filer som blivit include. Inget an
 
 Upload local stödjer inte alla funktioner som remote gör, till exempel gör det inte att specificera vissa filer/directories
 
-På raspberry pi:en n�r jag installar något för jag alltid 
-"Error Att connecta Bad file descriptor
-Segmentation fault" 
-efter den �r klar att ha laddat ner n�got. Den har inte senaste variationen men v�rt att unders�ka.
-
-
-om man har att MBPM_PACKETS_INSTALL_DIRECTORY inte slutar med / kajkar v�ldigt mycket.
-
 Fixa support f�r semantic versioning och vilka packets man beror p� samt vilken man vill h�mta
 
 fixa så att install om man har alla executable/library targets inte fortsätter
@@ -28,8 +20,6 @@ dokumentera allt, framförallt internet protokollet och MBMP_FileInfo formatet..
 
 fixa så att get har att man ser download tiden
 
-command för att uppdatera alla dependancies
-
 tog extremt mycket minne att jämföra den installerade ffmpegen och den lokala, borde kolla upp det där
 
 upload fastnar ibland på vissa ställen
@@ -45,9 +35,6 @@ fixa så att den märker av duplicate exported executables, samt att den uppdate
 MBPM_CompileInfo eller något, ett system för skriva vilka versioner av dependancys och deras struktur etc för som användes för att compila, så man vet att det är samma, samt ett system
 för att compila/updatera alla ett packets dependancys/ dem som skiljer sig från annan compile info etc. mbpm update MBWebsite --dependancies exempelvis
 
-Lägg även till mbpm compile MBWebsite --dependants, dvs compila alla packets som beror på MBWebsite
 
-Eftersom linux linker är *trash* så måste man specificera libraries i en specifik ordning, den som resolvar mest dependancies sist. Detta är ännu ett skäl att låta MBPM sköta det,
-och borde implementeras.
 
---makelocal för upload, så upload local kan uploada dependancies, men ta dem lokala instället fgör insallerade
+

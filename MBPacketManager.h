@@ -32,6 +32,9 @@ namespace MBPM
 		NonMBBuild,
 		Null
 	};
+
+    MBPM_PacketAttribute StringToPacketAttribute(std::string const& StringToConvert);
+
 	struct MBPM_SubLibrary
 	{
 		std::string LibraryName = "";
@@ -111,8 +114,8 @@ namespace MBPM
 	MBError GenerateCmakeFile(std::string const& PacketPath, std::string const& CmakeName = "CMakeLists.txt");
 
 
-	MBError EmbeddDependancies(std::string const& PacketDirectory, MBPM_MakefileGenerationOptions const& CompileConfiguration, std::string const& TargetFilepath);
-	MBError EmbeddDependancies(MBPM_PacketInfo const& PacketInfo,std::string const& PacketDirectory, MBPM_MakefileGenerationOptions const& CompileConfiguration, std::string const& TargetFilepath);
+	//MBError EmbeddDependancies(std::string const& PacketDirectory, MBPM_MakefileGenerationOptions const& CompileConfiguration, std::string const& TargetFilepath);
+	//MBError EmbeddDependancies(MBPM_PacketInfo const& PacketInfo,std::string const& PacketDirectory, MBPM_MakefileGenerationOptions const& CompileConfiguration, std::string const& TargetFilepath);
 
 	MBError CompilePacket(std::string const& PacketDirectory);
 	MBError InstallCompiledPacket(std::string const& PacketDirectory);
