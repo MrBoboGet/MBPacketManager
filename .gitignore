@@ -55,3 +55,6 @@ Thumbs.db
 /FileInfoWithoutTest
 /MBPM_DataToMerge
 /TestIndexNew
+/.*
+/*/.*
+/_*

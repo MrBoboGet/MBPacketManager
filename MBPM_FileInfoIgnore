@@ -24,7 +24,7 @@ Excludes:
 
 /RawDirectoryIndex
 /VirtualDirectoryIndex
-
+/.clang
 
 
 /TestMergeDirectory/
