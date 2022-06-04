@@ -1,5 +1,6 @@
 #include "MBPM_CLI.h"
 #include "MBPacketManager.h"
+#include "MB_PacketProtocol.h"
 #include <filesystem>
 #include <map>
 #include <MBUnicode/MBUnicode.h>
@@ -1701,8 +1702,18 @@ namespace MBPM
 			for (size_t i = 0; i < FileInfoDiff.AddedDirectories.size(); i++)
 			{
 				AssociatedTerminal->PrintLine(FileInfoDiff.AddedDirectories[i]);
-				ObjectsToCopy.push_back(FileInfoDiff.AddedDirectories[i]);
-			}
+				//ObjectsToCopy.push_back(FileInfoDiff.AddedDirectories[i]);
+                std::filesystem::path NewPath = PacketInstallPath+FileInfoDiff.AddedDirectories[i];
+                std::filesystem::create_directories(NewPath);
+                //actual files to copy
+                auto* LocalDirectory = LocalPacketInfo.GetDirectoryInfo(FileInfoDiff.AddedDirectories[i]);
+                auto Begin = LocalDirectory->begin();
+                auto End = LocalDirectory->end();
+                while(Begin != End)
+                {
+                    ObjectsToCopy.push_back(FileInfoDiff.AddedDirectories[i]+ Begin.GetCurrentDirectory()+Begin->FileName);   
+                }
+            }
 			AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::White);
 			AssociatedTerminal->PrintLine("Files to remove:");
 			AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::Red);
@@ -1717,13 +1728,18 @@ namespace MBPM
 			for (size_t i = 0; i < FileInfoDiff.DeletedDirectories.size(); i++)
 			{
 				AssociatedTerminal->PrintLine(FileInfoDiff.DeletedDirectories[i]);
-				ObjectsToRemove.push_back(FileInfoDiff.RemovedFiles[i]);
+				ObjectsToRemove.push_back(FileInfoDiff.DeletedDirectories[i]);
 			}
 			AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::White);
 			AssociatedTerminal->PrintLine("Copying files:");
 			std::filesystem::copy_options CopyOptions = std::filesystem::copy_options::update_existing|std::filesystem::copy_options::recursive;
 			for (size_t i = 0; i < ObjectsToCopy.size(); i++)
 			{
+                std::filesystem::path NewPath = PacketInstallPath+ObjectsToCopy[i];
+                if(!std::filesystem::exists(NewPath.parent_path()))
+                {
+                    std::filesystem::create_directories(NewPath.parent_path());   
+                }
 				std::filesystem::copy(LocalPacketPath + ObjectsToCopy[i], PacketInstallPath + ObjectsToCopy[i], CopyOptions);
 				AssociatedTerminal->PrintLine("Copied " + ObjectsToCopy[i]);
 			}
@@ -1804,7 +1820,7 @@ namespace MBPM
 			AssociatedTerminal->PrintLine("Uploading packet " + PacketsToUpload[i].PacketName);
 			if (!UseDirectPaths)
 			{
-				MBPM::CreatePacketFilesData(PacketToUploadDirectory);
+				MBPM::UpdateFileInfo(PacketToUploadDirectory);
 			}
 			else
 			{
