@@ -1,5 +1,7 @@
 #pragma once
+#include <filesystem>
 #include <string>
+#include <unordered_map>
 #include <vector>
 #include <MBUtility/MBErrorHandling.h>
 #include <cstdint>
@@ -7,7 +9,9 @@
 #include <set>
 #include <unordered_set>
 #include <MBParsing/MBParsing.h>
+#include <unordered_map>
 
+#include "MBPacketManager.h"
 #include "MB_PacketProtocol.h"
 namespace MBPM
 {
@@ -103,7 +107,56 @@ namespace MBPM
 		std::unordered_set<std::string> ProjectPacketsDepandancies;
 	};
 
-	std::string GetMBPMCmakeFunctions();
+    //Selft contained
+    enum class TargetType
+    {
+        Null,
+        Library,//Implies that it can be both dynamic or static
+        StaticLibrary,
+        DynamicLibrary,
+        Executable,
+    };
+    struct Target
+    {
+        TargetType Type = TargetType::Null;
+        std::vector<std::string> SourceFiles;   
+    };
+    struct SourceInfo
+    {
+        std::string Language;
+        std::vector<std::string> ExtraIncludes;
+        std::vector<std::string> ExternalDependancies;
+        std::unordered_map<std::string, Target> Targets;
+    };
+    struct CompileConfiguration
+    {
+        std::string Toolchain;   
+        std::vector<std::string> CompileFlags;
+        std::vector<std::string> LinkFlags;
+    };
+    struct LanguageConfiguration
+    {
+    
+        std::vector<std::string> DefaultConfigs;
+        std::unordered_map<std::string,CompileConfiguration> Configurations;   
+    };
+    struct UserConfigurationsInfo
+    {
+        std::unordered_map<std::string,LanguageConfiguration> Configurations;
+    };
+    //[[SemanticallyAuthoritative]]
+    MBError ParseUserConfigurationInfo(const void* Data,size_t DataSize,UserConfigurationsInfo& OutInfo);
+    MBError ParseUserConfigurationInfo(std::filesystem::path const& FilePath,UserConfigurationsInfo &OutInfo);
+    //[[SemanticallyAuthoritative]]
+    MBError ParseSourceInfo(const void* Data,size_t DataSize,SourceInfo& OutInfo);
+    MBError ParseSourceInfo(std::filesystem::path const& FilePath,SourceInfo& OutInfo);
+
+
+    //Self contained
+	
+    
+    
+    std::string GetMBPMCmakeFunctions();
 
 	MBError WriteCMakeProjectToFile(MBPM_CmakeProject const& ProjectToWrite, std::string const& OutputFilePath);
 
@@ -117,6 +170,8 @@ namespace MBPM
 	//MBError EmbeddDependancies(std::string const& PacketDirectory, MBPM_MakefileGenerationOptions const& CompileConfiguration, std::string const& TargetFilepath);
 	//MBError EmbeddDependancies(MBPM_PacketInfo const& PacketInfo,std::string const& PacketDirectory, MBPM_MakefileGenerationOptions const& CompileConfiguration, std::string const& TargetFilepath);
 
+    
+    
 	MBError CompilePacket(std::string const& PacketDirectory);
 	MBError InstallCompiledPacket(std::string const& PacketDirectory);
 

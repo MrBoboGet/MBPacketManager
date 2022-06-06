@@ -1,0 +1,21 @@
+{
+    "Language":"C++",
+    "ExtraIncludes":[],
+    "Dependancies":[],
+    "Targets":
+    {
+        "lib":
+        {
+            "TargetType":"Library"
+        },
+        "mbpm":
+        {
+            "TargetType":"Executable",
+            "Sources":
+            [
+                "MBPM_CLI.cpp",
+                "asdasd.cpp"
+            ]  
+        }
+    }    
+}

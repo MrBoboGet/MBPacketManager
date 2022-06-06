@@ -67,6 +67,23 @@ namespace MBPM
 		}
 	};
 
+    enum class MBBuildCompileFlags
+    {
+        CompleteRecompile, 
+    };
+    MBError CompileMBBuild(
+            std::filesystem::path const& PacketDirectory,
+            std::string const& PacketInstallDirectory,
+            MBBuildCompileFlags Flags,
+            LanguageConfiguration const& LanguageConf,
+            SourceInfo const& PacketSource,
+            std::vector<std::string> const& TargetsToCompile,
+            std::vector<std::string> const& ConfigurationsToCompile);
+    MBError CompileMBBuild(std::filesystem::path const& PacketPath, std::vector<std::string> Targets, std::vector<std::string> Configurations,
+		std::string const& PacketInstallDirectory,MBBuildCompileFlags Flags);
+
+
+    
 	class MBPM_ClI
 	{
 	private:
@@ -100,7 +117,7 @@ namespace MBPM
 	
 		MBError p_UpdateCmake(std::string const& PacketDirectory,std::string const& OptionalMBPMStaticData);//fyller bara i MBPM variablar och skriver inte �ver filen
 		MBError p_CreateCmake(std::string const& PacketDirectory);
-		MBError p_CompilePacket(std::string const& PacketDirectory);
+		MBError p_CompilePacket(PacketIdentifier const& PacketDirectory,MBCLI::ProcessedCLInput const& Input);
 		std::string p_GetPacketInstallDirectory();
 		MBPP_PacketHost p_GetDefaultPacketHost();
 

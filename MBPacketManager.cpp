@@ -1,5 +1,8 @@
 #include "MBPacketManager.h"
+#include "MBParsing/MBParsing.h"
+#include "MBUnicode/MBUnicode.h"
 #include <assert.h>
+#include <exception>
 #include <fstream>
 #include <cstdlib>
 #include <filesystem>
@@ -371,6 +374,173 @@ namespace MBPM
 			;
 		return(ReturnValue);
 	}
+    
+    //MBPM Build
+    CompileConfiguration ParseCompileConfiguration(MBParsing::JSONObject const& ObjectToParse)
+    {
+        CompileConfiguration ReturnValue;
+        ReturnValue.Toolchain = ObjectToParse["Toolchain"].GetStringData();  
+        if(ObjectToParse.HasAttribute("CompileFlags"))
+        {
+            for(MBParsing::JSONObject const& Flag : ObjectToParse["CompileFlags"].GetArrayData())
+            {
+                ReturnValue.CompileFlags.push_back(Flag.GetStringData());
+            }   
+        }
+        if(ObjectToParse.HasAttribute("LinkFlags"))
+        {
+            for(MBParsing::JSONObject const& Flag : ObjectToParse["LinkFlags"].GetArrayData())
+            {
+                ReturnValue.LinkFlags.push_back(Flag.GetStringData());
+            } 
+        }
+        return(ReturnValue);   
+    }
+    LanguageConfiguration ParseLanguageConfiguration(MBParsing::JSONObject const& ObjectToParse)
+    {
+        LanguageConfiguration ReturnValue;
+        auto const& DefaultConfigs = ObjectToParse["DefaultConfigs"].GetArrayData(); 
+        for(MBParsing::JSONObject const& ConfigName : DefaultConfigs)
+        {
+            ReturnValue.DefaultConfigs.push_back(ConfigName.GetStringData());   
+        }
+        auto const& Configs = ObjectToParse["CompileConfigurations"].GetMapData(); 
+        for(auto const& CompileConfiguration  : Configs)
+        {
+            ReturnValue.Configurations[CompileConfiguration.first] = ParseCompileConfiguration(CompileConfiguration.second);
+        }
+        return(ReturnValue);
+    }
+    MBError ParseUserConfigurationInfo(const void* Data,size_t DataSize,UserConfigurationsInfo& OutInfo)
+    {
+        MBError ReturnValue = true;
+        UserConfigurationsInfo Result;
+        try 
+        {
+            MBParsing::JSONObject JSONData = MBParsing::ParseJSONObject(Data,DataSize,0,nullptr,&ReturnValue);
+            if(!ReturnValue)
+            {
+                return(ReturnValue);   
+            }
+            auto const& ConfigMap = JSONData["LanguageConfigs"].GetMapData();
+            for(auto const& Object : ConfigMap)
+            {
+                Result.Configurations[Object.first] = ParseLanguageConfiguration(Object.second);
+            }
+        }
+        catch(std::exception const& Exception)
+        {
+            ReturnValue = false;
+            ReturnValue.ErrorMessage = Exception.what();    
+        }
+        if(ReturnValue)
+        {
+            OutInfo = std::move(Result);   
+        }
+        return(ReturnValue);        
+    }
+    MBError ParseUserConfigurationInfo(std::filesystem::path const& FilePath,UserConfigurationsInfo &OutInfo)
+    {
+        MBError ReturnValue = true;
+        std::string TotalData = MBUtility::ReadWholeFile(MBUnicode::PathToUTF8(FilePath));
+        ReturnValue = ParseUserConfigurationInfo(TotalData.data(),TotalData.size(),OutInfo);
+        return(ReturnValue);        
+    }
+    //
+    TargetType h_StringToTargetType(std::string const& StringToConvert)
+    {
+        TargetType ReturnValue = TargetType::Null;
+        if(StringToConvert == "Executable")
+        {
+            ReturnValue = TargetType::Executable;   
+        }
+        else if(StringToConvert == "Library")
+        {
+            ReturnValue = TargetType::Library;   
+        }
+        else if(StringToConvert == "StaticLibrary")
+        {
+            ReturnValue = TargetType::StaticLibrary;
+        }
+        else if(StringToConvert == "DynamicLibrary")
+        {
+            ReturnValue = TargetType::DynamicLibrary;
+        }
+        else
+        {
+            throw std::runtime_error("Invalid target type: "+StringToConvert);
+        }
+        return(ReturnValue);       
+    }
+    MBError ParseSourceInfo(const void* Data,size_t DataSize,SourceInfo& OutInfo)
+    {
+        MBError ReturnValue = true;
+        SourceInfo Result;
+        try
+        {
+            MBParsing::JSONObject JSONData = MBParsing::ParseJSONObject(Data,DataSize,0,nullptr,&ReturnValue);
+            if(!ReturnValue)
+            {
+                return(ReturnValue);   
+            }
+            Result.Language = JSONData["Language"].GetStringData();
+            auto const& ExtraIncludes = JSONData["ExtraIncludes"].GetArrayData();
+            for(MBParsing::JSONObject const& Include : ExtraIncludes)
+            {
+                Result.ExtraIncludes.push_back(Include.GetStringData()); 
+            }
+            auto const& Dependancies = JSONData["Dependancies"].GetArrayData();
+            for(MBParsing::JSONObject const& Dependancy : Dependancies)
+            {
+                Result.ExternalDependancies.push_back(Dependancy.GetStringData());   
+            }
+            auto const& Targets = JSONData["Targets"].GetMapData();
+            for(auto const& TargetData : Targets)
+            {
+                Target TargetInfo;
+                TargetInfo.Type = h_StringToTargetType(TargetData.second["TargetType"].GetStringData());
+                for(auto const& Source : TargetData.second["Sources"].GetArrayData())
+                {
+                    TargetInfo.SourceFiles.push_back(Source.GetStringData());   
+                }
+                Result.Targets[TargetData.first] = std::move(TargetInfo);
+            }
+        }
+        catch(std::exception const& Exception)
+        {
+            ReturnValue = false;
+            ReturnValue.ErrorMessage = Exception.what();    
+        }
+        if(ReturnValue)
+        {
+            OutInfo = std::move(Result);   
+        }
+        return(ReturnValue);        
+    }
+    MBError ParseSourceInfo(std::filesystem::path const& FilePath,SourceInfo& OutInfo)
+    {
+        MBError ReturnValue = true;
+        std::string TotalData = MBUtility::ReadWholeFile(MBUnicode::PathToUTF8(FilePath));
+        ReturnValue = ParseSourceInfo(TotalData.data(),TotalData.size(),OutInfo);
+        return(ReturnValue);        
+    }
+    //MBPM Build
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
 	std::vector<std::string> h_GetTotalPacketDependancies(MBPM_PacketInfo const& PacketInfo, MBError* OutError)
 	{
 		std::vector<std::string> ReturnValue = {};

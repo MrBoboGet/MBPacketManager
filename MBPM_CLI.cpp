@@ -1,5 +1,6 @@
 #include "MBPM_CLI.h"
 #include "MBPacketManager.h"
+#include "MBParsing/MBParsing.h"
 #include "MB_PacketProtocol.h"
 #include <filesystem>
 #include <map>
@@ -9,6 +10,7 @@
 #include <algorithm>
 
 #include <MBUtility/MBFiles.h>
+#include <system_error>
 #include <unordered_set>
 //#include "MBCLI/"
 
@@ -116,6 +118,11 @@ namespace MBPM
 			throw std::runtime_error("MBPM_PACKETS_INSTALL_DIRECTORY environment variable is not set");
 		}
 		std::string ReturnValue = Data;
+        if(ReturnValue == "")
+        {
+            
+			throw std::runtime_error("invalid value for MBPM_PACKETS_INSTALL_DIRECTORY, empty string");
+        }
 		if (ReturnValue.back() != '/')
 		{
 			ReturnValue += "/";
@@ -2347,6 +2354,53 @@ namespace MBPM
 				AssociatedTerminal->PrintLine("Successfully created total install index");
 			}
 		}
+        else if(CommandInput.CommandOptions.find("sourceinfo") != CommandInput.CommandOptions.end())
+        {
+            std::vector<PacketIdentifier> FailedPackets;
+            for(auto const& Packet : PacketDirectories)
+            {
+                MBError Error = true;
+                MBPM_PacketInfo PacketInfo = p_GetPacketInfo(Packet,&Error);
+                if(!Error)
+                {
+                    AssociatedTerminal->PrintLine("No MBPM_PacketInfo present in packet: "+Packet.PacketName);
+                    FailedPackets.push_back(Packet); 
+                    continue;
+                }
+                MBPM_FileInfoExcluder Excluder(Packet.PacketURI+"/MBPM_FileInfoIgnore");
+                std::filesystem::recursive_directory_iterator PacketDirectoryIterator(Packet.PacketURI);
+                MBParsing::JSONObject SourceInfo(MBParsing::JSONObjectType::Aggregate);
+                SourceInfo["Language"] = "C++";
+                SourceInfo["ExtraIncludes"] = PacketInfo.ExtraIncludeDirectories; 
+                SourceInfo["Dependancies"] = PacketInfo.PacketDependancies;
+                std::vector<std::string> AllSources;
+                for(auto const& Entry : PacketDirectoryIterator)
+                {
+                    std::string PacketPath ="/"+MBUtility::ReplaceAll(MBUnicode::PathToUTF8(std::filesystem::relative(Entry.path(),Packet.PacketURI)),"\\","/");
+					std::cout << PacketDirectoryIterator.depth() << std::endl;
+                    if(Excluder.Excludes(PacketPath) && !Excluder.Includes(PacketPath))
+                    {
+						if (Entry.is_directory()) 
+						{
+							PacketDirectoryIterator.disable_recursion_pending();
+						}
+                        continue;   
+                    }
+                    if(Entry.path().extension() == ".cpp")
+                    {
+                        AllSources.push_back(PacketPath);   
+                    }
+                }
+                MBParsing::JSONObject Targets(MBParsing::JSONObjectType::Aggregate);
+                MBParsing::JSONObject LibTarget(MBParsing::JSONObjectType::Aggregate);
+                LibTarget["TargetType"] = "Library";
+                LibTarget["Sources"] = AllSources;
+                Targets[Packet.PacketName] = std::move(LibTarget);
+                SourceInfo["Targets"] = std::move(Targets);
+                std::ofstream OutFile = std::ofstream(Packet.PacketURI+"/MBSourceInfo.json");
+                OutFile<<SourceInfo.ToString();
+            }    
+        }
 		else if (CommandInput.CommandOptions.find("compilecommands") != CommandInput.CommandOptions.end())
 		{
 			std::vector<PacketIdentifier> FailedPackets;
@@ -2497,7 +2551,7 @@ namespace MBPM
 				}
 				if (CompilationError)
 				{
-				 	CompilationError = p_CompilePacket(PacketDirectories[i].PacketURI);
+				 	CompilationError = p_CompilePacket(PacketDirectories[i],CommandInput);
 				}
 				if (!CompilationError)
 				{
@@ -2549,10 +2603,271 @@ namespace MBPM
 	MBError MBPM_ClI::p_CreateCmake(std::string const& PacketDirectory)
 	{
 		return(MBPM::GenerateCmakeFile(PacketDirectory));
-	}
-	MBError MBPM_ClI::p_CompilePacket(std::string const& PacketDirectory)
+	} 
+    MBError CompileMBBuild_Cpp_GCC(
+            std::filesystem::path const& PacketDirectory,
+            std::string const& PacketInstallDirectory,
+            MBBuildCompileFlags Flags,
+            SourceInfo const& PacketSource,
+            std::vector<std::string> const& TargetsToCompile,
+            CompileConfiguration const& CompileConf,
+            std::string const& ConfName)
+    {
+        MBError ReturnValue = true;
+        std::error_code FSError;
+        std::vector<std::string> TotalSources;
+        std::filesystem::path PreviousDir = std::filesystem::current_path();
+        for(std::string const& TargetName : TargetsToCompile)
+        {
+            auto const& TargetPosition = PacketSource.Targets.find(TargetName);
+            if(TargetPosition == PacketSource.Targets.end())
+            {
+                ReturnValue = false;
+                ReturnValue.ErrorMessage = "Invalid target for source info: "+TargetName;
+                return(ReturnValue);
+            }
+            Target const& TargetInfo = TargetPosition->second;
+            TotalSources.insert(TotalSources.end(),TargetInfo.SourceFiles.begin(),TargetInfo.SourceFiles.end());
+        }
+        std::sort(TotalSources.begin(),TotalSources.end());
+        size_t NewSize = std::unique(TotalSources.begin(),TotalSources.end())-TotalSources.begin();
+        std::string CompileSourcesCommand = "g++ -c -I"+PacketInstallDirectory+" ";
+        //NOTE allow this part to throw, filesystem error att this point could potentially destroy the current working directory
+		bool CreateResult = std::filesystem::directory_entry(PacketDirectory / ("MBPM_Builds/" + ConfName)).is_directory()||std::filesystem::create_directories(PacketDirectory / ("MBPM_Builds/" + ConfName));
+		if (!CreateResult)
+		{
+			ReturnValue = false;
+			ReturnValue.ErrorMessage = "Failed to create direcory for packet";
+			return(ReturnValue);
+		}
+        std::filesystem::current_path(PacketDirectory/("MBPM_Builds/"+ConfName));
+        for(size_t i = 0; i < NewSize;i++)
+        {
+            CompileSourcesCommand += "../../"+TotalSources[i]+" "; 
+        }
+        for(std::string const& ExtraInclude : PacketSource.ExtraIncludes)
+        {
+            CompileSourcesCommand += "-I"+ExtraInclude;   
+        }
+		for (std::string const& ExtraArgument : CompileConf.CompileFlags)
+		{
+			CompileSourcesCommand += ExtraArgument+" ";
+		}
+        int CompileResult = std::system(CompileSourcesCommand.c_str());
+        if(CompileResult != 0)
+        {
+            ReturnValue = false;
+            ReturnValue.ErrorMessage = "Error compiling sources for packet with configuration \""+ConfName+"\"";
+            std::filesystem::current_path(PreviousDir);
+            return(ReturnValue);
+        }
+        for(std::string const& TargetName : TargetsToCompile)
+        {
+            Target const& TargetInfo = PacketSource.Targets.at(TargetName);
+            if(TargetInfo.Type == TargetType::Executable)
+            {
+                std::string CompileExecutableString = "g++ -o "+TargetName+".exe ";
+                for(std::string const& SourceFile : TargetInfo.SourceFiles)
+                {
+					//Extremely innefecient
+					CompileExecutableString += MBUnicode::PathToUTF8(std::filesystem::path(SourceFile.substr(1)).replace_extension("o")) + " ";
+                }
+                for(std::string const& Dependancy : PacketSource.ExternalDependancies)
+                {
+					CompileExecutableString += "-L"+PacketInstallDirectory+"/"+Dependancy+"/MBPM_Builds/"+ConfName;
+					CompileExecutableString += "-l"+Dependancy;
+                }
+				for (std::string const& ExtraArgument : CompileConf.LinkFlags)
+				{
+					CompileExecutableString += ExtraArgument + " ";
+				}
+                int LinkResult = std::system(CompileExecutableString.c_str());
+                if(LinkResult != 0)
+                {
+                    ReturnValue = false;
+                    ReturnValue.ErrorMessage = "Error linking target: "+TargetName;   
+                }
+            }
+            else if(TargetInfo.Type == TargetType::Library || TargetInfo.Type == TargetType::StaticLibrary)
+            {
+				std::string CreateLibraryCommand = "ar rcs " + TargetName + ".a ";
+				for (std::string const& Source : TargetInfo.SourceFiles)
+				{
+					//assumes that Source starts with /, canonical packet path
+					std::filesystem::path AbsolutePath = Source.substr(1);
+					AbsolutePath.replace_extension("o");
+					CreateLibraryCommand += MBUnicode::PathToUTF8(AbsolutePath)+" ";
+				}
+				int CreateStaticLibraryResult = std::system(CreateLibraryCommand.c_str());
+				if (CreateStaticLibraryResult != 0)
+				{
+					ReturnValue = false;
+					ReturnValue.ErrorMessage = "Failed creating archive for target " + TargetName;
+				}
+            }
+            else if(TargetInfo.Type == TargetType::DynamicLibrary)
+            {
+                ReturnValue = false;
+                ReturnValue.ErrorMessage = "Invalid target type, dynamic library not supported yet";   
+            }
+            if(!ReturnValue)
+            {
+                std::filesystem::current_path(PreviousDir);
+                return ReturnValue;
+            }
+        }
+        std::filesystem::current_path(PreviousDir);
+        return(ReturnValue);       
+    }
+
+    MBError CompileMBBuild_Cpp(
+            std::filesystem::path const& PacketDirectory,
+            std::string const& PacketInstallDirectory,
+            MBBuildCompileFlags Flags,
+            LanguageConfiguration const& LanguageConf,
+            SourceInfo const& PacketSource,
+            std::vector<std::string> const& TargetsToCompile,
+            std::vector<std::string> const& ConfigurationsToCompile)
+    {
+        MBError ReturnValue = true;
+		bool CmakeCompiled = false;
+        for(std::string const& Configuration : ConfigurationsToCompile)
+        {
+            auto const& ConfigLocation = LanguageConf.Configurations.find(Configuration);
+            if(ConfigLocation == LanguageConf.Configurations.end())
+            {
+                ReturnValue = false;
+                ReturnValue.ErrorMessage = "Cannot find configuration \""+Configuration+"\""; 
+                return(ReturnValue);
+            } 
+            CompileConfiguration const& CurrentConfig = ConfigLocation->second;
+            if(CurrentConfig.Toolchain == "gcc")
+            {
+                ReturnValue = CompileMBBuild_Cpp_GCC(PacketDirectory,PacketInstallDirectory,Flags,PacketSource,TargetsToCompile,CurrentConfig,Configuration);
+            }
+            else if(CurrentConfig.Toolchain == "mbpm_cmake")
+            {
+				//Kinda hacky to retain backwards compatability, but redundant to compile multiple passes of mbpm_cmake as it implicitly compiles both debug and release
+				if (CmakeCompiled)
+				{
+					continue;
+				}
+				CmakeCompiled = true;
+                ReturnValue = MBPM::CompileAndInstallPacket(MBUnicode::PathToUTF8(PacketDirectory));
+			}
+            else
+            {
+                ReturnValue = false;
+                ReturnValue.ErrorMessage = "Unsupported toolchain value: "+CurrentConfig.Toolchain;   
+            }
+            if(!ReturnValue)
+            {
+                return(ReturnValue);
+            }
+
+        }
+        return(ReturnValue);    
+    }
+
+
+    MBError CompileMBBuild(
+            std::filesystem::path const& PacketDirectory,
+            std::string const& PacketInstallDirectory,
+            MBBuildCompileFlags Flags,
+            LanguageConfiguration const& LanguageConf,
+            SourceInfo const& PacketSource,
+            std::vector<std::string> const& TargetsToCompile,
+            std::vector<std::string> const& ConfigurationsToCompile)
+    {
+        MBError ReturnValue = true;
+        if(PacketSource.Language == "C++")
+        {
+            ReturnValue = CompileMBBuild_Cpp(PacketDirectory,PacketInstallDirectory,Flags,LanguageConf,PacketSource,TargetsToCompile,ConfigurationsToCompile);  
+        } 
+        else
+        {
+            ReturnValue = false;
+            ReturnValue.ErrorMessage = "Unsupported language: "+PacketSource.Language;   
+        }
+        return(ReturnValue);       
+    }
+    MBError CompileMBBuild(std::filesystem::path const& PacketPath,std::vector<std::string> Targets,std::vector<std::string> Configurations,std::string const& PacketInstallDirectory,MBBuildCompileFlags Flags)
+    {
+        MBError ReturnValue = true;
+        if(!std::filesystem::exists(PacketInstallDirectory+"/MBCompileConfigurations.json"))
+        {
+            ReturnValue = false;
+            ReturnValue.ErrorMessage = "Couldn't find MBCompileConfigurations.json in MBPM_PACKTETS_INSTALL_DIRECTORY";
+            return(ReturnValue);
+        }
+        UserConfigurationsInfo UserConfigurations;
+        ReturnValue = ParseUserConfigurationInfo(PacketInstallDirectory+"/MBCompileConfigurations.json",UserConfigurations);
+        if(!ReturnValue)
+        {
+            return(ReturnValue);   
+        }
+        if(!std::filesystem::exists(PacketPath/"MBSourceInfo.json"))
+        {
+            ReturnValue = false;
+            ReturnValue.ErrorMessage = "Couldn't find source MBSourceInfo.json in packet directory";
+            return(ReturnValue);
+        }
+        SourceInfo PacketSourceInfo;
+        ReturnValue = ParseSourceInfo(PacketPath/"MBSourceInfo.json",PacketSourceInfo);
+        if(!ReturnValue)
+        {
+            return(ReturnValue);   
+        }
+        if(UserConfigurations.Configurations.find(PacketSourceInfo.Language) == UserConfigurations.Configurations.end())
+        {
+            ReturnValue = false;
+            ReturnValue.ErrorMessage = "No configuration for lanuage in MBSourceInfo.json: "+PacketSourceInfo.Language; 
+            return(ReturnValue);
+        }
+		if (Targets.size() == 0)
+		{
+			for (auto const& CurrentTarget : PacketSourceInfo.Targets)
+			{
+				Targets.push_back(CurrentTarget.first);
+			}
+		}
+        LanguageConfiguration const& PacketLanguage = UserConfigurations.Configurations.at(PacketSourceInfo.Language);
+		if (Configurations.size() == 0)
+		{
+			Configurations = PacketLanguage.DefaultConfigs;
+		}
+        ReturnValue = CompileMBBuild(PacketPath,PacketInstallDirectory,Flags,PacketLanguage,PacketSourceInfo,Targets, Configurations);
+        return(ReturnValue);       
+    }
+	MBError MBPM_ClI::p_CompilePacket(PacketIdentifier const& Identifier,MBCLI::ProcessedCLInput const& Command)
 	{
-		return(MBPM::CompileAndInstallPacket(PacketDirectory));
+        MBError ReturnValue = true;
+        if(Identifier.PacketLocation == PacketLocationType::Remote)
+        {
+            ReturnValue = false;
+            ReturnValue.ErrorMessage = "Invalid packet type, can't compile remote packet"; 
+            return(ReturnValue);
+        }
+        std::error_code FSError;
+        if(std::filesystem::exists( Identifier.PacketURI+"/MBSourceInfo.json",FSError))
+        {
+			std::vector<std::string> TargetsToCompile = {};//Default
+			for (auto const& SpecifiedTargets : Command.GetSingleArgumentOptionList("t")) 
+			{
+				TargetsToCompile.push_back(SpecifiedTargets.first);
+			}
+			std::vector<std::string> ConfigurationsToCompile = {};
+			for (auto const& SpecifiedConfigurations : Command.GetSingleArgumentOptionList("c")) 
+			{
+				ConfigurationsToCompile.push_back(SpecifiedConfigurations.first);
+			}
+            ReturnValue = CompileMBBuild(std::filesystem::path(Identifier.PacketURI),TargetsToCompile,ConfigurationsToCompile, p_GetPacketInstallDirectory(),MBBuildCompileFlags(0));
+        }
+        else
+        {
+            ReturnValue =  MBPM::CompileAndInstallPacket(Identifier.PacketURI);
+        }
+		return(ReturnValue);
 	}
 	void MBPM_ClI::HandleCommand(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
 	{
