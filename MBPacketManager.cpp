@@ -399,6 +399,7 @@ namespace MBPM
     LanguageConfiguration ParseLanguageConfiguration(MBParsing::JSONObject const& ObjectToParse)
     {
         LanguageConfiguration ReturnValue;
+		ReturnValue.DefaultExportConfig = ObjectToParse["DefaultExportConfig"].GetStringData();
         auto const& DefaultConfigs = ObjectToParse["DefaultConfigs"].GetArrayData(); 
         for(MBParsing::JSONObject const& ConfigName : DefaultConfigs)
         {

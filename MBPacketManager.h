@@ -136,7 +136,7 @@ namespace MBPM
     };
     struct LanguageConfiguration
     {
-    
+		std::string DefaultExportConfig;
         std::vector<std::string> DefaultConfigs;
         std::unordered_map<std::string,CompileConfiguration> Configurations;   
     };

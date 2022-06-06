@@ -1,26 +1,23 @@
 {
     "LanguageConfigs":
     {
-        "C++":   
-        {
-            "DefaultConfigs":["Release","Debug"],
-            "CompileConfigurations":
-            {
-                "Debug":
-                {
-                    "Toolchain":"mbpm_cmake"
-                },
-                "Release":
-                {
-                    "Toolchain":"mbpm_cmake"
-                },
-                "GNU_Debug":
-                {
-                    "Toolchain":"gcc",
-                    "CompileFlags":[],
-                    "LinkFlags":[] 
-                }
-            }
-        } 
+      "C++": 
+      {
+        "DefaultExportConfig": ["Release"],
+        "DefaultConfigs": [ "Release", "Debug" ],
+        "CompileConfigurations": {
+          "Debug": {
+            "Toolchain": "mbpm_cmake"
+          },
+          "Release": {
+            "Toolchain": "mbpm_cmake"
+          },
+          "GNU_Debug": {
+            "Toolchain": "gcc",
+            "CompileFlags": [],
+            "LinkFlags": []
+          }
+        }
+      } 
     }
 }

@@ -117,7 +117,7 @@ namespace MBPM
 	
 		MBError p_UpdateCmake(std::string const& PacketDirectory,std::string const& OptionalMBPMStaticData);//fyller bara i MBPM variablar och skriver inte �ver filen
 		MBError p_CreateCmake(std::string const& PacketDirectory);
-		MBError p_CompilePacket(PacketIdentifier const& PacketDirectory,MBCLI::ProcessedCLInput const& Input);
+		MBError p_CompilePacket(PacketIdentifier const& PacketDirectory,MBCLI::MBTerminal* AssociatedTerminal,MBCLI::ProcessedCLInput const& Input);
 		std::string p_GetPacketInstallDirectory();
 		MBPP_PacketHost p_GetDefaultPacketHost();
 

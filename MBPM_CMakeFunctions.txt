@@ -18,15 +18,18 @@ macro(MBPM_UpdateLibraries TargetToUpdate LinkType BuildType)
 			list(GET PACKET_PART_LIST 1 LibraryName)
 		endif()
 		set(NewLibraryToAdd "$ENV{MBPM_PACKETS_INSTALL_DIRECTORY}/${PacketName}/MBPM_Builds/")
-		if(${LinkType} STREQUAL "STATIC")
-			set(NewLibraryName "${LibraryName}_S")
-		elseif(${LinkType} STREQUAL "DYNAMIC")
-			set(NewLibraryName "${LibraryName}_D")
-		endif()
+		#if(${LinkType} STREQUAL "STATIC")
+		#	set(NewLibraryName "${LibraryName}_S")
+		#elseif(${LinkType} STREQUAL "DYNAMIC")
+		#	set(NewLibraryName "${LibraryName}_D")
+		#endif()
+		set(NewLibraryName ${LibraryName})
 		if(${BuildType} STREQUAL "DEBUG")
-			set(NewLibraryName "${NewLibraryName}D")
+			#set(NewLibraryName "${NewLibraryName}D")
+			set(NewLibraryToAdd "${NewLibraryToAdd}/Debug/")
 		elseif(${BuildType} STREQUAL "RELEASE")
-			set(NewLibraryName "${NewLibraryName}R")
+			set(NewLibraryToAdd "${NewLibraryToAdd}/Release/")
+			#set(NewLibraryName "${NewLibraryName}R")
 		endif()
 		if(UNIX)
 			set(NewLibraryName "lib${NewLibraryName}.")
@@ -52,11 +55,17 @@ macro(MBPM_UpdateTargetVariables TargetToUpdate LinkType BuildType)
 endmacro()
 
 macro(MBPM_UpdateOutput TargetToUpdate)
+	set(BuildDirectorySuffix "")
+	if(${BuildType} STREQUAL "DEBUG")
+		set(BuildDirectorySuffix "Debug")
+	else()
+		set(BuildDirectorySuffix "Release")
+	endif()
 	set_target_properties(${TargetToUpdate} 
 	PROPERTIES 
-	ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/MBPM_Builds/"
-	LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/MBPM_Builds/"
-	RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/MBPM_Builds/"
+	ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/MBPM_Builds/${BuildDirectorySuffix}/"
+	LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/MBPM_Builds/${BuildDirectorySuffix}/"
+	RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/MBPM_Builds/${BuildDirectorySuffix}/"
 	)
 	#set_target_properties(${TargetToUpdate} PROPERTIES PREFIX "")
 	#set_target_properties(${TargetToUpdate} PROPERTIES SUFFIX "")

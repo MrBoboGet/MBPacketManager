@@ -2551,7 +2551,7 @@ namespace MBPM
 				}
 				if (CompilationError)
 				{
-				 	CompilationError = p_CompilePacket(PacketDirectories[i],CommandInput);
+				 	CompilationError = p_CompilePacket(PacketDirectories[i],AssociatedTerminal,CommandInput);
 				}
 				if (!CompilationError)
 				{
@@ -2839,7 +2839,7 @@ namespace MBPM
         ReturnValue = CompileMBBuild(PacketPath,PacketInstallDirectory,Flags,PacketLanguage,PacketSourceInfo,Targets, Configurations);
         return(ReturnValue);       
     }
-	MBError MBPM_ClI::p_CompilePacket(PacketIdentifier const& Identifier,MBCLI::ProcessedCLInput const& Command)
+	MBError MBPM_ClI::p_CompilePacket(PacketIdentifier const& Identifier,MBCLI::MBTerminal* AssoicatedTerminal,MBCLI::ProcessedCLInput const& Command)
 	{
         MBError ReturnValue = true;
         if(Identifier.PacketLocation == PacketLocationType::Remote)
@@ -2862,6 +2862,45 @@ namespace MBPM
 				ConfigurationsToCompile.push_back(SpecifiedConfigurations.first);
 			}
             ReturnValue = CompileMBBuild(std::filesystem::path(Identifier.PacketURI),TargetsToCompile,ConfigurationsToCompile, p_GetPacketInstallDirectory(),MBBuildCompileFlags(0));
+			if (ReturnValue)
+			{
+				//Export the compiled executables
+				UserConfigurationsInfo UserInfo;
+				ReturnValue = ParseUserConfigurationInfo(p_GetPacketInstallDirectory() + "/MBCompileConfigurations.json", UserInfo);
+				SourceInfo CompiledSource;
+				if (!ReturnValue) return(ReturnValue);
+				ReturnValue = ParseSourceInfo(Identifier.PacketURI+"/MBSourceInfo.json", CompiledSource);
+				if (!ReturnValue) return(ReturnValue);
+				MBPM_PacketInfo PacketInfo = p_GetPacketInfo(Identifier, &ReturnValue);
+				if (!ReturnValue) return(ReturnValue);
+				std::filesystem::path ExportedExecutablesPath = p_GetPacketInstallDirectory() + "/MBPM_ExportedExecutables/";
+				if (!std::filesystem::exists(ExportedExecutablesPath))
+				{
+					std::filesystem::create_directories(ExportedExecutablesPath);
+				}
+				for (std::string const& Executable : PacketInfo.ExportedTargets)
+				{
+					std::string ExecutableName = Executable;
+					if constexpr (MBUtility::IsWindows())
+					{
+						ExecutableName += ".exe";
+					}
+					std::filesystem::path ExecutablePath = Identifier.PacketURI + "/MBPM_Builds/" + UserInfo.Configurations[CompiledSource.Language].DefaultExportConfig+"/"+ExecutableName;
+					if (!std::filesystem::exists(ExecutablePath))
+					{
+						//AssociatedTerminal
+						AssoicatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::Yellow);
+						AssoicatedTerminal->PrintLine("Exported executable not found in " + UserInfo.Configurations[CompiledSource.Language].DefaultExportConfig+", skipping export");
+						continue;
+					}
+					std::filesystem::path SymlinkPath = ExportedExecutablesPath/ExecutableName;
+					if (std::filesystem::is_symlink(SymlinkPath))
+					{
+						std::filesystem::remove(SymlinkPath);
+					}
+					std::filesystem::create_symlink(ExecutablePath, SymlinkPath);
+				}
+			}
         }
         else
         {
