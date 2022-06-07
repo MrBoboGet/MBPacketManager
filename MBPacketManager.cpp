@@ -1221,15 +1221,15 @@ namespace MBPM
 		CommandReturnValue = std::system(("cmake --build " + PacketDirectory + "/MBPM_BuildFiles/").c_str());
 		if (CommandReturnValue == 0)
 		{
-#ifdef _WIN32
-			std::string BuildDirectory = PacketDirectory + "/MBPM_Builds/";
-			std::filesystem::copy_options Overwrite = std::filesystem::copy_options::overwrite_existing;
-			if (std::filesystem::exists(BuildDirectory + "Debug"))
-			{
-				std::filesystem::copy(BuildDirectory + "Debug", BuildDirectory, Overwrite);
-				std::filesystem::remove_all(BuildDirectory + "Debug");
-			}
-#endif // 
+//#ifdef _WIN32
+//			std::string BuildDirectory = PacketDirectory + "/MBPM_Builds/";
+//			std::filesystem::copy_options Overwrite = std::filesystem::copy_options::overwrite_existing;
+//			if (std::filesystem::exists(BuildDirectory + "Debug"))
+//			{
+//				std::filesystem::copy(BuildDirectory + "Debug", BuildDirectory, Overwrite);
+//				std::filesystem::remove_all(BuildDirectory + "Debug");
+//			}
+//#endif // 
 			ReturnValue = true;
 		}
 		else

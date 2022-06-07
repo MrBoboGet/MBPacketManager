@@ -1668,15 +1668,17 @@ namespace MBPM
 			OutFilesToDelete.push_back(Files);
 		}
 	}
-	void MBPM_ClI::p_UploadPacketsLocal(std::vector<PacketIdentifier> const& PacketsToUpload,MBCLI::MBTerminal* AssociatedTerminal)
+	void MBPM_ClI::p_UploadPacketsLocal(std::vector<PacketIdentifier> const& PacketsToUpload,MBCLI::ProcessedCLInput const& Command,MBCLI::MBTerminal* AssociatedTerminal)
 	{
 		std::string InstalledPacketsDirectory = GetSystemPacketsDirectory();
 		std::vector<std::pair<std::string, std::string>> FailedPackets = {};
+		bool UseDirectPath = false;
 		for (size_t i = 0; i < PacketsToUpload.size(); i++)
 		{
 			if (!p_PacketExists(PacketsToUpload[i]))
 			{
 				FailedPackets.push_back(std::pair<std::string,std::string>(PacketsToUpload[i].PacketName, "Invalid user packet to upload, packet doesnt exist or no MBPM_PacketInfo in directory"));
+				continue;
 			}
 			std::string PacketInstallPath = InstalledPacketsDirectory + PacketsToUpload[i].PacketName + "/";
 			if (std::filesystem::exists(PacketInstallPath) == false)
@@ -1690,11 +1692,73 @@ namespace MBPM
 			MBPM::MBPP_FileInfoReader InstalledInfo = MBPM::MBPP_FileInfoReader(PacketInstallPath+"/MBPM_FileInfo");
 			MBPM::MBPP_FileInfoReader LocalPacketInfo = MBPM::MBPP_FileInfoReader(PacketsToUpload[i].PacketURI +"/MBPM_FileInfo");
 			std::string LocalPacketPath = PacketsToUpload[i].PacketURI;
-			MBPM::MBPP_FileInfoDiff FileInfoDiff = MBPM::GetFileInfoDifference(InstalledInfo, LocalPacketInfo);
-			AssociatedTerminal->PrintLine("Files to copy:");
-			AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::Green);
+
+			MBPM::MBPP_FileInfoDiff FileInfoDiff;
 			std::vector<std::string> ObjectsToCopy = {};
 			std::vector<std::string> ObjectsToRemove = {};
+			for (auto const& File : Command.GetSingleArgumentOptionList("f"))
+			{
+				UseDirectPath = true;
+				if (File.first.size() == 0 || File.first[0] != '/') 
+				{
+					FailedPackets.push_back(std::pair<std::string, std::string>(PacketsToUpload[i].PacketName, "Can't upload file \"" + File.first + "\": Invalid PacketPath"));
+				}
+				if (LocalPacketInfo.GetFileInfo(File.first) == nullptr)
+				{
+					if (std::filesystem::exists(LocalPacketPath + File.first) && std::filesystem::is_regular_file(LocalPacketPath + File.first))
+					{
+						FileInfoDiff.AddedFiles.push_back(File.first);
+						continue;
+					}
+					FailedPackets.push_back(std::pair<std::string, std::string>(PacketsToUpload[i].PacketName, "Can't upload file \"" + File.first + "\": File not found"));
+					continue;
+				}
+				FileInfoDiff.AddedFiles.push_back(File.first);
+			}
+			for (auto const& Directory : Command.GetSingleArgumentOptionList("d"))
+			{
+				UseDirectPath = true;
+				if (Directory.first.size() == 0 || Directory.first[0] != '/')
+				{
+					FailedPackets.push_back(std::pair<std::string, std::string>(PacketsToUpload[i].PacketName, "Can't upload directory \"" + Directory.first + "\": Invalid PacketPath"));
+				}
+				if (LocalPacketInfo.GetDirectoryInfo(Directory.first) == nullptr)
+				{
+					if (std::filesystem::exists(LocalPacketPath + Directory.first) && std::filesystem::is_directory(LocalPacketPath + Directory.first))
+					{
+						FileInfoDiff.AddedDirectories.push_back(Directory.first);
+						continue;
+					}
+					FailedPackets.push_back(std::pair<std::string, std::string>(PacketsToUpload[i].PacketName, "Can't upload directory \"" + Directory.first + "\": Directory not found"));
+					continue;
+				}
+				//FileInfoDiff.AddedFiles.push_back(File.first);
+				//MBPP_FileInfoReader::GetFileInfoDifference(*InstalledInfo.GetDirectoryInfo(Directory.first),LocalPacketInfo.GetDirectoryInfo(Directory.first));
+				if (InstalledInfo.GetDirectoryInfo(Directory.first) == nullptr)
+				{
+					ObjectsToCopy.push_back(Directory.first);
+				}
+				else 
+				{
+					MBPM::MBPP_FileInfoDiff DirectoryDifference = MBPM::MBPP_FileInfoReader::GetFileInfoDifference(*InstalledInfo.GetDirectoryInfo(Directory.first),*LocalPacketInfo.GetDirectoryInfo(Directory.first));
+					for (auto const& NewFile : DirectoryDifference.AddedFiles)
+						FileInfoDiff.AddedFiles.push_back(NewFile);
+					for (auto const& NewDirectory : DirectoryDifference.AddedDirectories)
+						FileInfoDiff.AddedDirectories.push_back(NewDirectory);
+					for (auto const& UpdatedFile : DirectoryDifference.UpdatedFiles)
+						FileInfoDiff.UpdatedFiles.push_back(UpdatedFile);
+					for (auto const& DeletedDirectory : DirectoryDifference.DeletedDirectories)
+						FileInfoDiff.DeletedDirectories.push_back(DeletedDirectory);
+					for (auto const& RemovedFiles : DirectoryDifference.RemovedFiles)
+						FileInfoDiff.RemovedFiles.push_back(RemovedFiles);
+				}
+			}
+			if (!UseDirectPath)
+			{
+				FileInfoDiff = MBPM::GetFileInfoDifference(InstalledInfo, LocalPacketInfo);
+			}
+			AssociatedTerminal->PrintLine("Files to copy:");
+			AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::Green);
 			for (size_t i = 0; i < FileInfoDiff.AddedFiles.size(); i++)
 			{
 				AssociatedTerminal->PrintLine(FileInfoDiff.AddedFiles[i]);
@@ -1713,13 +1777,21 @@ namespace MBPM
                 std::filesystem::path NewPath = PacketInstallPath+FileInfoDiff.AddedDirectories[i];
                 std::filesystem::create_directories(NewPath);
                 //actual files to copy
-                auto* LocalDirectory = LocalPacketInfo.GetDirectoryInfo(FileInfoDiff.AddedDirectories[i]);
-                auto Begin = LocalDirectory->begin();
-                auto End = LocalDirectory->end();
-                while(Begin != End)
-                {
-                    ObjectsToCopy.push_back(FileInfoDiff.AddedDirectories[i]+ Begin.GetCurrentDirectory()+Begin->FileName);   
-                }
+				if (!UseDirectPath)
+				{
+					auto* LocalDirectory = LocalPacketInfo.GetDirectoryInfo(FileInfoDiff.AddedDirectories[i]);
+					auto Begin = LocalDirectory->begin();
+					auto End = LocalDirectory->end();
+					while (Begin != End)
+					{
+						ObjectsToCopy.push_back(FileInfoDiff.AddedDirectories[i] + Begin.GetCurrentDirectory() + Begin->FileName);
+						++Begin;
+					}
+				}
+				else 
+				{
+					ObjectsToCopy.push_back(FileInfoDiff.AddedDirectories[i]);
+				}
             }
 			AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::White);
 			AssociatedTerminal->PrintLine("Files to remove:");
@@ -1754,9 +1826,9 @@ namespace MBPM
 			for (size_t i = 0; i < ObjectsToRemove.size(); i++)
 			{
 				std::filesystem::remove_all(PacketInstallPath + ObjectsToRemove[i]);
-				AssociatedTerminal->PrintLine("Removed " + ObjectsToCopy[i]);
+				AssociatedTerminal->PrintLine("Removed " + ObjectsToRemove[i]);
 			}
-			MBPM::CreatePacketFilesData(PacketInstallPath);
+			MBPM::UpdateFileInfo(PacketInstallPath);
 			AssociatedTerminal->PrintLine("Successfully uploaded packet " + PacketsToUpload[i].PacketURI + "!");
 		}
 		if (FailedPackets.size() > 0)
@@ -1774,7 +1846,7 @@ namespace MBPM
 		//f�rst s� beh�ver vi skicka data f�r att se login typen
 		MBPM::MBPP_ComputerInfo PreviousComputerInfo = m_ClientToUse.GetComputerInfo();
 		MBError ParseError = true;
-		std::vector<PacketIdentifier> PacketsToUpload = p_GetCommandPackets(CommandInput,PacketLocationType::Installed,ParseError);
+		std::vector<PacketIdentifier> PacketsToUpload = p_GetCommandPackets(CommandInput,PacketLocationType::User,ParseError);
 		if (!ParseError)
 		{
 			AssociatedTerminal->PrintLine("Error getting command packets: " + ParseError.ErrorMessage);
@@ -1799,7 +1871,7 @@ namespace MBPM
 		}
 		if (CommandInput.CommandOptions.find("local") != CommandInput.CommandOptions.end())
 		{
-			p_UploadPacketsLocal(PacketsToUpload,AssociatedTerminal);
+			p_UploadPacketsLocal(PacketsToUpload,CommandInput,AssociatedTerminal);
 			return;
 		}
 
@@ -2891,6 +2963,7 @@ namespace MBPM
 						//AssociatedTerminal
 						AssoicatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::Yellow);
 						AssoicatedTerminal->PrintLine("Exported executable not found in " + UserInfo.Configurations[CompiledSource.Language].DefaultExportConfig+", skipping export");
+						AssoicatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::White);
 						continue;
 					}
 					std::filesystem::path SymlinkPath = ExportedExecutablesPath/ExecutableName;

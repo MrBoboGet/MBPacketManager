@@ -511,7 +511,7 @@ namespace MBPM
 			}
 			else if (*LocalFilesIterator > StoredFilesIterator->FileName)
 			{
-				OutResult.RemovedFiles.push_back(CurrentIndexPath + *LocalFilesIterator);
+				OutResult.RemovedFiles.push_back(CurrentIndexPath + StoredFilesIterator->FileName);
 				StoredFilesIterator++;
 			}
 			else
@@ -564,7 +564,7 @@ namespace MBPM
 			}
 			else if (*LocalDirectoriesIterator > StoredDirectoriesIterator->DirectoryName)
 			{
-				OutResult.DeletedDirectories.push_back(CurrentIndexPath + *LocalDirectoriesIterator);
+				OutResult.DeletedDirectories.push_back(CurrentIndexPath + StoredDirectoriesIterator->DirectoryName);
 				StoredDirectoriesIterator++;
 			}
 			else
