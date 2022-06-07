@@ -478,7 +478,7 @@ namespace MBPM
 		return(ReturnValue);
 	}
 
-	std::vector<PacketIdentifier> MBPM_ClI::p_GetCommandPackets(MBCLI::ProcessedCLInput const& CLIInput, PacketLocationType DefaultType,MBError& OutError)
+	std::vector<PacketIdentifier> MBPM_ClI::p_GetCommandPackets(MBCLI::ProcessedCLInput const& CLIInput, PacketLocationType DefaultType,MBError& OutError,size_t ArgumentOffset)
 	{
 		std::vector<PacketIdentifier> ReturnValue;
 		//individual packet specifiers
@@ -509,7 +509,7 @@ namespace MBPM
 			OutError.ErrorMessage = "More than 1 default packet type specification";
 			return(ReturnValue);
 		}
-		for (size_t i = 0; i < CLIInput.TopCommandArguments.size(); i++)
+		for (size_t i = ArgumentOffset; i < CLIInput.TopCommandArguments.size(); i++)
 		{
 			PacketIdentifier NewPacket = p_GetPacketIdentifier(CLIInput.TopCommandArguments[i], DefaultType, OutError);
 			if (!OutError)
@@ -561,7 +561,14 @@ namespace MBPM
 		//total packet specifiers
 		if (CLIInput.CommandOptions.find("allinstalled") != CLIInput.CommandOptions.end())
 		{
-			std::vector<PacketIdentifier> InstalledPackets = p_GetInstalledPackets();
+			std::vector<std::string> MissingPackets;
+			std::vector<PacketIdentifier> InstalledPackets = p_GetInstalledPacketsDependancyOrder(&MissingPackets);
+			if (MissingPackets.size() > 0)
+			{
+				OutError = false;
+				OutError.ErrorMessage = "Missing dependancies";
+				return(ReturnValue);
+			}
 			for (size_t i = 0; i < InstalledPackets.size(); i++)
 			{
 				ReturnValue.push_back(std::move(InstalledPackets[i]));
@@ -1811,7 +1818,7 @@ namespace MBPM
 			}
 			AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::White);
 			AssociatedTerminal->PrintLine("Copying files:");
-			std::filesystem::copy_options CopyOptions = std::filesystem::copy_options::update_existing|std::filesystem::copy_options::recursive;
+			std::filesystem::copy_options CopyOptions = std::filesystem::copy_options::overwrite_existing|std::filesystem::copy_options::recursive;
 			for (size_t i = 0; i < ObjectsToCopy.size(); i++)
 			{
                 std::filesystem::path NewPath = PacketInstallPath+ObjectsToCopy[i];
@@ -2057,6 +2064,25 @@ namespace MBPM
 			for (size_t i = 0; i < DirectoriesToProcess.size(); i++)
 			{
 				CreatePacketFilesData(DirectoriesToProcess[i], FileInfoName);
+			}
+		}
+		else if (CommandInput.TopCommandArguments[0] == "update")
+		{
+			MBError GetPacketsError = true;
+			std::vector<PacketIdentifier> Packets = p_GetCommandPackets(CommandInput, PacketLocationType::Local, GetPacketsError, 1);
+			if (!GetPacketsError)
+			{
+				AssociatedTerminal->PrintLine("Error retrieving command packets: " + GetPacketsError.ErrorMessage);
+				return;
+			}
+			for (PacketIdentifier const& Packet : Packets)
+			{
+				if (Packet.PacketLocation == PacketLocationType::Remote)
+				{
+					AssociatedTerminal->PrintLine("Can't update packets for remote index, skipping packet " + Packet.PacketName);
+					continue;
+				}
+				UpdateFileInfo(Packet.PacketURI);
 			}
 		}
 		else if (CommandInput.TopCommandArguments[0] == "list")
@@ -2449,7 +2475,6 @@ namespace MBPM
                 for(auto const& Entry : PacketDirectoryIterator)
                 {
                     std::string PacketPath ="/"+MBUtility::ReplaceAll(MBUnicode::PathToUTF8(std::filesystem::relative(Entry.path(),Packet.PacketURI)),"\\","/");
-					std::cout << PacketDirectoryIterator.depth() << std::endl;
                     if(Excluder.Excludes(PacketPath) && !Excluder.Includes(PacketPath))
                     {
 						if (Entry.is_directory()) 
@@ -2746,8 +2771,8 @@ namespace MBPM
                 }
                 for(std::string const& Dependancy : PacketSource.ExternalDependancies)
                 {
-					CompileExecutableString += "-L"+PacketInstallDirectory+"/"+Dependancy+"/MBPM_Builds/"+ConfName;
-					CompileExecutableString += "-l"+Dependancy;
+					CompileExecutableString += "-L"+PacketInstallDirectory+"/"+Dependancy+"/MBPM_Builds/"+ConfName+" ";
+					CompileExecutableString += "-l"+Dependancy+" ";
                 }
 				for (std::string const& ExtraArgument : CompileConf.LinkFlags)
 				{
@@ -2762,7 +2787,7 @@ namespace MBPM
             }
             else if(TargetInfo.Type == TargetType::Library || TargetInfo.Type == TargetType::StaticLibrary)
             {
-				std::string CreateLibraryCommand = "ar rcs " + TargetName + ".a ";
+				std::string CreateLibraryCommand = "ar rcs lib"+TargetName + ".a ";
 				for (std::string const& Source : TargetInfo.SourceFiles)
 				{
 					//assumes that Source starts with /, canonical packet path
@@ -2920,6 +2945,8 @@ namespace MBPM
             ReturnValue.ErrorMessage = "Invalid packet type, can't compile remote packet"; 
             return(ReturnValue);
         }
+		MBPM_PacketInfo PacketInfo = p_GetPacketInfo(Identifier, &ReturnValue);
+		if (!ReturnValue) return(ReturnValue);
         std::error_code FSError;
         if(std::filesystem::exists( Identifier.PacketURI+"/MBSourceInfo.json",FSError))
         {
@@ -2939,11 +2966,10 @@ namespace MBPM
 				//Export the compiled executables
 				UserConfigurationsInfo UserInfo;
 				ReturnValue = ParseUserConfigurationInfo(p_GetPacketInstallDirectory() + "/MBCompileConfigurations.json", UserInfo);
+				if (!ReturnValue) return(ReturnValue);
 				SourceInfo CompiledSource;
 				if (!ReturnValue) return(ReturnValue);
 				ReturnValue = ParseSourceInfo(Identifier.PacketURI+"/MBSourceInfo.json", CompiledSource);
-				if (!ReturnValue) return(ReturnValue);
-				MBPM_PacketInfo PacketInfo = p_GetPacketInfo(Identifier, &ReturnValue);
 				if (!ReturnValue) return(ReturnValue);
 				std::filesystem::path ExportedExecutablesPath = p_GetPacketInstallDirectory() + "/MBPM_ExportedExecutables/";
 				if (!std::filesystem::exists(ExportedExecutablesPath))
@@ -2977,7 +3003,109 @@ namespace MBPM
         }
         else
         {
-            ReturnValue =  MBPM::CompileAndInstallPacket(Identifier.PacketURI);
+			if (PacketInfo.Attributes.find(MBPM_PacketAttribute::NonMBBuild) == PacketInfo.Attributes.end())
+			{
+				if (!std::filesystem::is_regular_file(Identifier.PacketURI + "/CMakeLists.txt"))
+				{
+					ReturnValue = false;
+					ReturnValue.ErrorMessage = "Missing CMakeLists.txt for MBBuild without MBSourceInfo.json";
+					return(ReturnValue);
+				}
+				//Tar och kompilerar
+				UserConfigurationsInfo UserInfo;
+				ReturnValue = ParseUserConfigurationInfo(p_GetPacketInstallDirectory() + "/MBCompileConfigurations.json", UserInfo);
+				if (!ReturnValue) return(ReturnValue);
+				//OBS implicitly assumes that the code is C++
+				if (UserInfo.Configurations.find("C++") == UserInfo.Configurations.end()) 
+				{
+					ReturnValue = false;
+					ReturnValue.ErrorMessage = "No C++ configuration found in user MBCompileConfigurations.json";
+					return(ReturnValue);
+				}
+				std::vector<std::string> CmakeBuildTypes;
+				for (auto const& SpecifiedConfiguration : Command.GetSingleArgumentOptionList("c")) 
+				{
+					if (UserInfo.Configurations["C++"].Configurations.find(SpecifiedConfiguration.first) == UserInfo.Configurations["C++"].Configurations.end()
+						|| UserInfo.Configurations["C++"].Configurations[SpecifiedConfiguration.first].Toolchain != "mbpm_cmake")
+					{
+						ReturnValue = false;
+						ReturnValue.ErrorMessage = "Invalid configuration speficied: " + SpecifiedConfiguration.first;
+						return(ReturnValue);
+					}
+					CmakeBuildTypes.push_back(SpecifiedConfiguration.first);
+				}
+				if (CmakeBuildTypes.size() == 0) 
+				{
+					//TODO Inefficient accessing of dictionary
+					//TODO checking wheter or not a config actually exists in the specified configurations is a bit tedious, maybe should be checked att parse time and assumed?
+					for (std::string const& DefaultBuild: UserInfo.Configurations["C++"].DefaultConfigs)
+					{
+						if (UserInfo.Configurations["C++"].Configurations.find(DefaultBuild) == UserInfo.Configurations["C++"].Configurations.end())
+						{
+							ReturnValue = false;
+							ReturnValue.ErrorMessage = "Invalid LangaugeConfiguration for C++ in MBCompileConfigurations: Default configurations not specified";
+							return(ReturnValue);
+						}
+						if (UserInfo.Configurations["C++"].Configurations[DefaultBuild].Toolchain == "mbpm_cmake")
+						{
+							CmakeBuildTypes.push_back(DefaultBuild);
+						}
+					}
+				}
+				for (std::string const& CmakeBuildType : CmakeBuildTypes)
+				{
+					int CommandReturnValue = std::system(("cmake -S " + Identifier.PacketURI + " -B " + Identifier.PacketURI + "/MBPM_BuildFiles/"+CmakeBuildType+" -DCMAKE_BUILD_TYPE="+CmakeBuildType).c_str());
+					if (CommandReturnValue != 0)
+					{
+						ReturnValue = false;
+						ReturnValue.ErrorMessage = "Error configuring CMake";
+						return(ReturnValue);
+					}
+					//TODO should probably check for visual studio generator instead
+					if constexpr (MBUtility::IsWindows())
+					{
+						CommandReturnValue = std::system(("cmake --build " + Identifier.PacketURI + "/MBPM_BuildFiles/"+CmakeBuildType +" --config "+CmakeBuildType).c_str());
+					}
+					else 
+					{
+						CommandReturnValue = std::system(("cmake --build " + Identifier.PacketURI + "/MBPM_BuildFiles/" + CmakeBuildType).c_str());
+					}
+					if (CommandReturnValue != 0)
+					{
+						ReturnValue = false;
+						ReturnValue.ErrorMessage = "Error compiling cmake configuration";
+						return(ReturnValue);
+					}
+				}
+				std::filesystem::path ExportedExecutablesPath = p_GetPacketInstallDirectory() + "/MBPM_ExportedExecutables/";
+				for (std::string const& Executable : PacketInfo.ExportedTargets)
+				{
+					std::string ExecutableName = Executable;
+					if constexpr (MBUtility::IsWindows())
+					{
+						ExecutableName += ".exe";
+					}
+					std::filesystem::path ExecutablePath = Identifier.PacketURI + "/MBPM_Builds/" + UserInfo.Configurations["C++"].DefaultExportConfig + "/" + ExecutableName;
+					if (!std::filesystem::exists(ExecutablePath))
+					{
+						//AssociatedTerminal
+						AssoicatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::Yellow);
+						AssoicatedTerminal->PrintLine("Exported executable not found in " + UserInfo.Configurations["C++"].DefaultExportConfig + ", skipping export");
+						AssoicatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::White);
+						continue;
+					}
+					std::filesystem::path SymlinkPath = ExportedExecutablesPath/ExecutableName;
+					if (std::filesystem::is_symlink(SymlinkPath))
+					{
+						std::filesystem::remove(SymlinkPath);
+					}
+					std::filesystem::create_symlink(ExecutablePath, SymlinkPath);
+				}
+			}
+			else
+			{
+				ReturnValue =  MBPM::CompileAndInstallPacket(Identifier.PacketURI);
+			}
         }
 		return(ReturnValue);
 	}

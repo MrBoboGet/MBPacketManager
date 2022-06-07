@@ -1,0 +1,1 @@
+{"Dependancies":["MrBoboSockets","MBParsing","MBCrypto","MBUtility","MBUnicode","MBCLI"],"ExtraIncludes":[],"Language":"C++","Targets":{"MBPacketManager":{"Sources":["/MBPacketManager.cpp","/MBPMCLIMain.cpp","/MBPM_CLI.cpp","/MBPM_TestMain.cpp","/MB_PacketProtocol.cpp"],"TargetType":"Library"}}}

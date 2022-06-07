@@ -132,7 +132,7 @@ namespace MBPM
 		bool p_PacketExists(PacketIdentifier const& PacketToCheck);
 
 		//std::string p_GetInstalledPacketDirectory();
-		std::vector<PacketIdentifier> p_GetCommandPackets(MBCLI::ProcessedCLInput const& CLIInput, PacketLocationType DefaultType,MBError& OutError);
+		std::vector<PacketIdentifier> p_GetCommandPackets(MBCLI::ProcessedCLInput const& CLIInput, PacketLocationType DefaultType,MBError& OutError, size_t ArgumentOffset = 0);
 		PacketIdentifier p_GetPacketIdentifier(std::string const& PacketName, PacketLocationType Type, MBError& OutError);
 
 		std::vector<PacketIdentifier> p_GetInstalledPacketsDependancyOrder(std::vector<std::string>* MissingPackets);
@@ -147,7 +147,7 @@ namespace MBPM
 
 
 		std::vector<PacketIdentifier> p_GetUserPackets();//ingen garanti p� dependancy order
-		std::vector<PacketIdentifier> p_GetInstalledPackets();//implicit tar den i installed dependancy order
+		std::vector<PacketIdentifier> p_GetInstalledPackets();//TAR INTE I DEPENDANCY ORDER
 
 		//std::string p_GetInstalledPacketDirectory(std::string const& PacketName);
 
