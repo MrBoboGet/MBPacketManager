@@ -584,6 +584,12 @@ namespace MBPM
 			OutResult.DeletedDirectories.push_back(CurrentIndexPath + StoredDirectoriesIterator->DirectoryName);
 			StoredDirectoriesIterator++;
 		}
+		//uneccsarilly slow, but quick fix
+		std::sort(OutResult.AddedDirectories.begin(), OutResult.AddedDirectories.end());
+		std::sort(OutResult.AddedFiles.begin(), OutResult.AddedFiles.end());
+		std::sort(OutResult.UpdatedFiles.begin(), OutResult.UpdatedFiles.end());
+		std::sort(OutResult.DeletedDirectories.begin(), OutResult.DeletedDirectories.end());
+		std::sort(OutResult.RemovedFiles.begin(), OutResult.RemovedFiles.end());
 	}
 	void MBPP_FileInfoReader::p_GetLocalInfoDiff_UpdateDirectory(MBPP_FileInfoDiff& OutResult, MBUtility::Filesystem& Filesystem, MBPM_FileInfoExcluder const& Excluder, MBPP_DirectoryInfoNode const& StoredNode, std::string const& CurrentDirectoryPath, std::string const& CurrentIndexPath)
 	{
@@ -1547,6 +1553,8 @@ namespace MBPM
 		std::vector<MBPP_FileInfo>::const_iterator ServerEnd = ServerDirectory.Files.end();
 		std::vector<MBPP_FileInfo>::const_iterator ClientIterator = ClientDirectory.Files.begin();
 		std::vector<MBPP_FileInfo>::const_iterator ServerIterator = ServerDirectory.Files.begin();
+		assert(std::is_sorted(ClientIterator, ClientEnd));
+		assert(std::is_sorted(ServerIterator, ServerEnd));
 		while (ClientIterator != ClientEnd && ServerIterator != ServerEnd)
 		{
 			if (*ClientIterator < *ServerIterator)
@@ -1590,6 +1598,8 @@ namespace MBPM
 		std::vector<MBPP_DirectoryInfoNode>::const_iterator ServerEnd = ServerDirectory.Directories.end();
 		std::vector<MBPP_DirectoryInfoNode>::const_iterator ClientIterator = ClientDirectory.Directories.begin();
 		std::vector<MBPP_DirectoryInfoNode>::const_iterator ServerIterator = ServerDirectory.Directories.begin();
+		assert(std::is_sorted(ClientIterator, ClientEnd));
+		assert(std::is_sorted(ServerIterator, ServerEnd));
 		while (ClientIterator != ClientEnd && ServerIterator != ServerEnd)
 		{
 			if (*ClientIterator < *ServerIterator)
@@ -1630,6 +1640,11 @@ namespace MBPM
 		MBPP_DirectoryInfoNode const& ClientNode = ClientInfo.m_TopNode;
 		MBPP_DirectoryInfoNode const& ServerNode = ServerInfo.m_TopNode;
 		h_UpdateDiffOverDirectory(ReturnValue, ClientNode, ServerNode, "/");
+		//assert(std::is_sorted(ReturnValue.AddedDirectories.begin(), ReturnValue.AddedDirectories.end()));
+		//assert(std::is_sorted(ReturnValue.DeletedDirectories.begin(), ReturnValue.DeletedDirectories.end()));
+		//assert(std::is_sorted(ReturnValue.AddedFiles.begin(), ReturnValue.AddedFiles.end()));
+		//assert(std::is_sorted(ReturnValue.UpdatedFiles.begin(), ReturnValue.UpdatedFiles.end()));
+		//assert(std::is_sorted(ReturnValue.RemovedFiles.begin(), ReturnValue.RemovedFiles.end()));
 		return(ReturnValue);
 	}
 	std::vector<std::string> MBPP_FileInfoReader::sp_GetPathComponents(std::string const& PathToDecompose)
