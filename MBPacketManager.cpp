@@ -124,30 +124,6 @@ namespace MBPM
 					}
 				}
 				ProjectToPopulate.ProjectPacketsDepandancies.insert(Dependancies);
-				if (CompileConfiguration.SupportedLibraryConfigurations.find(MBPM_CompileOutputConfiguration::Embedded) != CompileConfiguration.SupportedLibraryConfigurations.end())
-				{
-					GenerationError = h_EmbeddPacket_CmakeFile(ProjectToPopulate, CompileConfiguration, DependancyInfo, DependancyPath);
-					if (!GenerationError)
-					{
-						return(GenerationError);
-					}
-				}
-				if (CompileConfiguration.SupportedLibraryConfigurations.find(MBPM_CompileOutputConfiguration::StaticRelease) != CompileConfiguration.SupportedLibraryConfigurations.end())
-				{
-					ProjectToPopulate.TargetsData[MBPM_CompileOutputConfiguration::StaticRelease].StaticLibrarysNeeded.push_back(Dependancies);
-				}
-				if (CompileConfiguration.SupportedLibraryConfigurations.find(MBPM_CompileOutputConfiguration::StaticDebug) != CompileConfiguration.SupportedLibraryConfigurations.end())
-				{
-					ProjectToPopulate.TargetsData[MBPM_CompileOutputConfiguration::StaticDebug].StaticLibrarysNeeded.push_back(Dependancies);
-				}
-				if (CompileConfiguration.SupportedLibraryConfigurations.find(MBPM_CompileOutputConfiguration::DynamicRelease) != CompileConfiguration.SupportedLibraryConfigurations.end())
-				{
-					ProjectToPopulate.TargetsData[MBPM_CompileOutputConfiguration::DynamicRelease].DynamicLibrarysNeeded.push_back(Dependancies);
-				}
-				if (CompileConfiguration.SupportedLibraryConfigurations.find(MBPM_CompileOutputConfiguration::DynamicDebug) != CompileConfiguration.SupportedLibraryConfigurations.end())
-				{
-					ProjectToPopulate.TargetsData[MBPM_CompileOutputConfiguration::DynamicDebug].DynamicLibrarysNeeded.push_back(Dependancies);
-				}
 			}
 		}
 		if (IsTopPacket)
@@ -192,28 +168,6 @@ namespace MBPM
 //		return(ReturnValue);
 //	}
 
-
-	MBPM_CompileOutputConfiguration h_StringToConfiguration(std::string const& StringToInspect)
-	{
-		MBPM_CompileOutputConfiguration ReturnValue = MBPM_CompileOutputConfiguration::Null;
-		if (StringToInspect == "StaticDebug")
-		{
-			ReturnValue = MBPM_CompileOutputConfiguration::StaticDebug;
-		}
-		if (StringToInspect == "StaticRelease")
-		{
-			ReturnValue = MBPM_CompileOutputConfiguration::StaticRelease;
-		}
-		if (StringToInspect == "DynamicDebug")
-		{
-			ReturnValue = MBPM_CompileOutputConfiguration::DynamicDebug;
-		}
-		if (StringToInspect == "DynamicRelease")
-		{
-			ReturnValue = MBPM_CompileOutputConfiguration::DynamicRelease;
-		}
-		return(ReturnValue);
-	}
     
     MBPM_PacketAttribute StringToPacketAttribute(std::string const& StringToConvert)
     {
@@ -234,6 +188,10 @@ namespace MBPM
         {
             ReturnValue = MBPM_PacketAttribute::TriviallyCompilable; 
         }
+		if (StringToConvert == "SubOnly")
+		{
+			ReturnValue = MBPM_PacketAttribute::SubOnly;
+		}
         return(ReturnValue);
     }
 	MBPM_PacketInfo ParseMBPM_PacketInfo(std::string const& PacketPath)
@@ -259,25 +217,6 @@ namespace MBPM
                     ReturnValue.Attributes.insert(NewAttribute);   
                 }
 			}
-			for (auto const& OutputConfigurations : ParsedJson.GetAttribute("OutputConfigurations").GetArrayData())
-			{
-				if (OutputConfigurations.GetStringData() == "StaticDebug")
-				{
-					ReturnValue.SupportedOutputConfigurations.insert(MBPM_CompileOutputConfiguration::StaticDebug);
-				}
-				if (OutputConfigurations.GetStringData() == "StaticRelease")
-				{
-					ReturnValue.SupportedOutputConfigurations.insert(MBPM_CompileOutputConfiguration::StaticRelease);
-				}
-				if (OutputConfigurations.GetStringData() == "DynamicDebug")
-				{
-					ReturnValue.SupportedOutputConfigurations.insert(MBPM_CompileOutputConfiguration::DynamicDebug);
-				}
-				if (OutputConfigurations.GetStringData() == "DynamicRelease")
-				{
-					ReturnValue.SupportedOutputConfigurations.insert(MBPM_CompileOutputConfiguration::DynamicRelease);
-				}
-			}
 			//ExportedExecutableTargets
 			if (ParsedJson.HasAttribute("ExportedExecutableTargets"))
 			{
@@ -293,6 +232,25 @@ namespace MBPM
 						}
 					}
 				}
+			}
+			if (ParsedJson.HasAttribute("PacketType"))
+			{
+				if (ParsedJson["PacketType"].GetStringData() == "C++")
+				{
+					ReturnValue.Type = PacketType::CPP;
+				}
+				else if (ParsedJson["PacketType"].GetStringData() == "MBDoc")
+				{
+					ReturnValue.Type = PacketType::MBDoc;
+				}
+				else
+				{
+					ReturnValue.Type = PacketType::Unkown;
+				}
+			}
+			else
+			{
+				ReturnValue.Type = PacketType::CPP;
 			}
 			//F�r include
 			if (ParsedJson.HasAttribute("ExtraIncludeDirectories"))
@@ -323,34 +281,10 @@ namespace MBPM
 				{
 					MBPM_SubLibrary NewSubLibrary;
 					NewSubLibrary.LibraryName = SubLibraries[i].GetAttribute("LibraryName").GetStringData();
-					std::vector<MBParsing::JSONObject> const& LibraryOutputConfiguratiosn = SubLibraries[i].GetAttribute("OutputConfigurations").GetArrayData();
-					for (size_t i = 0; i < LibraryOutputConfiguratiosn.size(); i++)
-					{
-						NewSubLibrary.OutputConfigurations.push_back(h_StringToConfiguration(LibraryOutputConfiguratiosn[i].GetStringData()));
-					}
 					ReturnValue.SubLibraries.push_back(NewSubLibrary);
 				}
 			}
-			//
-
-			//f�r outout configuratuions
-			MBParsing::JSONObject OutputConfiguration = ParsedJson.GetAttribute("OutputTargetNames");
-			if (OutputConfiguration.HasAttribute("StaticDebug"))
-			{
-				ReturnValue.OutputConfigurationTargetNames[MBPM_CompileOutputConfiguration::StaticDebug] = OutputConfiguration.GetAttribute("StaticDebug").GetStringData();
-			}
-			if (OutputConfiguration.HasAttribute("StaticRelease"))
-			{
-				ReturnValue.OutputConfigurationTargetNames[MBPM_CompileOutputConfiguration::StaticRelease] = OutputConfiguration.GetAttribute("StaticRelease").GetStringData();
-			}
-			if (OutputConfiguration.HasAttribute("DynamicDebug"))
-			{
-				ReturnValue.OutputConfigurationTargetNames[MBPM_CompileOutputConfiguration::DynamicDebug] = OutputConfiguration.GetAttribute("DynamicDebug").GetStringData();
-			}
-			if (OutputConfiguration.HasAttribute("DynamicRelease"))
-			{
-				ReturnValue.OutputConfigurationTargetNames[MBPM_CompileOutputConfiguration::DynamicRelease] = OutputConfiguration.GetAttribute("DynamicRelease").GetStringData();
-			}
+			
 			//ReturnValue.PacketDependancies = ParsedAttributes["Dependancies"];
 			for (auto const& Dependancie : ParsedJson.GetAttribute("Dependancies").GetArrayData())
 			{
@@ -513,19 +447,19 @@ namespace MBPM
             ReturnValue.ErrorMessage = Exception.what();    
         }
         if(ReturnValue)
-        {
-            OutInfo = std::move(Result);   
-        }
-        return(ReturnValue);        
-    }
-    MBError ParseSourceInfo(std::filesystem::path const& FilePath,SourceInfo& OutInfo)
-    {
-        MBError ReturnValue = true;
-        std::string TotalData = MBUtility::ReadWholeFile(MBUnicode::PathToUTF8(FilePath));
-        ReturnValue = ParseSourceInfo(TotalData.data(),TotalData.size(),OutInfo);
-        return(ReturnValue);        
-    }
-    //MBPM Build
+		{
+		OutInfo = std::move(Result);
+		}
+		return(ReturnValue);
+	}
+	MBError ParseSourceInfo(std::filesystem::path const& FilePath, SourceInfo& OutInfo)
+	{
+		MBError ReturnValue = true;
+		std::string TotalData = MBUtility::ReadWholeFile(MBUnicode::PathToUTF8(FilePath));
+		ReturnValue = ParseSourceInfo(TotalData.data(), TotalData.size(), OutInfo);
+		return(ReturnValue);
+	}
+	//MBPM Build
 
 
 
@@ -541,7 +475,7 @@ namespace MBPM
 
 
 
-    
+
 	std::vector<std::string> h_GetTotalPacketDependancies(MBPM_PacketInfo const& PacketInfo, MBError* OutError)
 	{
 		std::vector<std::string> ReturnValue = {};
@@ -599,11 +533,11 @@ namespace MBPM
 		std::string InstallDirectory = GetSystemPacketsDirectory();
 		for (size_t i = 0; i < DependanciesToCheck.size(); i++)
 		{
-			ReturnValue.push_back(ParseMBPM_PacketInfo(InstallDirectory+"/"+DependanciesToCheck[i]+"/MBPM_PacketInfo"));
+			ReturnValue.push_back(ParseMBPM_PacketInfo(InstallDirectory + "/" + DependanciesToCheck[i] + "/MBPM_PacketInfo"));
 		}
 		return(ReturnValue);
 	}
-	void h_WriteMBPMCmakeValues(std::vector<std::string> const& Dependancies, std::ofstream& OutputFile,std::string const& StaticMBPMData)
+	void h_WriteMBPMCmakeValues(std::vector<std::string> const& Dependancies, std::ofstream& OutputFile, std::string const& StaticMBPMData)
 	{
 		OutputFile << "##BEGIN MBPM_VARIABLES\n";
 		OutputFile << "set(MBPM_DEPENDENCIES \n";
@@ -612,7 +546,7 @@ namespace MBPM
 
 		for (auto const& Packet : TargetDependancies)
 		{
-			if (Packet.OutputConfigurationTargetNames.size() > 0)
+			if(Packet.Attributes.find(MBPM_PacketAttribute::SubOnly) == Packet.Attributes.end())
 			{
 				OutputFile << "\t" <<"\""<< Packet.PacketName<<"\"" << "\n";
 			}
@@ -728,60 +662,7 @@ namespace MBPM
 		OutputFile << "set(COMMON_LIBRARIES ${MBPM_SystemLibraries} ${COMMON_STATIC_LIBRARIES} ${COMMON_DYNAMIC_LIBRARIES})\n";
 
 
-		for (auto const& TargetData : ProjectToWrite.TargetsData)
-		{
-			OutputFile << "\n";
-			std::string CmakeTargetName = ProjectToWrite.ProjectName+'_';
-			bool IsDebug = false;
-			bool IsStatic = true;
-			if (TargetData.first == MBPM::MBPM_CompileOutputConfiguration::DynamicDebug || TargetData.first == MBPM_CompileOutputConfiguration::DynamicRelease)
-			{
-				CmakeTargetName += "D";
-				IsStatic = false;
-			}
-			else
-			{
-				CmakeTargetName += "S";
-			}
-			if (TargetData.first == MBPM_CompileOutputConfiguration::StaticDebug || TargetData.first == MBPM_CompileOutputConfiguration::DynamicDebug)
-			{
-				CmakeTargetName += "D";
-				IsDebug = true;
-			}
-			else
-			{
-				CmakeTargetName += "R";
-			}
 
-			//skapar targeten
-			OutputFile << "add_library(" << CmakeTargetName << " ";
-			if (IsStatic)
-			{
-				OutputFile << "STATIC ";
-			}
-			else
-			{
-				OutputFile << "SHARED ";
-			}
-			OutputFile << "${COMMON_FILES})\n";
-			//
-
-			//librarys to link
-			//OutputFile << "MBPM_UpdateTargetLibraries("; //bara n�dv�ndig om vi ska skapa en executable
-			//OutputFile << IsStatic ? "\"Static\"" : "\"Dynamic\"";
-			//OutputFile << IsDebug ? " \"Debug\")\n" : " \"Release\")\n";
-			//OutputFile << "target_link_libraries(" << CmakeTargetName << " ${MBPM_EXTPACKET_LIBRARIES} ${COMMON_LIBRARIES})\n";
-			OutputFile << "MBPM_ApplyTargetConfiguration(\""+CmakeTargetName+"\" ";
-			OutputFile << (IsStatic ? "\"STATIC\"" : "\"DYNAMIC\"");
-			OutputFile << (IsDebug ? " \"DEBUG\")\n" : " \"RELEASE\")\n");
-			
-			//OutputFile << "set_target_properties(\"" + CmakeTargetName + "\" PROPERTIES PREFIX \"\")\n";
-			//OutputFile << "set_target_properties(\"" + CmakeTargetName + "\" PROPERTIES SUFFIX \"\")\n";
-			//OutputFile << "set_target_properties(\"" + CmakeTargetName + "\" PROPERTIES OUTPUT_NAME \""+CmakeTargetName+"\")\n";
-			OutputFile << "target_compile_features(\"" << CmakeTargetName << "\" PRIVATE cxx_std_17)\n";
-			OutputFile << "target_link_libraries(\""<< CmakeTargetName << "\" ${COMMON_LIBRARIES})\n";
-			
-		}
 		return(ReturnValue);
 	}
 	MBError UpdateCmakeMBPMVariables(std::string const& PacketPath, std::vector<std::string> const& TotalPacketDependancies, std::string const& StaticMBPMData)
@@ -856,10 +737,6 @@ namespace MBPM
 		MBError ReturnValue = true;
 		MBPM_CmakeProject GeneratedProject;
 		ReturnValue = h_GenerateCmakeFile(GeneratedProject, CompileConfiguration, PacketToConvert, PacketDirectory);
-		for(auto const& OutputOption : CompileConfiguration.SupportedLibraryConfigurations)
-		{
-			GeneratedProject.TargetsData[OutputOption];
-		}
 		if (ReturnValue)
 		{
 			WriteCMakeProjectToFile(GeneratedProject, PacketDirectory + "/" + OutputName);
@@ -876,7 +753,6 @@ namespace MBPM
 	{
 		MBPM_PacketInfo PacketToConvert = ParseMBPM_PacketInfo(PacketPath + "/MBPM_PacketInfo");
 		MBPM_MakefileGenerationOptions OptionsToUse;
-		OptionsToUse.SupportedLibraryConfigurations = PacketToConvert.SupportedOutputConfigurations;
 		return(GenerateCmakeFile(PacketToConvert, PacketPath, OptionsToUse, CmakeName));
 	}
 
@@ -1221,15 +1097,6 @@ namespace MBPM
 		CommandReturnValue = std::system(("cmake --build " + PacketDirectory + "/MBPM_BuildFiles/").c_str());
 		if (CommandReturnValue == 0)
 		{
-//#ifdef _WIN32
-//			std::string BuildDirectory = PacketDirectory + "/MBPM_Builds/";
-//			std::filesystem::copy_options Overwrite = std::filesystem::copy_options::overwrite_existing;
-//			if (std::filesystem::exists(BuildDirectory + "Debug"))
-//			{
-//				std::filesystem::copy(BuildDirectory + "Debug", BuildDirectory, Overwrite);
-//				std::filesystem::remove_all(BuildDirectory + "Debug");
-//			}
-//#endif // 
 			ReturnValue = true;
 		}
 		else
@@ -1239,6 +1106,7 @@ namespace MBPM
 		return(ReturnValue);
 	}
 
+	[[deprecated]]
 	MBError CompilePacket(std::string const& PacketDirectory)
 	{
 		MBError ReturnValue = true;
@@ -1264,50 +1132,6 @@ namespace MBPM
 		if (PacketInfo.PacketName != "")
 		{
 			std::string PacketInstallDirectory = GetSystemPacketsDirectory();
-			for (auto const& Configurations : PacketInfo.OutputConfigurationTargetNames)
-			{
-				std::string NewLibraryName = "";
-				if (!std::filesystem::exists(PacketInstallDirectory + "/MBPM_CompiledLibraries"))
-				{
-					std::filesystem::create_directories(PacketInstallDirectory + "/MBPM_CompiledLibraries");
-				}
-				if (Configurations.first == MBPM_CompileOutputConfiguration::StaticDebug || Configurations.first == MBPM_CompileOutputConfiguration::StaticRelease)
-				{
-					if (MBUtility::IsWindows())
-					{
-						NewLibraryName = Configurations.second + ".lib";
-					}
-					else
-					{
-						NewLibraryName = "lib"+Configurations.second + ".a";
-					}
-				}
-				else if (Configurations.first == MBPM_CompileOutputConfiguration::DynamicDebug || Configurations.first == MBPM_CompileOutputConfiguration::DynamicRelease)
-				{
-					if (MBUtility::IsWindows())
-					{
-						NewLibraryName = Configurations.second + ".dll";
-					}
-					else
-					{
-						NewLibraryName = "lib" + Configurations.second + ".so";
-					}
-				}
-				try
-				{
-					std::string SymlinkName = PacketInstallDirectory + "/MBPM_CompiledLibraries/" + NewLibraryName;
-					std::string TargetName = PacketDirectory + "/MBPM_Builds/";
-					if (std::filesystem::is_symlink(SymlinkName))
-					{
-						std::filesystem::remove(SymlinkName);
-					}
-					std::filesystem::create_symlink(TargetName, SymlinkName);
-				}
-				catch (const std::exception& e)
-				{
-					std::cout << e.what() << std::endl;
-				}
-			}
 			for (auto const& ExportedExecutables : PacketInfo.ExportedTargets)
 			{
 				std::string NewExecutableName = ExportedExecutables;
@@ -1343,6 +1167,41 @@ namespace MBPM
 		}
 		return(ReturnValue);
 	}
+	MBError CompileMBCmake(std::string const& PacketDirectory, std::string const& Configuration, std::vector<std::string> const& Targets)
+	{
+		MBError ReturnValue = false;
+		int CommandReturnValue = 0;
+		CommandReturnValue = std::system(("cmake -S " + PacketDirectory + " -B " + PacketDirectory + "/MBPM_BuildFiles/"+Configuration+" -DCMAKE_BUILD_TYPE="+Configuration).c_str());
+		if (CommandReturnValue != 0)
+		{
+			ReturnValue = false; 
+			return(ReturnValue);
+		}
+		if (Targets.size() == 0)
+		{
+			CommandReturnValue = std::system(("cmake --build " + PacketDirectory + "/MBPM_BuildFiles/"+Configuration).c_str());
+		}
+		else
+		{
+			for (std::string const& Target : Targets)
+			{
+				CommandReturnValue = std::system(("cmake --build " + PacketDirectory + "/MBPM_BuildFiles/" + Configuration + " --target "+Target + " --config "+Configuration).c_str());
+				if (CommandReturnValue != 0)
+				{
+					break;
+				}
+			}
+		}
+		if (CommandReturnValue == 0)
+		{
+			ReturnValue = true;
+		}
+		else
+		{
+			ReturnValue = false;
+		}
+		return(ReturnValue);
+	}
 	MBError CompileAndInstallPacket(std::string const& PacketToCompileDirectory)
 	{
 		MBError ReturnValue = CompilePacket(PacketToCompileDirectory);
@@ -1352,30 +1211,10 @@ namespace MBPM
 		}
 		return(ReturnValue);
 	}
-	std::string h_ConfigurationPostfix(MBPM_CompileOutputConfiguration Configuration)
-	{
-		std::string ReturnValue = "";
-		if (Configuration == MBPM_CompileOutputConfiguration::StaticDebug || Configuration == MBPM_CompileOutputConfiguration::StaticRelease)
-		{
-			ReturnValue += "_S";
-		}
-		else
-		{
-			ReturnValue += "_D";
-		}
-		if(Configuration == MBPM_CompileOutputConfiguration::DynamicDebug || Configuration == MBPM_CompileOutputConfiguration::StaticDebug)
-		{
-			ReturnValue += "D";
-		}
-		else
-		{
-			ReturnValue += "R";
-		}
-		return(ReturnValue);
-	}
 	bool PacketIsPrecompiled(std::string const& PacketDirectoryToCheck, MBError* OutError)
 	{
-		bool ReturnValue = true;
+		bool ReturnValue = false;
+		return(ReturnValue);
 		try
 		{
 			MBPM_PacketInfo PacketInfo = ParseMBPM_PacketInfo(PacketDirectoryToCheck + "/MBPM_PacketInfo");
@@ -1403,53 +1242,9 @@ namespace MBPM
 					return(ReturnValue);
 				}
 			}
-			for (auto const& Configuration : PacketInfo.OutputConfigurationTargetNames)
-			{
-				std::string LibraryName = Configuration.second;
-				if constexpr (MBUtility::IsWindows())
-				{
-					LibraryName = LibraryName + ".lib";
-				}
-				else
-				{
-					LibraryName = "lib" + LibraryName + ".a";
-				}
-				if (!std::filesystem::exists(PacketDirectoryToCheck + "/MBPM_Builds/" + LibraryName))
-				{
-					ReturnValue = false;
-					return(ReturnValue);
-				}
-				if (!std::filesystem::is_regular_file(PacketDirectoryToCheck + "/MBPM_Builds/" + LibraryName))
-				{
-					ReturnValue = false;
-					return(ReturnValue);
-				}
-			}
 			for (size_t i = 0; i < PacketInfo.SubLibraries.size(); i++)
 			{
-				for (size_t j = 0; j < PacketInfo.SubLibraries[j].OutputConfigurations.size(); j++)
-				{
-					std::string LibraryName = PacketInfo.SubLibraries[i].LibraryName;
-					LibraryName += h_ConfigurationPostfix(PacketInfo.SubLibraries[i].OutputConfigurations[j]);
-					if constexpr (MBUtility::IsWindows())
-					{
-						LibraryName = LibraryName + ".lib";
-					}
-					else
-					{
-						LibraryName = "lib" + LibraryName + ".a";
-					}
-					if (!std::filesystem::exists(PacketDirectoryToCheck + "/MBPM_Builds/" + LibraryName))
-					{
-						ReturnValue = false;
-						return(ReturnValue);
-					}
-					if (!std::filesystem::is_regular_file(PacketDirectoryToCheck + "/MBPM_Builds/" + LibraryName))
-					{
-						ReturnValue = false;
-						return(ReturnValue);
-					}
-				}
+				
 			}
 		}
 		catch (std::exception const& e)

@@ -38,3 +38,4 @@ för att compila/updatera alla ett packets dependancys/ dem som skiljer sig frå
 
 
 
+Fix the updated InstallPacket and Compile packet, without supported packet configuration

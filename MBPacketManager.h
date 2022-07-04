@@ -15,15 +15,6 @@
 #include "MB_PacketProtocol.h"
 namespace MBPM
 {
-	enum class MBPM_CompileOutputConfiguration
-	{
-		StaticDebug,
-		StaticRelease,
-		DynamicDebug,
-		DynamicRelease,
-		Embedded,
-		Null,
-	};
 	enum class MBPM_PacketAttribute : uint64_t
 	{
 		TriviallyCompilable,
@@ -34,6 +25,7 @@ namespace MBPM
 		NoSource,
 		Precompiled,
 		NonMBBuild,
+		SubOnly,
 		Null
 	};
 
@@ -42,19 +34,24 @@ namespace MBPM
 	struct MBPM_SubLibrary
 	{
 		std::string LibraryName = "";
-		std::vector<MBPM_CompileOutputConfiguration> OutputConfigurations = {};
+	};
+
+	enum class PacketType
+	{
+		CPP,
+		MBDoc,
+		Unkown,
+		Null
 	};
 	struct MBPM_PacketInfo
 	{
 		std::string PacketName = "";
-		std::string UsedCompiler = "";
+		PacketType Type = PacketType::Null;
 		std::unordered_set<MBPM_PacketAttribute> Attributes = {};
-		std::set<MBPM_CompileOutputConfiguration> SupportedOutputConfigurations = {};
 		//std::vector<MBPM_CompileOutputConfiguration> SupportedOutputConfigurations = {};
 		std::vector<std::string> AdditionalSystemLibraryDependancies = {};
 		std::vector<std::string> PacketDependancies = {};
-		std::map<MBPM_CompileOutputConfiguration, std::string> OutputConfigurationTargetNames = {};
-		std::vector<std::string> ExportedTargets = {}; //Targets som ska komma till pathen, library targets inkluderas ej
+		std::vector<std::string> ExportedTargets = {}; 
 		std::vector<std::string> ExtraIncludeDirectories = {};
 		std::vector<MBPM_SubLibrary> SubLibraries = {};
 	};
@@ -83,11 +80,7 @@ namespace MBPM
 
 	struct MBPM_MakefileGenerationOptions
 	{
-		std::set<MBPM_CompileOutputConfiguration> SupportedLibraryConfigurations = {
-			MBPM_CompileOutputConfiguration::StaticRelease,
-			MBPM_CompileOutputConfiguration::StaticDebug,
-			MBPM_CompileOutputConfiguration::DynamicRelease,
-			MBPM_CompileOutputConfiguration::DynamicDebug };
+
 	};
 	struct MBPM_CmakeProject_TargetData
 	{
@@ -103,7 +96,6 @@ namespace MBPM
 		std::vector<std::string> CommonSources = {};
 		std::vector<std::string> CommonStaticLibrarysNeeded = {};
 		std::vector<std::string> CommonDynamicLibrarysNeeded = {};
-		std::map<MBPM_CompileOutputConfiguration, MBPM_CmakeProject_TargetData> TargetsData = {};
 		std::unordered_set<std::string> ProjectPacketsDepandancies;
 	};
 
@@ -175,6 +167,9 @@ namespace MBPM
 	MBError CompilePacket(std::string const& PacketDirectory);
 	MBError InstallCompiledPacket(std::string const& PacketDirectory);
 
+	MBError CompileMBCmake(std::string const& PacketDirectory, std::string const& Configuration, std::vector<std::string> const& Targets);
+
+	[[deprecated]]
 	MBError CompileAndInstallPacket(std::string const& PacketToCompileDirectory);
 
 	bool PacketIsPrecompiled(std::string const& PacketDirectoryToCheck, MBError* OutError);

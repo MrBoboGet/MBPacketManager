@@ -79,7 +79,7 @@ int main(int argc,const char** argv)
 	//MBUtility::MBStringOutputStream OutStream3(Buffer3);
 	//RawDirectoryInfo.WriteData(&OutStream1);
 	//VirtualDirectoryInfo.WriteData(&OutStream2);
-	//SubVirtualDirectortInfo.WriteData(&OutStream3);
+	//SubVirtualDirectortInfo.WriteData(&OutStream3);	
 	//std::cout << bool(Buffer1 == Buffer2) << std::endl;
 	//std::cout << bool(Buffer1 == Buffer3) << std::endl;
 	//std::exit(0);
@@ -87,7 +87,7 @@ int main(int argc,const char** argv)
 
 	//debug för compile av locala packets
 	//std::filesystem::current_path("C:\\Users\\emanu\\Desktop\\Program\\C++\\MBPlay");
-	//const char* NewArgv[] = { "mbpm","upload","MBDoc","--user","--local"};
+	//const char* NewArgv[] = { "mbpm","compile","MBUtility","-c:Debug","-t:MBUtility"};
 	//argc = sizeof(NewArgv) / sizeof(const char*);
 	//argv = NewArgv;
 	return(MBPM::MBCLI_Main(argc, argv));

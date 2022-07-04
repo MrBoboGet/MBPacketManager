@@ -498,7 +498,7 @@ namespace MBPM
 			DefaultType = PacketLocationType::Remote;
 			DefaultSpecifications += 1;
 		}
-		if (CLIInput.CommandOptions.find("path") != CLIInput.CommandOptions.end())
+		if (CLIInput.CommandOptions.find("localpacket") != CLIInput.CommandOptions.end())
 		{
 			DefaultType = PacketLocationType::Local;
 			DefaultSpecifications += 1;
@@ -1347,14 +1347,14 @@ namespace MBPM
 		}
 		while (NewPacketsToCompile.size() > 0)
 		{
-			std::string CurrentPacket = NewPacketsToCompile.top();
-			NewPacketsToCompile.pop();
-			MBError IsPrecompiledError = true;
-			if (MBPM::PacketIsPrecompiled(InstallDirectory + CurrentPacket + "/",&IsPrecompiledError))
-			{
-				continue;
-			}
-			MBPM::CompileAndInstallPacket(InstallDirectory + CurrentPacket + "/");
+			//std::string CurrentPacket = NewPacketsToCompile.top();
+			//NewPacketsToCompile.pop();
+			//MBError IsPrecompiledError = true;
+			//if (MBPM::PacketIsPrecompiled(InstallDirectory + CurrentPacket + "/",&IsPrecompiledError))
+			//{
+			//	continue;
+			//}
+			//p_CompilePacket(InstallDirectory + CurrentPacket + "/");
 		}
 	}
 	void MBPM_ClI::p_HandleGet(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
@@ -1441,6 +1441,11 @@ namespace MBPM
 		}
 		if (RemotePacket)
 		{
+			if (CommandInput.CommandOptions.find("path") != CommandInput.CommandOptions.end())
+			{
+				AssociatedTerminal->PrintLine("cannot get path of remote packet");
+				return;
+			}
 			MBError NetworkError = m_ClientToUse.Connect(p_GetDefaultPacketHost()); 
 			if (!NetworkError)
 			{
@@ -1494,54 +1499,25 @@ namespace MBPM
 				AssociatedTerminal->PrintLine("Failed to find packet");
 				return;
 			}
-			MBError Result = DownloadDirectory(PacketDirectory, ObjectsToGet, DownloadHandler.get());
+			MBError Result = true;
+			if (CommandInput.CommandOptions.find("path") != CommandInput.CommandOptions.end())
+			{
+				//a absolute packet path always begins with /
+				for (std::string const& PacketPath : ObjectsToGet)
+				{
+					std::filesystem::path PathToPrint = std::filesystem::path(PacketDirectory + PacketPath.substr(1)).lexically_normal();
+					AssociatedTerminal->PrintLine(MBUnicode::PathToUTF8(PathToPrint));
+				}
+			}
+			else 
+			{
+				Result = DownloadDirectory(PacketDirectory, ObjectsToGet, DownloadHandler.get());
+			}
 			if(!Result)
 			{
 				AssociatedTerminal->PrintLine("Error downloading files: " + Result.ErrorMessage);
 			}
 		}
-		//for (size_t i = 0; i < ObjectsToGet.size(); i++)
-		//{
-		//	if (PacketFileInfo.ObjectExists(ObjectsToGet[i]))
-		//	{
-		//
-		//	}
-		//	else
-		//	{
-		//		GetObjectErrors.push_back("Error getting object \"" + ObjectsToGet[i] + "\": Object does not exist");
-		//	}
-		//}
-		//if (PacketFileInfo.ObjectExists(ObjectToGet))
-		//{
-		//	std::string OutputDirectory = "./";
-		//	if (CommandInput.TopCommandArguments.size() > 2)
-		//	{
-		//		OutputDirectory = CommandInput.TopCommandArguments[2];
-		//	}
-		//	const MBPP_FileInfo* ObjectFileInfo = nullptr;
-		//	const MBPP_DirectoryInfoNode* ObjectDirectoryInfo = nullptr;
-		//	if ((ObjectFileInfo = PacketFileInfo.GetFileInfo(ObjectToGet)) != nullptr)
-		//	{
-		//		GetPacketError = m_ClientToUse.DownloadPacketFiles(OutputDirectory, PacketName, { ObjectToGet });
-		//	}
-		//	else if ((ObjectDirectoryInfo = PacketFileInfo.GetDirectoryInfo(ObjectToGet)) != nullptr)
-		//	{
-		//		GetPacketError = m_ClientToUse.DownloadPacketDirectories(OutputDirectory, PacketName, { ObjectToGet });
-		//	}
-		//	else
-		//	{
-		//		AssociatedTerminal->PrintLine("No file named \"" + PacketName+"\"");
-		//	}
-		//	if (!GetPacketError)
-		//	{
-		//		AssociatedTerminal->PrintLine("get failed with error: " + GetPacketError.ErrorMessage);
-		//		return;
-		//	}
-		//}
-		//else
-		//{
-		//	AssociatedTerminal->PrintLine("Package \""+ PacketName +"\" has no filesystem object \""+ ObjectToGet +"\"");
-		//}
 	}
 	std::vector<std::string> h_GetDirectoryFiles(std::string const& DirectoryPath, std::string const& DirectoryPrefix)
 	{
@@ -2000,22 +1976,25 @@ namespace MBPM
 		}
 		for (auto const& Packet : SpecifiedPackets)
 		{
-			AssociatedTerminal->Print(Packet.PacketName + " ");
-			if (Packet.PacketLocation == PacketLocationType::Remote)
+			if (CommandInput.CommandOptions.find("path") == CommandInput.CommandOptions.end())
 			{
-				AssociatedTerminal->Print("Remote ");
-			}
-			else if (Packet.PacketLocation == PacketLocationType::Installed)
-			{
-				AssociatedTerminal->Print("Installed ");
-			}
-			else if (Packet.PacketLocation == PacketLocationType::User)
-			{
-				AssociatedTerminal->Print("User ");
-			}
-			else if (Packet.PacketLocation == PacketLocationType::Local)
-			{
-				AssociatedTerminal->Print("Local ");
+				AssociatedTerminal->Print(Packet.PacketName + " ");
+				if (Packet.PacketLocation == PacketLocationType::Remote)
+				{
+					AssociatedTerminal->Print("Remote ");
+				}
+				else if (Packet.PacketLocation == PacketLocationType::Installed)
+				{
+					AssociatedTerminal->Print("Installed ");
+				}
+				else if (Packet.PacketLocation == PacketLocationType::User)
+				{
+					AssociatedTerminal->Print("User ");
+				}
+				else if (Packet.PacketLocation == PacketLocationType::Local)
+				{
+					AssociatedTerminal->Print("Local ");
+				}
 			}
 			AssociatedTerminal->PrintLine(Packet.PacketURI);
 		}
@@ -2827,7 +2806,6 @@ namespace MBPM
             std::vector<std::string> const& ConfigurationsToCompile)
     {
         MBError ReturnValue = true;
-		bool CmakeCompiled = false;
         for(std::string const& Configuration : ConfigurationsToCompile)
         {
             auto const& ConfigLocation = LanguageConf.Configurations.find(Configuration);
@@ -2845,12 +2823,7 @@ namespace MBPM
             else if(CurrentConfig.Toolchain == "mbpm_cmake")
             {
 				//Kinda hacky to retain backwards compatability, but redundant to compile multiple passes of mbpm_cmake as it implicitly compiles both debug and release
-				if (CmakeCompiled)
-				{
-					continue;
-				}
-				CmakeCompiled = true;
-                ReturnValue = MBPM::CompileAndInstallPacket(MBUnicode::PathToUTF8(PacketDirectory));
+				ReturnValue = MBPM::CompileMBCmake(MBUnicode::PathToUTF8(PacketDirectory), Configuration, TargetsToCompile);
 			}
             else
             {
@@ -2947,6 +2920,12 @@ namespace MBPM
         }
 		MBPM_PacketInfo PacketInfo = p_GetPacketInfo(Identifier, &ReturnValue);
 		if (!ReturnValue) return(ReturnValue);
+		if (PacketInfo.Type != PacketType::CPP)
+		{
+			ReturnValue = false;
+			ReturnValue.ErrorMessage = "Only C++ packets are currently supported for compilation";
+			return(ReturnValue);
+		}
         std::error_code FSError;
         if(std::filesystem::exists( Identifier.PacketURI+"/MBSourceInfo.json",FSError))
         {
@@ -3038,7 +3017,7 @@ namespace MBPM
 				{
 					//TODO Inefficient accessing of dictionary
 					//TODO checking wheter or not a config actually exists in the specified configurations is a bit tedious, maybe should be checked att parse time and assumed?
-					for (std::string const& DefaultBuild: UserInfo.Configurations["C++"].DefaultConfigs)
+					for (std::string const& DefaultBuild : UserInfo.Configurations["C++"].DefaultConfigs)
 					{
 						if (UserInfo.Configurations["C++"].Configurations.find(DefaultBuild) == UserInfo.Configurations["C++"].Configurations.end())
 						{

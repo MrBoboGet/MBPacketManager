@@ -1,0 +1,13 @@
+
+mbpm install no longer compiles the downloaded packet or it's dependancies. This is mainly to comply with the philosophy of @(/{MBBuild}). Use 
+```
+mbpm compile {downloaded packet} --dependancies and 
+mbpm compile {downloaded packet} to 
+```
+to get the same functionality.
+
+Added PacketType field to MBPM_PacketInfo to distinguish between different types. Current supported PacketTypes are MBDoc and C++.
+
+Added new PacketAttribute, "SubOnly", which indicates that the packet itself isn't a library, and contains only sub libraries.
+
+Removed OutputConfigurations,OutputTargetNames fields from MBPM_PacketInfo, also to comply with the philosophy of compilation in @(/{MBBuild}).
