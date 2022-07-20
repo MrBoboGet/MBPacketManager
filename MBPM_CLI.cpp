@@ -343,6 +343,20 @@ namespace MBPM
 		}
 		return(ReturnValue);
 	}
+	std::vector<PacketIdentifier> MBPM_ClI::p_UnrollPacketDependancyInfo(std::map<std::string, MBPM_PacketDependancyRankInfo> const& InPackets)
+	{
+		std::vector<PacketIdentifier> ReturnValue;
+		std::set<MBPM_PacketDependancyRankInfo> OrderedPackets;
+		for (auto const& Packet : InPackets)
+		{
+			OrderedPackets.insert(Packet.second);
+		}
+		for (auto const& Packet : OrderedPackets)
+		{
+			ReturnValue.push_back(p_GetInstalledPacket(Packet.PacketName));
+		}
+		return(ReturnValue);
+	}
 	std::vector<PacketIdentifier> MBPM_ClI::p_GetInstalledPackets()
 	{
 		std::vector<PacketIdentifier> ReturnValue = {};
@@ -2445,11 +2459,36 @@ namespace MBPM
                     continue;
                 }
                 MBPM_FileInfoExcluder Excluder(Packet.PacketURI+"/MBPM_FileInfoIgnore");
+				MBError DependanciesError = true;
                 std::filesystem::recursive_directory_iterator PacketDirectoryIterator(Packet.PacketURI);
                 MBParsing::JSONObject SourceInfo(MBParsing::JSONObjectType::Aggregate);
                 SourceInfo["Language"] = "C++";
                 SourceInfo["ExtraIncludes"] = PacketInfo.ExtraIncludeDirectories; 
-                SourceInfo["Dependancies"] = PacketInfo.PacketDependancies;
+                //SourceInfo["Dependancies"] = PacketInfo.PacketDependancies;
+				std::vector<std::string> MissingPackets;
+				std::vector<PacketIdentifier> FirstDegreeDependancies;
+				for (std::string const& PacketName: PacketInfo.PacketDependancies)
+				{
+					FirstDegreeDependancies.push_back(p_GetInstalledPacket(PacketName));
+				}
+				auto DependancyInfo = p_GetPacketDependancieInfo(FirstDegreeDependancies, DependanciesError, &MissingPackets);
+				if (!DependanciesError)
+				{
+					AssociatedTerminal->PrintLine("Error with constructing source info: missing dependancies:");
+					for (size_t i = 0; i < MissingPackets.size(); i++)
+					{
+						AssociatedTerminal->PrintLine(MissingPackets[i]);
+					}
+					continue;
+				}
+				std::vector<PacketIdentifier> AllDependancies = p_UnrollPacketDependancyInfo(DependancyInfo);
+				std::vector<std::string> DependancyNames;
+				for (PacketIdentifier const& PacketToInsert : AllDependancies)
+				{
+					DependancyNames.push_back(PacketToInsert.PacketName);
+				}
+				std::reverse(DependancyNames.begin(), DependancyNames.end());
+				SourceInfo["Dependancies"] = DependancyNames;
                 std::vector<std::string> AllSources;
                 for(auto const& Entry : PacketDirectoryIterator)
                 {

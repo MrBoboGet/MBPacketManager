@@ -39,3 +39,17 @@ för att compila/updatera alla ett packets dependancys/ dem som skiljer sig frå
 
 
 Fix the updated InstallPacket and Compile packet, without supported packet configuration
+
+Probably something that should be a part of an eventual MBBuild project
+instead, but requiring that all projects use the same compilation
+configurartion quickly leads to a roadblock with ffmpeg/cryptopp/assimp etc
+etc. Being able specify which dependancies use which configurations is probably
+needed.
+
+There should exist a way to export a specific compilation instead of being
+forced to edit the MBCompileConfig every time.
+
+Add dependancy depth for both dependants and dependees. The main reason for
+this would be to for example more cleary see which packets need to be changed
+when updating a packet, a correctly configured, but not strictly enforcable,
+packet structure entails that only packets of depth 1 need to be updated.
