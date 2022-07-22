@@ -1,6 +1,7 @@
 #include "MBPacketManager.h"
 #include "MBParsing/MBParsing.h"
 #include "MBUnicode/MBUnicode.h"
+#include "MBUtility/MBErrorHandling.h"
 #include <assert.h>
 #include <exception>
 #include <fstream>
@@ -309,157 +310,7 @@ namespace MBPM
 		return(ReturnValue);
 	}
     
-    //MBPM Build
-    CompileConfiguration ParseCompileConfiguration(MBParsing::JSONObject const& ObjectToParse)
-    {
-        CompileConfiguration ReturnValue;
-        ReturnValue.Toolchain = ObjectToParse["Toolchain"].GetStringData();  
-        if(ObjectToParse.HasAttribute("CompileFlags"))
-        {
-            for(MBParsing::JSONObject const& Flag : ObjectToParse["CompileFlags"].GetArrayData())
-            {
-                ReturnValue.CompileFlags.push_back(Flag.GetStringData());
-            }   
-        }
-        if(ObjectToParse.HasAttribute("LinkFlags"))
-        {
-            for(MBParsing::JSONObject const& Flag : ObjectToParse["LinkFlags"].GetArrayData())
-            {
-                ReturnValue.LinkFlags.push_back(Flag.GetStringData());
-            } 
-        }
-        return(ReturnValue);   
-    }
-    LanguageConfiguration ParseLanguageConfiguration(MBParsing::JSONObject const& ObjectToParse)
-    {
-        LanguageConfiguration ReturnValue;
-		ReturnValue.DefaultExportConfig = ObjectToParse["DefaultExportConfig"].GetStringData();
-        auto const& DefaultConfigs = ObjectToParse["DefaultConfigs"].GetArrayData(); 
-        for(MBParsing::JSONObject const& ConfigName : DefaultConfigs)
-        {
-            ReturnValue.DefaultConfigs.push_back(ConfigName.GetStringData());   
-        }
-        auto const& Configs = ObjectToParse["CompileConfigurations"].GetMapData(); 
-        for(auto const& CompileConfiguration  : Configs)
-        {
-            ReturnValue.Configurations[CompileConfiguration.first] = ParseCompileConfiguration(CompileConfiguration.second);
-        }
-        return(ReturnValue);
-    }
-    MBError ParseUserConfigurationInfo(const void* Data,size_t DataSize,UserConfigurationsInfo& OutInfo)
-    {
-        MBError ReturnValue = true;
-        UserConfigurationsInfo Result;
-        try 
-        {
-            MBParsing::JSONObject JSONData = MBParsing::ParseJSONObject(Data,DataSize,0,nullptr,&ReturnValue);
-            if(!ReturnValue)
-            {
-                return(ReturnValue);   
-            }
-            auto const& ConfigMap = JSONData["LanguageConfigs"].GetMapData();
-            for(auto const& Object : ConfigMap)
-            {
-                Result.Configurations[Object.first] = ParseLanguageConfiguration(Object.second);
-            }
-        }
-        catch(std::exception const& Exception)
-        {
-            ReturnValue = false;
-            ReturnValue.ErrorMessage = Exception.what();    
-        }
-        if(ReturnValue)
-        {
-            OutInfo = std::move(Result);   
-        }
-        return(ReturnValue);        
-    }
-    MBError ParseUserConfigurationInfo(std::filesystem::path const& FilePath,UserConfigurationsInfo &OutInfo)
-    {
-        MBError ReturnValue = true;
-        std::string TotalData = MBUtility::ReadWholeFile(MBUnicode::PathToUTF8(FilePath));
-        ReturnValue = ParseUserConfigurationInfo(TotalData.data(),TotalData.size(),OutInfo);
-        return(ReturnValue);        
-    }
-    //
-    TargetType h_StringToTargetType(std::string const& StringToConvert)
-    {
-        TargetType ReturnValue = TargetType::Null;
-        if(StringToConvert == "Executable")
-        {
-            ReturnValue = TargetType::Executable;   
-        }
-        else if(StringToConvert == "Library")
-        {
-            ReturnValue = TargetType::Library;   
-        }
-        else if(StringToConvert == "StaticLibrary")
-        {
-            ReturnValue = TargetType::StaticLibrary;
-        }
-        else if(StringToConvert == "DynamicLibrary")
-        {
-            ReturnValue = TargetType::DynamicLibrary;
-        }
-        else
-        {
-            throw std::runtime_error("Invalid target type: "+StringToConvert);
-        }
-        return(ReturnValue);       
-    }
-    MBError ParseSourceInfo(const void* Data,size_t DataSize,SourceInfo& OutInfo)
-    {
-        MBError ReturnValue = true;
-        SourceInfo Result;
-        try
-        {
-            MBParsing::JSONObject JSONData = MBParsing::ParseJSONObject(Data,DataSize,0,nullptr,&ReturnValue);
-            if(!ReturnValue)
-            {
-                return(ReturnValue);   
-            }
-            Result.Language = JSONData["Language"].GetStringData();
-            auto const& ExtraIncludes = JSONData["ExtraIncludes"].GetArrayData();
-            for(MBParsing::JSONObject const& Include : ExtraIncludes)
-            {
-                Result.ExtraIncludes.push_back(Include.GetStringData()); 
-            }
-            auto const& Dependancies = JSONData["Dependancies"].GetArrayData();
-            for(MBParsing::JSONObject const& Dependancy : Dependancies)
-            {
-                Result.ExternalDependancies.push_back(Dependancy.GetStringData());   
-            }
-            auto const& Targets = JSONData["Targets"].GetMapData();
-            for(auto const& TargetData : Targets)
-            {
-                Target TargetInfo;
-                TargetInfo.Type = h_StringToTargetType(TargetData.second["TargetType"].GetStringData());
-                for(auto const& Source : TargetData.second["Sources"].GetArrayData())
-                {
-                    TargetInfo.SourceFiles.push_back(Source.GetStringData());   
-                }
-                Result.Targets[TargetData.first] = std::move(TargetInfo);
-            }
-        }
-        catch(std::exception const& Exception)
-        {
-            ReturnValue = false;
-            ReturnValue.ErrorMessage = Exception.what();    
-        }
-        if(ReturnValue)
-		{
-		OutInfo = std::move(Result);
-		}
-		return(ReturnValue);
-	}
-	MBError ParseSourceInfo(std::filesystem::path const& FilePath, SourceInfo& OutInfo)
-	{
-		MBError ReturnValue = true;
-		std::string TotalData = MBUtility::ReadWholeFile(MBUnicode::PathToUTF8(FilePath));
-		ReturnValue = ParseSourceInfo(TotalData.data(), TotalData.size(), OutInfo);
-		return(ReturnValue);
-	}
-	//MBPM Build
+    
 
 
 
@@ -1258,4 +1109,306 @@ namespace MBPM
 		}
 		return(ReturnValue);
 	}
+
+    //BEGIN PacketRetriever
+    PacketIdentifier PacketRetriever::p_GetInstalledPacket(std::string const& PacketName)
+    {
+        PacketIdentifier ReturnValue;
+        ReturnValue.PacketName = PacketName;
+        ReturnValue.PacketLocation = PacketLocationType::Installed;
+        ReturnValue.PacketURI = GetSystemPacketsDirectory();
+        if (ReturnValue.PacketURI.back() != '/')
+        {
+            ReturnValue.PacketURI += "/";
+        }
+        if (std::filesystem::exists(ReturnValue.PacketURI + PacketName) && std::filesystem::exists(ReturnValue.PacketURI + PacketName + "/MBPM_PacketInfo"))
+        {
+            ReturnValue.PacketURI = ReturnValue.PacketURI + PacketName + "/";
+        }
+        else
+        {
+            ReturnValue = PacketIdentifier();
+        }
+        return(ReturnValue);
+    }
+    std::vector<PacketIdentifier> PacketRetriever::p_GetUserPackets()
+    {
+        std::vector<PacketIdentifier> ReturnValue = {};
+        std::set<std::string> SearchDirectories = {};
+        std::string PacketInstallDirectory = GetSystemPacketsDirectory();
+        //l�ser in config filen
+        if (std::filesystem::exists(PacketInstallDirectory + "/LocalUploadPackets.txt"))
+        {
+            std::ifstream UploadPacketsFile = std::ifstream(PacketInstallDirectory + "/LocalUploadPackets.txt",std::ios::in);
+            std::string CurrentLine = "";
+            while (std::getline(UploadPacketsFile,CurrentLine))
+            {
+                SearchDirectories.insert(CurrentLine);
+            }
+        }
+        for (std::string const& Directories : SearchDirectories)
+        {
+            std::filesystem::directory_iterator CurrentDirectoryIterator = std::filesystem::directory_iterator(Directories);
+            for (auto const& Entries : CurrentDirectoryIterator)
+            {
+                if (Entries.is_directory())
+                {
+                    std::string EntryPath = MBUnicode::PathToUTF8(Entries.path())+"/";
+                    if (std::filesystem::exists(EntryPath+"/MBPM_PacketInfo"))
+                    {
+                        MBPM::MBPM_PacketInfo CurrentPacket = MBPM::ParseMBPM_PacketInfo(EntryPath + "/MBPM_PacketInfo");
+                        if (CurrentPacket.PacketName != "")
+                        {
+                            PacketIdentifier NewPacket;
+                            NewPacket.PacketName = CurrentPacket.PacketName;
+                            NewPacket.PacketURI = EntryPath;
+                            NewPacket.PacketLocation = PacketLocationType::User;
+                            ReturnValue.push_back(NewPacket);
+                        }
+                    }
+                }
+            }
+        }
+
+        return(ReturnValue);
+    }
+    MBPM::MBPM_PacketInfo PacketRetriever::p_GetPacketInfo(PacketIdentifier const& PacketToInspect, MBError* OutError)
+	{
+		MBPM::MBPM_PacketInfo ReturnValue;
+		MBError Error = true;
+		if (PacketToInspect.PacketLocation == PacketLocationType::Installed)
+		{
+			std::string CurrentURI = PacketToInspect.PacketURI;
+			if (CurrentURI == "")
+			{
+				CurrentURI = GetSystemPacketsDirectory() + "/" + PacketToInspect.PacketName+"/";
+			}
+			if (std::filesystem::exists(CurrentURI + "/MBPM_PacketInfo") && std::filesystem::is_regular_file(CurrentURI + "/MBPM_PacketInfo"))
+			{
+				ReturnValue = MBPM::ParseMBPM_PacketInfo(CurrentURI + "/MBPM_PacketInfo");
+			}
+			else
+			{
+				Error = false;
+				Error.ErrorMessage = "Can't find user packet";
+			}
+		}
+		else if (PacketToInspect.PacketLocation == PacketLocationType::Remote)
+		{
+			Error = false;
+			//TODO att implementera
+			Error.ErrorMessage = "Packet info of remote packet not implemented yet xd";
+		}
+		else if (PacketToInspect.PacketLocation == PacketLocationType::Local)
+		{
+			if (std::filesystem::exists(PacketToInspect.PacketURI + "/MBPM_PacketInfo") && std::filesystem::is_regular_file(PacketToInspect.PacketURI + "/MBPM_PacketInfo"))
+			{
+				ReturnValue = MBPM::ParseMBPM_PacketInfo(PacketToInspect.PacketURI + "/MBPM_PacketInfo");
+			}
+			else
+			{
+				Error = false;
+				Error.ErrorMessage = "Can't find user packet";
+			}
+		}
+		else if (PacketToInspect.PacketLocation == PacketLocationType::User)
+		{
+			if (std::filesystem::exists(PacketToInspect.PacketURI + "/MBPM_PacketInfo") && std::filesystem::is_regular_file(PacketToInspect.PacketURI + "/MBPM_PacketInfo"))
+			{
+				ReturnValue = MBPM::ParseMBPM_PacketInfo(PacketToInspect.PacketURI + "/MBPM_PacketInfo");
+			}
+			else
+			{
+				Error = false;
+				Error.ErrorMessage = "Can't find user packet";
+			}
+		}
+		if (!Error && OutError != nullptr)
+		{
+			*OutError = std::move(Error);
+		}
+		return(ReturnValue);
+	}
+    uint32_t h_GetPacketDepth2(std::map<std::string, MBPM_PacketDependancyRankInfo>& PacketInfoToUpdate, std::string const& PacketName, std::vector<std::string>* OutDependancies)
+    {
+        if (PacketInfoToUpdate.find(PacketName) == PacketInfoToUpdate.end())
+        {
+            OutDependancies->push_back(PacketName);
+            return(0);
+        }
+        MBPM_PacketDependancyRankInfo& PacketToEvaluate = PacketInfoToUpdate[PacketName];
+        if (PacketToEvaluate.DependancyDepth != -1)
+        {
+            return(PacketToEvaluate.DependancyDepth);
+        }
+        else
+        {
+            std::vector<std::string>& PacketDependancies = PacketToEvaluate.PacketDependancies;
+            if (PacketDependancies.size() == 0)
+            {
+                PacketToEvaluate.DependancyDepth = 0;
+                return(0);
+            }
+            else
+            {
+                uint32_t DeepestDepth = 0;
+                for (size_t i = 0; i < PacketDependancies.size(); i++)
+                {
+                    uint32_t NewDepth = h_GetPacketDepth2(PacketInfoToUpdate, PacketDependancies[i], OutDependancies) + 1;
+                    if (NewDepth > DeepestDepth)
+                    {
+                        DeepestDepth = NewDepth;
+                    }
+                }
+                PacketToEvaluate.DependancyDepth = DeepestDepth;
+                return(DeepestDepth);
+            }
+        }
+    }
+    std::map<std::string, MBPM_PacketDependancyRankInfo> PacketRetriever::p_GetPacketDependancieInfo(
+            std::vector<PacketIdentifier> const& InPacketsToCheck,
+            MBError& OutError,
+            std::vector<std::string>* OutMissing)
+    {
+        std::map<std::string, MBPM_PacketDependancyRankInfo> ReturnValue;
+        std::vector<PacketIdentifier> PacketsToCheck = InPacketsToCheck;
+        std::set<std::string> TotalPacketNames;
+        while (PacketsToCheck.size() > 0)
+        {
+            PacketIdentifier NewPacket = PacketsToCheck.back();
+            PacketsToCheck.pop_back();
+            if (ReturnValue.find(NewPacket.PacketName) != ReturnValue.end())
+            {
+                continue;
+            }
+            MBPM_PacketInfo PacketInfo = p_GetPacketInfo(NewPacket, &OutError);
+            assert(PacketInfo.PacketName != "");//contract by p_GetPacketInfo
+            if (!OutError)
+            {
+                return(ReturnValue);
+            }
+            //TotalPacketNames.push_back(PacketInfo.PacketName);
+            TotalPacketNames.insert(PacketInfo.PacketName);
+            MBPM_PacketDependancyRankInfo NewDependancyInfo;
+            NewDependancyInfo.PacketName = PacketInfo.PacketName;
+            NewDependancyInfo.PacketDependancies = PacketInfo.PacketDependancies;
+            for (auto const& Dependancy : NewDependancyInfo.PacketDependancies)
+            {
+                if (TotalPacketNames.find(Dependancy) == TotalPacketNames.end())
+                {
+                    PacketIdentifier NewPacketToCheck;
+                    NewPacketToCheck = p_GetInstalledPacket(Dependancy);
+                    if (NewPacketToCheck.PacketName == "")
+                    {
+                        OutMissing->push_back(Dependancy);
+                    }
+                    else
+                    {
+                        TotalPacketNames.insert(Dependancy);
+                        PacketsToCheck.push_back(std::move(NewPacketToCheck));
+                    }
+                }
+            }
+            ReturnValue[NewDependancyInfo.PacketName] = std::move(NewDependancyInfo);
+        }
+        for (auto const& Name : TotalPacketNames)
+        {
+			h_GetPacketDepth2(ReturnValue, Name, OutMissing);
+        }
+        if (OutMissing->size() > 0)
+        {
+            OutError = false;
+            OutError.ErrorMessage = "Missing dependancies";
+        }
+        return(ReturnValue);
+    }
+    std::vector<PacketIdentifier> PacketRetriever::p_GetPacketDependancies_DependancyOrder(std::vector<PacketIdentifier> const& InPacketsToCheck,MBError& OutError, std::vector<std::string>* MissingPackets)
+    {
+        std::vector<PacketIdentifier> ReturnValue;
+
+        std::map<std::string, MBPM_PacketDependancyRankInfo> PacketDependancyInfo = p_GetPacketDependancieInfo(InPacketsToCheck, OutError, MissingPackets);
+        std::set<MBPM_PacketDependancyRankInfo> OrderedPackets;
+        for (auto const& Packet : PacketDependancyInfo)
+        {
+            OrderedPackets.insert(Packet.second);
+        }
+        for (auto const& Packet : OrderedPackets)
+        {
+            bool Continue = false;
+            PacketIdentifier NewIdentifier = p_GetInstalledPacket(Packet.PacketName);
+            for (size_t i = 0; i < InPacketsToCheck.size(); i++)
+            {
+                if (Packet.PacketName == InPacketsToCheck[i].PacketName)
+                {
+                    Continue = true;
+                    break;
+                }
+            }
+            if (Continue)
+            {
+                continue;
+            }
+            ReturnValue.push_back(NewIdentifier);
+        }
+        return(ReturnValue);
+    }
+    PacketIdentifier PacketRetriever::p_GetUserPacket(std::string const& PacketName)
+    {
+        PacketIdentifier ReturnValue;
+        std::vector<PacketIdentifier> AllUserPackets = p_GetUserPackets();
+        for (size_t i = 0; i < AllUserPackets.size(); i++)
+        {
+            if (AllUserPackets[i].PacketName == PacketName)
+            {
+                ReturnValue = AllUserPackets[i];
+            }
+        }
+        return(ReturnValue);
+    }
+    PacketIdentifier PacketRetriever::p_GetLocalPacket(std::string const& PacketPath)
+    {
+        PacketIdentifier ReturnValue;
+        if (std::filesystem::exists(PacketPath + "/MBPM_PacketInfo"))
+        {
+            MBPM::MBPM_PacketInfo PacketInfo = MBPM::ParseMBPM_PacketInfo(PacketPath+"/MBPM_PacketInfo");
+            if (PacketInfo.PacketName != "")
+            {
+                ReturnValue.PacketName = PacketInfo.PacketName;
+                ReturnValue.PacketURI = PacketPath;
+                ReturnValue.PacketLocation = PacketLocationType::Local;
+            }
+        }
+        return(ReturnValue);
+    }
+    PacketIdentifier PacketRetriever::p_GetRemotePacketIdentifier(std::string const& PacketName)
+    {
+        PacketIdentifier ReturnValue;
+        ReturnValue.PacketLocation = PacketLocationType::Remote;
+        ReturnValue.PacketName = PacketName;
+        ReturnValue.PacketURI = "default";
+        return(ReturnValue);
+    }
+    PacketIdentifier PacketRetriever::GetInstalledPacket(std::string const& PacketName)
+    {
+        return(p_GetInstalledPacket(PacketName));
+    }
+    PacketIdentifier PacketRetriever::GetUserPacket(std::string const& PacketName)
+    {
+        return(p_GetUserPacket(PacketName)); 
+    }
+    std::vector<PacketIdentifier> PacketRetriever::GetPacketDependancies(PacketIdentifier const& Packet)
+    {
+        MBError Result = true;
+        std::vector<std::string> MissingPackets;
+        
+        std::vector<PacketIdentifier> ReturnValue = p_GetPacketDependancies_DependancyOrder({Packet},Result,&MissingPackets);
+        return(ReturnValue);
+    }
+    MBPM_PacketInfo PacketRetriever::GetPacketInfo(PacketIdentifier const& PacketToRetrieve)
+    {
+        MBError Result = true;
+        return(p_GetPacketInfo(PacketToRetrieve,&Result));
+    }
+
+    //END PacketRetriever
 };

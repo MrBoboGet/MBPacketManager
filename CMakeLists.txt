@@ -8,6 +8,7 @@ set(MBPM_DEPENDENCIES
 	"MBCLI"
 	"MrBigInt"
 	"MBUnicode"
+	"MBSystem"
 	"MBParsing"
 	"cryptopp"
 	"MBUtility"
@@ -91,16 +92,16 @@ endmacro()
 ##END MBPM_VARIABLES
 set(PROJECT_SOURCES 
 
-	"${CMAKE_CURRENT_SOURCE_DIR}//MBPacketManager.cpp"
-	#"${CMAKE_CURRENT_SOURCE_DIR}/MBCLI/MBCLI.cpp"
-	"${CMAKE_CURRENT_SOURCE_DIR}//MBPM_CLI.cpp"
-	"${CMAKE_CURRENT_SOURCE_DIR}//MB_PacketProtocol.cpp"
-	#"${CMAKE_CURRENT_SOURCE_DIR}/MBCLI/MBCLI.cpp"
+	"${CMAKE_CURRENT_SOURCE_DIR}/MBPacketManager.cpp"
+	"${CMAKE_CURRENT_SOURCE_DIR}/MBPM_CLI.cpp"
+	"${CMAKE_CURRENT_SOURCE_DIR}/MB_PacketProtocol.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/MBBuild/MBBuild.cpp"
 )
 set(PROJECT_HEADERS 
-	"${CMAKE_CURRENT_SOURCE_DIR}//MBPacketManager.h"
-	"${CMAKE_CURRENT_SOURCE_DIR}//MBPM_CLI.h"
-	"${CMAKE_CURRENT_SOURCE_DIR}//MB_PacketProtocol.h"
+	"${CMAKE_CURRENT_SOURCE_DIR}/MBPacketManager.h"
+	"${CMAKE_CURRENT_SOURCE_DIR}/MBPM_CLI.h"
+	"${CMAKE_CURRENT_SOURCE_DIR}/MB_PacketProtocol.h"
+
 )
 set(COMMON_FILES ${PROJECT_SOURCES} ${PROJECT_HEADERS})
 set(COMMON_DYNAMIC_LIBRARIES 
@@ -108,6 +109,7 @@ set(COMMON_DYNAMIC_LIBRARIES
 set(COMMON_STATIC_LIBRARIES
 )
 set(EXECUTABLE_FILES "${CMAKE_CURRENT_SOURCE_DIR}//MBPMCLIMain.cpp")
+set(MBBUILD_EXECUTABLE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/MBBuild/MBBuildMain.cpp")
 if(WIN32)
 	list(APPEND "COMMON_STATIC_LIBRARIES" "Ws2_32")
 else()
@@ -119,9 +121,13 @@ add_library(MBPacketManager STATIC ${COMMON_FILES})
 MBPM_ApplyConfiguration("MBPacketManager")
 target_compile_features("MBPacketManager" PRIVATE cxx_std_17)
 
-add_executable("mbpm" ${COMMON_FILES} ${EXECUTABLE_FILES})
+add_executable("mbpm" ${COMMON_FILES}  ${EXECUTABLE_FILES})
 MBPM_ApplyConfiguration("mbpm")
 target_compile_features("mbpm" PRIVATE cxx_std_17)
+
+add_executable("mbbuild" ${COMMON_FILES} ${MBBUILD_EXECUTABLE_FILES})
+MBPM_ApplyConfiguration("mbbuild")
+target_compile_features("mbbuild" PRIVATE cxx_std_17)
 
 add_executable("mbpm_test" ${COMMON_FILES} "MBPM_TestMain.cpp")
 MBPM_ApplyConfiguration("mbpm_test")

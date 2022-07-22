@@ -4,6 +4,6 @@
 	"Attributes":["Embeddable"],
 	"OutputConfigurations":["StaticDebug","StaticRelease"],
 	"OutputTargetNames":{"StaticRelease":"MBPacketManager_SR","StaticDebug":"MBPacketManager_SD"},
-	"ExportedExecutableTargets":["mbpm"],
-	"Dependancies":["MrBoboSockets","MBParsing","MBCrypto","MBUtility","MBUnicode","MBCLI"]
+	"ExportedExecutableTargets":["mbpm","mbbuild"],
+	"Dependancies":["MrBoboSockets","MBParsing","MBCrypto","MBUtility","MBSystem","MBUnicode","MBCLI"]
 }

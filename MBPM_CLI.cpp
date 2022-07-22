@@ -12,6 +12,8 @@
 #include <MBUtility/MBFiles.h>
 #include <system_error>
 #include <unordered_set>
+
+#include "MBBuild/MBBuild.h"
 //#include "MBCLI/"
 
 namespace MBPM
@@ -2719,235 +2721,7 @@ namespace MBPM
 	{
 		return(MBPM::GenerateCmakeFile(PacketDirectory));
 	} 
-    MBError CompileMBBuild_Cpp_GCC(
-            std::filesystem::path const& PacketDirectory,
-            std::string const& PacketInstallDirectory,
-            MBBuildCompileFlags Flags,
-            SourceInfo const& PacketSource,
-            std::vector<std::string> const& TargetsToCompile,
-            CompileConfiguration const& CompileConf,
-            std::string const& ConfName)
-    {
-        MBError ReturnValue = true;
-        std::error_code FSError;
-        std::vector<std::string> TotalSources;
-        std::filesystem::path PreviousDir = std::filesystem::current_path();
-        for(std::string const& TargetName : TargetsToCompile)
-        {
-            auto const& TargetPosition = PacketSource.Targets.find(TargetName);
-            if(TargetPosition == PacketSource.Targets.end())
-            {
-                ReturnValue = false;
-                ReturnValue.ErrorMessage = "Invalid target for source info: "+TargetName;
-                return(ReturnValue);
-            }
-            Target const& TargetInfo = TargetPosition->second;
-            TotalSources.insert(TotalSources.end(),TargetInfo.SourceFiles.begin(),TargetInfo.SourceFiles.end());
-        }
-        std::sort(TotalSources.begin(),TotalSources.end());
-        size_t NewSize = std::unique(TotalSources.begin(),TotalSources.end())-TotalSources.begin();
-        std::string CompileSourcesCommand = "g++ -c -I"+PacketInstallDirectory+" ";
-        //NOTE allow this part to throw, filesystem error att this point could potentially destroy the current working directory
-		bool CreateResult = std::filesystem::directory_entry(PacketDirectory / ("MBPM_Builds/" + ConfName)).is_directory()||std::filesystem::create_directories(PacketDirectory / ("MBPM_Builds/" + ConfName));
-		if (!CreateResult)
-		{
-			ReturnValue = false;
-			ReturnValue.ErrorMessage = "Failed to create direcory for packet";
-			return(ReturnValue);
-		}
-        std::filesystem::current_path(PacketDirectory/("MBPM_Builds/"+ConfName));
-        for(size_t i = 0; i < NewSize;i++)
-        {
-            CompileSourcesCommand += "../../"+TotalSources[i]+" "; 
-        }
-        for(std::string const& ExtraInclude : PacketSource.ExtraIncludes)
-        {
-            CompileSourcesCommand += "-I"+ExtraInclude;   
-        }
-		for (std::string const& ExtraArgument : CompileConf.CompileFlags)
-		{
-			CompileSourcesCommand += ExtraArgument+" ";
-		}
-        int CompileResult = std::system(CompileSourcesCommand.c_str());
-        if(CompileResult != 0)
-        {
-            ReturnValue = false;
-            ReturnValue.ErrorMessage = "Error compiling sources for packet with configuration \""+ConfName+"\"";
-            std::filesystem::current_path(PreviousDir);
-            return(ReturnValue);
-        }
-        for(std::string const& TargetName : TargetsToCompile)
-        {
-            Target const& TargetInfo = PacketSource.Targets.at(TargetName);
-            if(TargetInfo.Type == TargetType::Executable)
-            {
-                std::string CompileExecutableString = "g++ -o "+TargetName+".exe ";
-                for(std::string const& SourceFile : TargetInfo.SourceFiles)
-                {
-					//Extremely innefecient
-					CompileExecutableString += MBUnicode::PathToUTF8(std::filesystem::path(SourceFile.substr(1)).replace_extension("o")) + " ";
-                }
-                for(std::string const& Dependancy : PacketSource.ExternalDependancies)
-                {
-					CompileExecutableString += "-L"+PacketInstallDirectory+"/"+Dependancy+"/MBPM_Builds/"+ConfName+" ";
-					CompileExecutableString += "-l"+Dependancy+" ";
-                }
-				for (std::string const& ExtraArgument : CompileConf.LinkFlags)
-				{
-					CompileExecutableString += ExtraArgument + " ";
-				}
-                int LinkResult = std::system(CompileExecutableString.c_str());
-                if(LinkResult != 0)
-                {
-                    ReturnValue = false;
-                    ReturnValue.ErrorMessage = "Error linking target: "+TargetName;   
-                }
-            }
-            else if(TargetInfo.Type == TargetType::Library || TargetInfo.Type == TargetType::StaticLibrary)
-            {
-				std::string CreateLibraryCommand = "ar rcs lib"+TargetName + ".a ";
-				for (std::string const& Source : TargetInfo.SourceFiles)
-				{
-					//assumes that Source starts with /, canonical packet path
-					std::filesystem::path AbsolutePath = Source.substr(1);
-					AbsolutePath.replace_extension("o");
-					CreateLibraryCommand += MBUnicode::PathToUTF8(AbsolutePath)+" ";
-				}
-				int CreateStaticLibraryResult = std::system(CreateLibraryCommand.c_str());
-				if (CreateStaticLibraryResult != 0)
-				{
-					ReturnValue = false;
-					ReturnValue.ErrorMessage = "Failed creating archive for target " + TargetName;
-				}
-            }
-            else if(TargetInfo.Type == TargetType::DynamicLibrary)
-            {
-                ReturnValue = false;
-                ReturnValue.ErrorMessage = "Invalid target type, dynamic library not supported yet";   
-            }
-            if(!ReturnValue)
-            {
-                std::filesystem::current_path(PreviousDir);
-                return ReturnValue;
-            }
-        }
-        std::filesystem::current_path(PreviousDir);
-        return(ReturnValue);       
-    }
-
-    MBError CompileMBBuild_Cpp(
-            std::filesystem::path const& PacketDirectory,
-            std::string const& PacketInstallDirectory,
-            MBBuildCompileFlags Flags,
-            LanguageConfiguration const& LanguageConf,
-            SourceInfo const& PacketSource,
-            std::vector<std::string> const& TargetsToCompile,
-            std::vector<std::string> const& ConfigurationsToCompile)
-    {
-        MBError ReturnValue = true;
-        for(std::string const& Configuration : ConfigurationsToCompile)
-        {
-            auto const& ConfigLocation = LanguageConf.Configurations.find(Configuration);
-            if(ConfigLocation == LanguageConf.Configurations.end())
-            {
-                ReturnValue = false;
-                ReturnValue.ErrorMessage = "Cannot find configuration \""+Configuration+"\""; 
-                return(ReturnValue);
-            } 
-            CompileConfiguration const& CurrentConfig = ConfigLocation->second;
-            if(CurrentConfig.Toolchain == "gcc")
-            {
-                ReturnValue = CompileMBBuild_Cpp_GCC(PacketDirectory,PacketInstallDirectory,Flags,PacketSource,TargetsToCompile,CurrentConfig,Configuration);
-            }
-            else if(CurrentConfig.Toolchain == "mbpm_cmake")
-            {
-				//Kinda hacky to retain backwards compatability, but redundant to compile multiple passes of mbpm_cmake as it implicitly compiles both debug and release
-				ReturnValue = MBPM::CompileMBCmake(MBUnicode::PathToUTF8(PacketDirectory), Configuration, TargetsToCompile);
-			}
-            else
-            {
-                ReturnValue = false;
-                ReturnValue.ErrorMessage = "Unsupported toolchain value: "+CurrentConfig.Toolchain;   
-            }
-            if(!ReturnValue)
-            {
-                return(ReturnValue);
-            }
-
-        }
-        return(ReturnValue);    
-    }
-
-
-    MBError CompileMBBuild(
-            std::filesystem::path const& PacketDirectory,
-            std::string const& PacketInstallDirectory,
-            MBBuildCompileFlags Flags,
-            LanguageConfiguration const& LanguageConf,
-            SourceInfo const& PacketSource,
-            std::vector<std::string> const& TargetsToCompile,
-            std::vector<std::string> const& ConfigurationsToCompile)
-    {
-        MBError ReturnValue = true;
-        if(PacketSource.Language == "C++")
-        {
-            ReturnValue = CompileMBBuild_Cpp(PacketDirectory,PacketInstallDirectory,Flags,LanguageConf,PacketSource,TargetsToCompile,ConfigurationsToCompile);  
-        } 
-        else
-        {
-            ReturnValue = false;
-            ReturnValue.ErrorMessage = "Unsupported language: "+PacketSource.Language;   
-        }
-        return(ReturnValue);       
-    }
-    MBError CompileMBBuild(std::filesystem::path const& PacketPath,std::vector<std::string> Targets,std::vector<std::string> Configurations,std::string const& PacketInstallDirectory,MBBuildCompileFlags Flags)
-    {
-        MBError ReturnValue = true;
-        if(!std::filesystem::exists(PacketInstallDirectory+"/MBCompileConfigurations.json"))
-        {
-            ReturnValue = false;
-            ReturnValue.ErrorMessage = "Couldn't find MBCompileConfigurations.json in MBPM_PACKTETS_INSTALL_DIRECTORY";
-            return(ReturnValue);
-        }
-        UserConfigurationsInfo UserConfigurations;
-        ReturnValue = ParseUserConfigurationInfo(PacketInstallDirectory+"/MBCompileConfigurations.json",UserConfigurations);
-        if(!ReturnValue)
-        {
-            return(ReturnValue);   
-        }
-        if(!std::filesystem::exists(PacketPath/"MBSourceInfo.json"))
-        {
-            ReturnValue = false;
-            ReturnValue.ErrorMessage = "Couldn't find source MBSourceInfo.json in packet directory";
-            return(ReturnValue);
-        }
-        SourceInfo PacketSourceInfo;
-        ReturnValue = ParseSourceInfo(PacketPath/"MBSourceInfo.json",PacketSourceInfo);
-        if(!ReturnValue)
-        {
-            return(ReturnValue);   
-        }
-        if(UserConfigurations.Configurations.find(PacketSourceInfo.Language) == UserConfigurations.Configurations.end())
-        {
-            ReturnValue = false;
-            ReturnValue.ErrorMessage = "No configuration for lanuage in MBSourceInfo.json: "+PacketSourceInfo.Language; 
-            return(ReturnValue);
-        }
-		if (Targets.size() == 0)
-		{
-			for (auto const& CurrentTarget : PacketSourceInfo.Targets)
-			{
-				Targets.push_back(CurrentTarget.first);
-			}
-		}
-        LanguageConfiguration const& PacketLanguage = UserConfigurations.Configurations.at(PacketSourceInfo.Language);
-		if (Configurations.size() == 0)
-		{
-			Configurations = PacketLanguage.DefaultConfigs;
-		}
-        ReturnValue = CompileMBBuild(PacketPath,PacketInstallDirectory,Flags,PacketLanguage,PacketSourceInfo,Targets, Configurations);
-        return(ReturnValue);       
-    }
+    
 	MBError MBPM_ClI::p_CompilePacket(PacketIdentifier const& Identifier,MBCLI::MBTerminal* AssoicatedTerminal,MBCLI::ProcessedCLInput const& Command)
 	{
         MBError ReturnValue = true;
@@ -2978,16 +2752,19 @@ namespace MBPM
 			{
 				ConfigurationsToCompile.push_back(SpecifiedConfigurations.first);
 			}
-            ReturnValue = CompileMBBuild(std::filesystem::path(Identifier.PacketURI),TargetsToCompile,ConfigurationsToCompile, p_GetPacketInstallDirectory(),MBBuildCompileFlags(0));
+			PacketRetriever NewRetriever;
+			MBBuild::MBBuildCLI Builder(&NewRetriever);
+			Builder.BuildPacket(Identifier.PacketURI, ConfigurationsToCompile, TargetsToCompile);
+            //ReturnValue = MBBuild::CompileMBBuild(std::filesystem::path(Identifier.PacketURI),TargetsToCompile,ConfigurationsToCompile, p_GetPacketInstallDirectory(),MBBuild::MBBuildCompileFlags(0));
 			if (ReturnValue)
 			{
 				//Export the compiled executables
-				UserConfigurationsInfo UserInfo;
-				ReturnValue = ParseUserConfigurationInfo(p_GetPacketInstallDirectory() + "/MBCompileConfigurations.json", UserInfo);
+                MBBuild::UserConfigurationsInfo UserInfo;
+				ReturnValue = MBBuild::ParseUserConfigurationInfo(p_GetPacketInstallDirectory() + "/MBCompileConfigurations.json", UserInfo);
 				if (!ReturnValue) return(ReturnValue);
-				SourceInfo CompiledSource;
+				MBBuild::SourceInfo CompiledSource;
 				if (!ReturnValue) return(ReturnValue);
-				ReturnValue = ParseSourceInfo(Identifier.PacketURI+"/MBSourceInfo.json", CompiledSource);
+				ReturnValue = MBBuild::ParseSourceInfo(Identifier.PacketURI+"/MBSourceInfo.json", CompiledSource);
 				if (!ReturnValue) return(ReturnValue);
 				std::filesystem::path ExportedExecutablesPath = p_GetPacketInstallDirectory() + "/MBPM_ExportedExecutables/";
 				if (!std::filesystem::exists(ExportedExecutablesPath))
@@ -3030,8 +2807,8 @@ namespace MBPM
 					return(ReturnValue);
 				}
 				//Tar och kompilerar
-				UserConfigurationsInfo UserInfo;
-				ReturnValue = ParseUserConfigurationInfo(p_GetPacketInstallDirectory() + "/MBCompileConfigurations.json", UserInfo);
+				MBBuild::UserConfigurationsInfo UserInfo;
+				ReturnValue = MBBuild::ParseUserConfigurationInfo(p_GetPacketInstallDirectory() + "/MBCompileConfigurations.json", UserInfo);
 				if (!ReturnValue) return(ReturnValue);
 				//OBS implicitly assumes that the code is C++
 				if (UserInfo.Configurations.find("C++") == UserInfo.Configurations.end()) 

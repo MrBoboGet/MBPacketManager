@@ -2,6 +2,7 @@
 #include "MBPacketManager.h"
 #include <MBCLI/MBCLI.h>
 #include <MBUnicode/MBUnicode.h>
+#include <unordered_map>
 namespace MBPM
 {
 	class DownloadPrinter : public MBPP_FileListDownloadHandler
@@ -15,73 +16,12 @@ namespace MBPM
 		virtual MBError InsertData(const void* Data, size_t DataSize) override;
 		virtual MBError Close() override;
 	};
-	enum class PacketLocationType
-	{
-		Null,
-		User,
-		Installed,
-		Local,
-		Remote
-	};
-
 	MBError DownloadDirectory(std::string const& PacketDirectory, std::vector<std::string> const& FilesystemObjectsToDownload, MBPP_FileListDownloadHandler* DownloadHandler);
-	struct PacketIdentifier
-	{
-		std::string PacketName = "";
-		std::string PacketURI = "";//Default/"" implicerar att man anv�nder default remoten
-		PacketLocationType PacketLocation = PacketLocationType::Null;
-		bool operator==(PacketIdentifier const& rhs) const
-		{
-			bool ReturnValue = true;
-			if (PacketName != rhs.PacketName)
-			{
-				ReturnValue = false;
-			}
-			if (PacketURI != rhs.PacketURI)
-			{
-				ReturnValue = false;
-			}
-			if (PacketLocation != rhs.PacketLocation)
-			{
-				ReturnValue = false;
-			}
-			return(ReturnValue);
-		}
-	};
+	
 	void PrintFileInfo(MBPM::MBPP_FileInfoReader const& InfoToPrint, std::vector<std::string> const& FilesystemObjectsToPrint, MBCLI::MBTerminal* AssociatedTerminal);
 	void PrintFileInfoDiff(MBPM::MBPP_FileInfoDiff const& InfoToPrint, MBCLI::MBTerminal* AssociatedTerminal);
 
-	struct MBPM_PacketDependancyRankInfo
-	{
-		uint32_t DependancyDepth = -1;
-		std::string PacketName = "";
-		std::vector<std::string> PacketDependancies = {};
-		bool operator<(MBPM_PacketDependancyRankInfo const& PacketToCompare) const
-		{
-			bool ReturnValue = DependancyDepth < PacketToCompare.DependancyDepth;
-			if (DependancyDepth == PacketToCompare.DependancyDepth)
-			{
-				ReturnValue = PacketName < PacketToCompare.PacketName;
-			}
-			return(ReturnValue);
-		}
-	};
-
-    enum class MBBuildCompileFlags
-    {
-        CompleteRecompile, 
-    };
-    MBError CompileMBBuild(
-            std::filesystem::path const& PacketDirectory,
-            std::string const& PacketInstallDirectory,
-            MBBuildCompileFlags Flags,
-            LanguageConfiguration const& LanguageConf,
-            SourceInfo const& PacketSource,
-            std::vector<std::string> const& TargetsToCompile,
-            std::vector<std::string> const& ConfigurationsToCompile);
-    MBError CompileMBBuild(std::filesystem::path const& PacketPath, std::vector<std::string> Targets, std::vector<std::string> Configurations,
-		std::string const& PacketInstallDirectory,MBBuildCompileFlags Flags);
-
+	
 
     
 	class MBPM_ClI
@@ -150,15 +90,12 @@ namespace MBPM
 		std::vector<PacketIdentifier> p_GetUserPackets();//ingen garanti p� dependancy order
 		std::vector<PacketIdentifier> p_GetInstalledPackets();//TAR INTE I DEPENDANCY ORDER
 
-		//std::string p_GetInstalledPacketDirectory(std::string const& PacketName);
 
 		PacketIdentifier p_GetInstalledPacket(std::string const& PacketName);
 		PacketIdentifier p_GetUserPacket(std::string const& PacketName);
 		PacketIdentifier p_GetLocalPacket(std::string const& PacketPath);
 		PacketIdentifier p_GetRemotePacketIdentifier(std::string const& PacketPath);
 
-		//void p_PrintFileInfo(MBPM::MBPP_FileInfoReader const& InfoToPrint,std::vector<std::string> const& FilesystemObjectsToPrint,MBCLI::MBTerminal* AssociatedTerminal);
-		//void p_PrintFileInfoDiff(MBPM::MBPP_FileInfoDiff const& InfoToPrint,MBCLI::MBTerminal* AssociatedTerminal);
 	public:
 		void HandleCommand(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
 	};
