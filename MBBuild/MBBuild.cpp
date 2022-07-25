@@ -10,6 +10,7 @@
 #include <MBParsing/MBParsing.h>
 #include <MBUtility/MBFiles.h>
 #include <MBUtility/MBStrings.h>
+#include <stdint.h>
 #include <unordered_map>
 #include <MBSystem/MBSystem.h>
 namespace MBPM
@@ -415,9 +416,9 @@ namespace MBPM
         bool ReturnValue = false;
         assert(Index <= m_Dependancies.size());
         DependancyStruct& CurrentStruct = m_Dependancies[Index];
-        if(CurrentStruct.Flags.IsUpdated)
+        if((CurrentStruct.Flags & DependancyFlag::IsUpdated) != DependancyFlag::Null)
         {
-            return(true);   
+            return(true);
         }
         std::filesystem::directory_entry FileStatus = std::filesystem::directory_entry(SourceDirectory/CurrentStruct.Path);
         if(!FileStatus.exists())
@@ -427,7 +428,7 @@ namespace MBPM
         uint32_t CurrentTimestamp = h_GetEntryWriteTimestamp(FileStatus);  
         if(CurrentTimestamp != CurrentStruct.WriteFlag)
         {
-            CurrentStruct.Flags.IsUpdated = true;       
+            CurrentStruct.Flags |= DependancyFlag::IsUpdated;       
             CurrentStruct.WriteFlag = CurrentTimestamp;
             return(true);
         }
@@ -446,7 +447,7 @@ namespace MBPM
         for(size_t i = 0; i < m_Dependancies.size();i++)
         {
             auto const& Source = m_Dependancies[i];
-            if(Source.Flags.IsSource == false)
+            if((Source.Flags & DependancyFlag::IsSource) != DependancyFlag::Null)
             {
                 break;   
             }
@@ -531,8 +532,8 @@ namespace MBPM
         for(MakeDependancyInfo const& SourceFile : InfoToConvert)
         {
             DependancyStruct NewInfo;
-            NewInfo.Flags.IsSource = true;
-            NewInfo.Flags.IsUpdated = true;
+            NewInfo.Flags |= DependancyFlag::IsSource;
+            NewInfo.Flags |= DependancyFlag::IsUpdated;
             NewInfo.Path = SourceFile.FileName;
             NewInfo.WriteFlag = h_GetEntryWriteTimestamp(std::filesystem::directory_entry(NewInfo.Path));
             for(std::string const& Dependancy : SourceFile.Dependancies)
@@ -545,8 +546,8 @@ namespace MBPM
                 }
                 DependancyStruct NewDependancy;  
                 NewDependancy.Path = Dependancy;
-                NewDependancy.Flags.IsUpdated = false;
-                NewDependancy.Flags.IsSource = false;
+                NewDependancy.Flags &= ~DependancyFlag::IsUpdated;
+                NewDependancy.Flags &= ~DependancyFlag::IsSource;
                 NewDependancy.WriteFlag = h_GetEntryWriteTimestamp(std::filesystem::directory_entry(NewDependancy.Path));
                 DependancyID = CurrentFileID;
                 NewInfo.Dependancies.push_back(CurrentFileID);
@@ -586,21 +587,86 @@ namespace MBPM
         *OutInfo = std::move(Result);
         return(ReturnValue);
     }
-    MBError DependancyInfo::UpdateDependancyInfo(SourceInfo const& CurrentBuild, std::filesystem::path const& BuildRoot, DependancyInfo* OutInfo)
+    MBError DependancyInfo::UpdateUpdatedFilesDependancies(std::filesystem::path const& SourceDirectory,std::vector<std::string> const& FilesToAdd)
     {
         MBError ReturnValue = true;
-
-        return(ReturnValue);
+        
+        return(ReturnValue);       
+    }
+    bool DependancyInfo::operator==(DependancyInfo const& OtherInfo) const
+    {
+        return(m_Dependancies == OtherInfo.m_Dependancies);            
+    }
+    bool DependancyInfo::operator!=(DependancyInfo const& OtherInfo) const
+    {
+        return(m_Dependancies != OtherInfo.m_Dependancies);            
     }
     MBError DependancyInfo::ParseDependancyInfo(MBUtility::MBOctetInputStream& InputStream, DependancyInfo* OutInfo)
     {
         MBError ReturnValue = true;
-
+        DependancyInfo Result;
+        try
+        {
+            uint32_t NumberOfDependancies = uint32_t(MBParsing::ParseBigEndianInteger(InputStream,4));
+            if(NumberOfDependancies >= 1000000)
+            {
+                ReturnValue = false;
+                ReturnValue.ErrorMessage = "Invalid number of soruce files: assumed to be under 1 million";  
+            } 
+            Result.m_Dependancies.reserve(NumberOfDependancies);
+            for(uint32_t i = 0; i < NumberOfDependancies;i++)
+            {
+                DependancyStruct NewStruct; 
+                NewStruct.Flags = DependancyFlag(MBParsing::ParseBigEndianInteger(InputStream,4));
+                NewStruct.WriteFlag = MBParsing::ParseBigEndianInteger(InputStream,4);
+                std::string SerializedString;
+                uint16_t StringSize = MBParsing::ParseBigEndianInteger(InputStream,2);
+                SerializedString.resize(StringSize);
+                InputStream.Read(SerializedString.data(),StringSize);
+                NewStruct.Path = SerializedString;
+                uint32_t DependanciesCount = MBParsing::ParseBigEndianInteger(InputStream,4);
+                if(DependanciesCount >= 1000000)
+                {
+                    ReturnValue = false;
+                    ReturnValue.ErrorMessage = "Dependancies count assumed to be under 1 million";
+                    return(ReturnValue);
+                }
+                NewStruct.Dependancies.resize(DependanciesCount);
+                for(uint32_t j = 0; j < DependanciesCount;j++)
+                {
+                    NewStruct.Dependancies[j] = FileID(MBParsing::ParseBigEndianInteger(InputStream,4));
+                }
+                Result.m_Dependancies.push_back(std::move(NewStruct));
+            }
+            Result.p_CreateStringToIDMap();
+        }
+        catch(std::exception const& e)
+        {
+            ReturnValue = false;
+            ReturnValue.ErrorMessage = "Error parsing data: ";
+            ReturnValue.ErrorMessage += e.what(); 
+            return(ReturnValue);
+        }
+        *OutInfo = std::move(Result);
         return(ReturnValue);
     }
     void DependancyInfo::WriteDependancyInfo(MBUtility::MBOctetOutputStream& OutStream) const
     {
-
+        MBParsing::WriteBigEndianInteger(OutStream,m_Dependancies.size(),4);
+        for(DependancyStruct const& Dependancy : m_Dependancies)
+        {
+            uintmax_t Flags = (uintmax_t)Dependancy.Flags;
+            MBParsing::WriteBigEndianInteger(OutStream,Flags,4);
+            MBParsing::WriteBigEndianInteger(OutStream,Dependancy.WriteFlag,4);
+            std::string FilePath = MBUnicode::PathToUTF8(Dependancy.Path);
+            MBParsing::WriteBigEndianInteger(OutStream,FilePath.size(),2);
+            OutStream.Write(FilePath.data(),FilePath.size());
+            MBParsing::WriteBigEndianInteger(OutStream,Dependancy.Dependancies.size(),4);
+            for(FileID IDToWrite : Dependancy.Dependancies)
+            {
+                MBParsing::WriteBigEndianInteger(OutStream,IDToWrite,4);   
+            }
+        } 
     }
     MBError DependancyInfo::GetUpdatedFiles(std::filesystem::path const& SourceDirectory,std::vector<std::string> const& InputFiles,std::vector<std::string>* OutFilesToCompile) 
     {
@@ -676,7 +742,7 @@ namespace MBPM
     DependancyConfigSpecification MBBuildCLI::p_GetConfigSpec(std::filesystem::path const& PacketPath)
     {
         DependancyConfigSpecification  ReturnValue;
-
+         
         return(ReturnValue); 
     }
 
@@ -814,7 +880,7 @@ namespace MBPM
         }
         else
         {
-            DependancyInfoResult = DependancyInfo::UpdateDependancyInfo(InfoToCompile,PacketPath,&SourceDependancies);
+            //DependancyInfoResult = DependancyInfo::UpdateDependancyInfo(InfoToCompile,PacketPath,&SourceDependancies);
         }
         if (!DependancyInfoResult)
         {

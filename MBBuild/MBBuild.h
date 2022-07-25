@@ -1,5 +1,6 @@
 #include "../MBPacketManager.h"
 #include <MBUtility/MBInterfaces.h>
+#include <stdint.h>
 #include <vector>
 #include <string>
 #include <unordered_map>
@@ -83,9 +84,33 @@ namespace MBPM
 		std::string const& PacketInstallDirectory,MBBuildCompileFlags Flags);
 
 
-    
+    enum class DependancyFlag
+    {
+        Null = 0,
+        IsSource = 1,
+        IsUpdated = 1 <<1,
+    };
 
-    
+    inline DependancyFlag operator&(DependancyFlag Left,DependancyFlag Right)
+    {
+        return(DependancyFlag(uintmax_t(Left)&uintmax_t(Right)));   
+    }
+    inline DependancyFlag operator|(DependancyFlag Left,DependancyFlag Right)
+    {
+        return(DependancyFlag(uintmax_t(Left)|uintmax_t(Right)));   
+    }
+    inline void operator&=(DependancyFlag& lhs,DependancyFlag rhs)
+    {
+        lhs = (lhs & rhs); 
+    } 
+    inline void operator|=(DependancyFlag& lhs,DependancyFlag rhs)
+    {
+        lhs = (lhs | rhs); 
+    } 
+    inline DependancyFlag operator~(DependancyFlag rhs)
+    {
+        return(DependancyFlag(~uintmax_t(rhs)));
+    }
     class DependancyInfo
     {
     public:
@@ -95,22 +120,36 @@ namespace MBPM
             std::vector<std::string> Dependancies;
         };
     private:
-        struct DependancyFlags
-        {
-            bool IsSource : 1;      
-            bool IsUpdated : 1;
-            DependancyFlags()
-            {
-                IsSource = false;       
-                IsUpdated = false;       
-            }
-        };
+        //struct DependancyFlags
+        //{
+        //    bool IsSource : 1; 
+        //    bool IsUpdated : 1;
+        //    DependancyFlags()
+        //    {
+        //        IsSource = false;       
+        //        IsUpdated = false;       
+        //    }
+        //};
         struct DependancyStruct
         {
-            DependancyFlags Flags;
+            //32
+            DependancyFlag Flags;
             uint32_t WriteFlag = 0;
             std::filesystem::path Path;
             std::vector<FileID> Dependancies; 
+            bool operator==(DependancyStruct const& OtherInfo) const
+            {
+                bool ReturnValue = true;
+                ReturnValue &= Flags == OtherInfo.Flags;
+                ReturnValue &= WriteFlag == OtherInfo.WriteFlag;
+                ReturnValue &= Path == OtherInfo.Path;
+                ReturnValue &= Dependancies == OtherInfo.Dependancies;
+                return(ReturnValue); 
+            }
+            bool operator!=(DependancyStruct const& OtherInfo) const
+            {
+                return(!(*this  == OtherInfo));       
+            }
         };
         
         
@@ -128,9 +167,13 @@ namespace MBPM
         //uint32_t 
         //MBError CreateDependancyInfo('
         static MBError CreateDependancyInfo(SourceInfo const& CurrentBuild,std::filesystem::path const& BuildRoot,DependancyInfo* OutInfo);
-        static MBError UpdateDependancyInfo(SourceInfo const& CurrentBuild,std::filesystem::path const& BuildRoot,DependancyInfo* OutInfo);
         static MBError ParseDependancyInfo(MBUtility::MBOctetInputStream& InputStream,DependancyInfo* OutInfo);
         void WriteDependancyInfo(MBUtility::MBOctetOutputStream& OutStream) const;
+    
+        bool operator==(DependancyInfo const& OtherInfo) const;
+        bool operator!=(DependancyInfo const& OtherInfo) const;
+        
+        MBError UpdateUpdatedFilesDependancies(std::filesystem::path const& SourceDirectory,std::vector<std::string> const& FilesToAdd);
         MBError GetUpdatedFiles(std::filesystem::path const& SourceDirectory,std::vector<std::string> const& FilesToCheck,std::vector<std::string>* OutFilesToCompile) ;
 
     };
