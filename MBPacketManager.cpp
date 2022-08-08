@@ -412,13 +412,13 @@ namespace MBPM
 		OutputFile << "set(MBPM_SystemLibraries\n";
 		if constexpr(MBUtility::IsWindows())
 		{
-			OutputFile << "Ws2_32.lib\n"
-				"Secur32.lib\n"
-				"Bcrypt.lib\n"
-				"Mfplat.lib\n"
-				"opengl32\n"
-				"Mfuuid.lib\n	"
-				"Strmiids.lib\n)\n";
+			OutputFile <<	"Ws2_32.lib\n"
+							"Secur32.lib\n"
+							"Bcrypt.lib\n"
+							"Mfplat.lib\n"
+							"opengl32\n"
+							"Mfuuid.lib\n	"
+							"Strmiids.lib\n)\n";
 		}
 		else//ska egentligen kolla om det �r unix...
 		{

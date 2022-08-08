@@ -27,11 +27,13 @@ namespace MBPM
     struct Target
     {
         TargetType Type = TargetType::Null;
+        std::string OutputName;
         std::vector<std::string> SourceFiles;   
     };
     struct SourceInfo
     {
         std::string Language;
+        std::string Standard;
         std::vector<std::string> ExtraIncludes;
         std::vector<std::string> ExternalDependancies;
         std::unordered_map<std::string, Target> Targets;
@@ -56,8 +58,29 @@ namespace MBPM
     class DependancyConfigSpecification
     {
     private:
+        struct Predicate
+        {
+            bool Negated = false;
+            std::vector<std::string> PacketName;      
+            std::vector<MBPM_PacketAttribute> Attribute;      
+            std::vector<std::string> ConfigurationName;      
+        };
+        struct Specification
+        {
+            std::vector<Predicate> Predicates;
+            std::string ResultConfiguration;
+        };
 
+        std::vector<Specification> Specifications;
+        
+        static std::vector<std::string> p_ParseStringArray(MBParsing::JSONObject const& ObjectToParse);
+        static Predicate p_ParsePredicate(MBParsing::JSONObject const& ObjectToParse);
+        static Specification p_ParseSpecification(MBParsing::JSONObject const& ObjectToParse);
+
+        static bool p_SpecIsTrue(Specification const& SpecToVerify,MBPM_PacketInfo const& DependancyPacket,std::string const& CompileConfig);
+        static bool p_PredicateIsTrue(Predicate const& SpecToVerify,MBPM_PacketInfo const& DependancyPacket,std::string const& CompileConfig);
     public:
+        static MBError ParseDependancyConfigSpecification(MBUtility::MBOctetInputStream& InputStream,DependancyConfigSpecification* OutConfig);
         std::string GetDependancyConfig(MBPM_PacketInfo const& InfoToInspect,std::string const& CompileConfig) const;   
     };
     
@@ -87,7 +110,7 @@ namespace MBPM
     enum class DependancyFlag
     {
         Null = 0,
-        IsSource = 1,
+        FileChecked = 1,
         IsUpdated = 1 <<1,
     };
 
@@ -133,14 +156,13 @@ namespace MBPM
         struct DependancyStruct
         {
             //32
-            DependancyFlag Flags;
+            DependancyFlag Flags = DependancyFlag::Null;
             uint32_t WriteFlag = 0;
-            std::filesystem::path Path;
+            std::string Path;
             std::vector<FileID> Dependancies; 
             bool operator==(DependancyStruct const& OtherInfo) const
             {
                 bool ReturnValue = true;
-                ReturnValue &= Flags == OtherInfo.Flags;
                 ReturnValue &= WriteFlag == OtherInfo.WriteFlag;
                 ReturnValue &= Path == OtherInfo.Path;
                 ReturnValue &= Dependancies == OtherInfo.Dependancies;
@@ -151,30 +173,63 @@ namespace MBPM
                 return(!(*this  == OtherInfo));       
             }
         };
-        
-        
+        //struct SourceStruct
+        //{
+        //    DependancyFlag Flags;
+        //    uint32_t WriteFlag = 0;
+        //    std::filesystem::path Path;
+        //    std::vector<FileID> Dependancies; 
+        //    bool operator==(DependancyStruct const& OtherInfo) const
+        //    {
+        //        bool ReturnValue = true;
+        //        ReturnValue &= Flags == OtherInfo.Flags;
+        //        ReturnValue &= WriteFlag == OtherInfo.WriteFlag;
+        //        ReturnValue &= Path == OtherInfo.Path;
+        //        ReturnValue &= Dependancies == OtherInfo.Dependancies;
+        //        return(ReturnValue); 
+        //    }
+        //    bool operator!=(DependancyStruct const& OtherInfo) const
+        //    {
+        //        return(!(*this  == OtherInfo));       
+        //    }
+        //        
+        //};
         //A FileID as an Index to the depenancyies
+        static std::string GetGCCDependancyCommand(std::filesystem::path const& BuildRoot,std::vector<std::string> const& SourcesToCheck,std::vector<std::string> const& ExtraIncludeDirectories);
         static std::vector<MakeDependancyInfo> p_ParseMakeDependancyInfo(MBUtility::MBOctetInputStream& InStream);
-        static std::vector<DependancyStruct> p_NormalizeDependancies(std::vector<MakeDependancyInfo>  const& InfoToConvert);
+        static std::vector<DependancyStruct> p_NormalizeDependancies(std::vector<MakeDependancyInfo>  const& InfoToConvert,
+            std::filesystem::path const& SourceRoot,std::unordered_map<std::string,FileID>& IDMap,std::vector<DependancyStruct>& OutDeps,std::vector<std::string> const& OriginalSources);
         //Convenience part 
-        std::unordered_map<std::string,FileID> m_StringToIDMap;
+        std::vector<std::string> m_AddedSources = {};
+        std::unordered_map<std::string,FileID> m_PathToDependancyIndex;
+        std::unordered_map<std::string,size_t> m_PathToSourceIndex;
         //Serialzied partsk
+        std::vector<std::string> m_CompileOptions;
+        std::string m_ToolChain;
+        std::vector<DependancyStruct> m_Sources;
         std::vector<DependancyStruct> m_Dependancies;
 
+        bool p_DependancyIsUpdated(FileID Index);
         bool p_FileIsUpdated(std::filesystem::path const& SourceDirectory ,FileID Index);
-        void p_CreateStringToIDMap();
+        void p_CreateSourceMap();
+        void p_CreateDependancyMap();
+
+        void p_WriteDependancyStruct(MBUtility::MBOctetOutputStream& OutStream, DependancyStruct const& StructToWrite) const;
+        static DependancyStruct p_ParseDependancyStruct(MBUtility::MBOctetInputStream& OutStream);
     public:
         //uint32_t 
         //MBError CreateDependancyInfo('
-        static MBError CreateDependancyInfo(SourceInfo const& CurrentBuild,std::filesystem::path const& BuildRoot,DependancyInfo* OutInfo);
+        static MBError CreateDependancyInfo(SourceInfo const& CurrentBuild,CompileConfiguration const& CompileConfig,std::filesystem::path const& BuildRoot,DependancyInfo* OutInfo);
         static MBError ParseDependancyInfo(MBUtility::MBOctetInputStream& InputStream,DependancyInfo* OutInfo);
         void WriteDependancyInfo(MBUtility::MBOctetOutputStream& OutStream) const;
     
         bool operator==(DependancyInfo const& OtherInfo) const;
         bool operator!=(DependancyInfo const& OtherInfo) const;
+       
+        //TODO void RemoveRedundantDependancies();
         
-        MBError UpdateUpdatedFilesDependancies(std::filesystem::path const& SourceDirectory,std::vector<std::string> const& FilesToAdd);
-        MBError GetUpdatedFiles(std::filesystem::path const& SourceDirectory,std::vector<std::string> const& FilesToCheck,std::vector<std::string>* OutFilesToCompile) ;
+        MBError UpdateUpdatedFilesDependancies(std::filesystem::path const& SourceDirectory);
+        MBError GetUpdatedFiles(std::filesystem::path const& SourceDirectory,CompileConfiguration const& CompileConfig,std::vector<std::string> const& FilesToCheck,std::vector<std::string>* OutFilesToCompile) ;
 
     };
 
@@ -184,15 +239,24 @@ namespace MBPM
         PacketRetriever* m_AssociatedRetriever = nullptr; 
         //[[Throws]] 
         UserConfigurationsInfo p_GetGlobalCompileConfigurations();
+        DependancyConfigSpecification p_GetGlobalDependancySpecification();
         SourceInfo p_GetPacketSourceInfo(std::filesystem::path const& PacketPath);        
         MBPM_PacketInfo p_GetPacketInfo(std::filesystem::path const& PacketPath);
         DependancyConfigSpecification p_GetConfigSpec(std::filesystem::path const& PacketPath);
 
         bool p_VerifyConfigs(LanguageConfiguration const& Config,std::vector<std::string> const& ConfigNames);
         bool p_VerifyTargets(SourceInfo const& InfoToCompile,std::vector<std::string> const& Targests);
+        //Responsible both for verifying that the toolchain is supported, and that the standard is supported by the toolchain 
+        bool p_VerifyToolchain(SourceInfo const& InfoToCompile,CompileConfiguration const& TargetToVerify);
+       
+        void p_Compile(CompileConfiguration const& CompileConf,SourceInfo const& SInfo,std::vector<std::string> const& SourcesToCompile,std::vector<std::string> const& ExtraIncludeDirectories);
+        void p_Link(CompileConfiguration const& CompileConfig,SourceInfo const& SInfo, std::string const& ConfigName, Target const& TargetToLink, std::vector<std::string> ExtraLibraries);
+
+        void p_Compile_MSVC(CompileConfiguration const& CompileConf,SourceInfo const& SInfo,std::vector<std::string> const& SourcesToCompile,std::vector<std::string> const& ExtraIncludeDirectories);
+        void p_Link_MSVC(CompileConfiguration const& CompileConfig, SourceInfo const& SInfo,std::string const& ConfigName, Target const& TargetToLink, std::vector<std::string> ExtraLibraries);
         
-        void p_Compile_GCC(CompileConfiguration const& CompileConf,std::vector<std::string> const& SourcesToCompile,std::vector<std::string> const& ExtraIncludeDirectories);
-        void p_Link_GCC(CompileConfiguration const& CompileConfig,Target const& TargetToLink,std::string const& TargetName,std::vector<std::string> ExtraLibraries);
+        void p_Compile_GCC(std::string const& CompilerName,CompileConfiguration const& CompileConf,SourceInfo const& SInfo,std::vector<std::string> const& SourcesToCompile,std::vector<std::string> const& ExtraIncludeDirectories);
+        void p_Link_GCC( std::string const& CompilerName,CompileConfiguration const& CompileConfig, SourceInfo const& SInfo,std::string const& ConfigName, Target const& TargetToLink, std::vector<std::string> ExtraLibraries);
         
         void p_BuildLanguageConfig(std::filesystem::path const& PacketPath,MBPM_PacketInfo const& PacketInfo,DependancyConfigSpecification const& Dependancies,CompileConfiguration const& CompileConf,std::string const& CompileConfName, SourceInfo const& InfoToCompile,std::vector<std::string> const& Targets);
     public:

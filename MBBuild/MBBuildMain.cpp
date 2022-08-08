@@ -31,7 +31,7 @@ int main(int argc,const char** argv)
         std::exit(1);
     }
     MBPM::MBBuild::DependancyInfo Dependancies;
-    MBError CreateResult = MBPM::MBBuild::DependancyInfo::CreateDependancyInfo(Source, "../../", &Dependancies);
+    MBError CreateResult = MBPM::MBBuild::DependancyInfo::CreateDependancyInfo(Source,MBPM::MBBuild::CompileConfiguration(), "../../", &Dependancies);
     if (!Result)
     {
         std::cout << "Error creating dependancies: " << Result << "\n";
@@ -41,11 +41,16 @@ int main(int argc,const char** argv)
     MBUtility::MBStringOutputStream OutStream(Buffer);
     Dependancies.WriteDependancyInfo(OutStream);
     MBPM::MBBuild::DependancyInfo ParsedDependancies;
-    Result =  MBPM::MBBuild::DependancyInfo::ParseDependancyInfo(MBUtility::MBBufferInputStream(Buffer.data(),Buffer.size()), &ParsedDependancies);
+    MBUtility::MBBufferInputStream InputStream(Buffer.data(), Buffer.size());
+    Result =  MBPM::MBBuild::DependancyInfo::ParseDependancyInfo(InputStream, &ParsedDependancies);
     if (!Result)
     {
         std::cout << "Error parsing serialized dependancies: " << Result << "\n";
         std::exit(1);
     }
     assert(ParsedDependancies == Dependancies);
+    MBPM::PacketRetriever Retriever;    
+    MBPM::MBBuild::MBBuildCLI Builder(&Retriever);
+    //Builder.BuildPacket("../../", {"GNU_Debug"}, {});
+    Builder.BuildPacket("../../", {"Debug"}, {});
 }

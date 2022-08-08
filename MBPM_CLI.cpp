@@ -2450,6 +2450,11 @@ namespace MBPM
         else if(CommandInput.CommandOptions.find("sourceinfo") != CommandInput.CommandOptions.end())
         {
             std::vector<PacketIdentifier> FailedPackets;
+			bool OverrideAll = false;
+			if (CommandInput.CommandOptions.find("override") != CommandInput.CommandOptions.end())
+			{
+				OverrideAll = true;
+			}
             for(auto const& Packet : PacketDirectories)
             {
                 MBError Error = true;
@@ -2465,6 +2470,7 @@ namespace MBPM
                 std::filesystem::recursive_directory_iterator PacketDirectoryIterator(Packet.PacketURI);
                 MBParsing::JSONObject SourceInfo(MBParsing::JSONObjectType::Aggregate);
                 SourceInfo["Language"] = "C++";
+                SourceInfo["Standard"] = "C++17";
                 SourceInfo["ExtraIncludes"] = PacketInfo.ExtraIncludeDirectories; 
                 //SourceInfo["Dependancies"] = PacketInfo.PacketDependancies;
 				std::vector<std::string> MissingPackets;
@@ -2512,10 +2518,46 @@ namespace MBPM
                 MBParsing::JSONObject LibTarget(MBParsing::JSONObjectType::Aggregate);
                 LibTarget["TargetType"] = "Library";
                 LibTarget["Sources"] = AllSources;
+				LibTarget["OutputName"] = PacketInfo.PacketName;
                 Targets[Packet.PacketName] = std::move(LibTarget);
                 SourceInfo["Targets"] = std::move(Targets);
+
+				bool FileExist = std::filesystem::exists(Packet.PacketURI + "/MBSourceInfo.json");
+
+				if(FileExist && CommandInput.CommandOptions.find("newonly") != CommandInput.CommandOptions.end())
+				{
+					continue;
+				}
+				if (!OverrideAll && FileExist)
+				{
+					std::string Response;
+					bool ContinueTop = false;
+					while (true)
+					{
+						AssociatedTerminal->PrintLine("MBSourceInfo.json already exists for " + Packet.PacketURI + ". Do you want to override it? [y/n/all]");
+						AssociatedTerminal->GetLine(Response);
+						if (Response == "y")
+						{
+							break;
+						}
+						else if (Response == "n")
+						{
+							ContinueTop = true;
+							break;
+						}
+						else if (Response == "all")
+						{
+							OverrideAll = true;
+							break;
+						}
+					}
+					if (ContinueTop)
+					{
+						continue;
+					}
+				}
                 std::ofstream OutFile = std::ofstream(Packet.PacketURI+"/MBSourceInfo.json");
-                OutFile<<SourceInfo.ToString();
+                OutFile<<SourceInfo.ToPrettyString();
             }    
         }
 		else if (CommandInput.CommandOptions.find("compilecommands") != CommandInput.CommandOptions.end())
@@ -2754,7 +2796,7 @@ namespace MBPM
 			}
 			PacketRetriever NewRetriever;
 			MBBuild::MBBuildCLI Builder(&NewRetriever);
-			Builder.BuildPacket(Identifier.PacketURI, ConfigurationsToCompile, TargetsToCompile);
+			ReturnValue = Builder.BuildPacket(Identifier.PacketURI, ConfigurationsToCompile, TargetsToCompile);
             //ReturnValue = MBBuild::CompileMBBuild(std::filesystem::path(Identifier.PacketURI),TargetsToCompile,ConfigurationsToCompile, p_GetPacketInstallDirectory(),MBBuild::MBBuildCompileFlags(0));
 			if (ReturnValue)
 			{

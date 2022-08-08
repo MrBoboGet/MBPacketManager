@@ -53,3 +53,7 @@ Add dependancy depth for both dependants and dependees. The main reason for
 this would be to for example more cleary see which packets need to be changed
 when updating a packet, a correctly configured, but not strictly enforcable,
 packet structure entails that only packets of depth 1 need to be updated.
+
+
+override for creating source info, moving more to that only requires that
+the file is not arbitrarily overriden

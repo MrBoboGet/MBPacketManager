@@ -1,0 +1,4 @@
+Now uses the new subproject "MBBuild" by default when compiling packets, if the target has MBSourceInfo.json.
+
+Known issues: Dependancies are only updated if both compilation and linking was succesfull, but as compilation
+might fail for any particular source file so is there no way to determine which files were succesfully compiled, so all have to be redone.
