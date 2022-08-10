@@ -1175,14 +1175,15 @@ namespace MBPM
             {
                 LinkCommand += ".exe";   
             }
+            LinkCommand += " ";
+            for (std::string const& ObjectFile : ObjectFiles)
+            {
+                LinkCommand += ObjectFile;
+                LinkCommand += ' ';
+            }
             for(std::string const& LinkFlag : CompileConfig.LinkFlags)
             {
                 LinkCommand += LinkFlag;   
-                LinkCommand += ' ';
-            }
-            for(std::string const& ObjectFile : ObjectFiles)
-            {
-                LinkCommand += ObjectFile;
                 LinkCommand += ' ';
             }
             //extra libraries stuff
@@ -1322,6 +1323,10 @@ namespace MBPM
         }
         std::vector<std::string> UpdatedSources; 
         DependancyInfoResult = SourceDependancies.GetUpdatedFiles(PacketPath,CompileConf, TotalSources, &UpdatedSources);
+        if (!DependancyInfoResult)
+        {
+            throw std::runtime_error(DependancyInfoResult.ErrorMessage);
+        }
         if (UpdatedSources.size() == 0)
         {
             return;
