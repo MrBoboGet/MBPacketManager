@@ -1,0 +1,226 @@
+%title Packets Specification
+
+//Hur ska detta formuleras?
+The most core part of mbpm's functionality is in the vectorisation of 
+functionality over packets. Almost all commands work over multiple packets at
+the same time, and this document describes how the packets in a command are
+determined.
+
+#_ The pipeline
+    A packet specification consist of a couple of distinct steps, with the input
+    from the previous step being the input for the next. A step in the pipeline
+    is skipped if no option in the command changes it's default behaviour,
+    which is always to leave the current packet list unchanged.
+
+    [[Note]]
+    Any fatal error occuring during this process is guaranteed to terminate the
+    process is guaranteed to not make the command not execute on any packet, and
+    terminates the process directly.
+
+    # Simple packet specification 
+        The first step of a packet specification. This step always identifies
+        individual packtes, which are further processed.
+
+        Every packet specification has a list of *arguments*, which is every
+        part of the command line that isn't identifying the top command or sub
+        command, and which is not a part of an option. These strings are
+        interpreted as packet names or locations. 
+        The @[location type](LocationType.mbd) of these packet names are
+        determined by the default location type for the given command, but is
+        usually interpreted as a 
+        @[installed packet](LocationType.mbd#Installed packet). 
+
+        [[Note]]
+        A argument begining with . or containing / is always interpeted as a 
+        @[local packet](LocationType.mbd#Local packet), as these would otherwise
+        form an invalid packet name. 
+        
+        The default packet location of a command can always be overriden with
+        the following flags:
+        
+        #_ Default location flags
+            # local
+                Interpretes *all* arguments as directory name identifying a local
+                packet.
+            # installed
+                Interpretes *all* arguments as the packet name of a installed
+                packet.
+            # user
+                Interpretes *all* arguments as the packet name of a user
+                packet.
+            # remote
+                Interpretes *all* arguments as the packet name of a remote
+                packet.
+            [[Note]]
+            Multiple default location flags being present in a command line is
+            treated as fatal error.
+        /_
+
+        #_ Direct packet specification
+            The following single argument options directly adds a packet to the result
+            list without relying on the default packet type.
+
+            # r
+                Interpates the argument as the name of a remote packet.
+            # i
+                Interpates the argument as the name of a installed packet.
+            # u
+                Interpates the argument as the name of a user packet.
+            # l
+                Interpates the argument as the directory of a local packet.
+        /_
+
+        After all of the packet names/locations has been specified so are they
+        checked for existance, with the notable exception for remote packets. A
+        packet not existing is treated as a fatal error.
+
+        [[Note]] 
+        The order of which packets are processed by the command may be relevant,
+        and the order of packets specified through the argument list are
+        guaranteed to be added to the packet list in the same order, but packets
+        specified through @[direct packet specification](#Direct packet
+        specification) are always added after the packets specified through the
+        argument list, and with unspecified order.
+
+        _# Examples
+```
+# Specifies that MBUtility and MBParsing should be compiled and because compile
+# has as default location type as installed so are the installed packets checked
+# for packets named MBUtility and MBParsing
+mbpm compile MBUtility MBParsing
+
+# This can be overriden by specifying a default location flag, the following
+# command therefore searches for the user packets named MBUtility and MBParsing
+mbpm compile MBUtility MBParsing --user
+
+# Specifying a packet with a direct packet specification makes it so that the
+# deafult location is ignored, therefor MBCLI is in the following commands
+# always interpreted as being the name of a user packet
+mbpm compile MBUtility MBParsing -u:MBCLI
+mbpm compile MBUtility MBParsing --remote -u:MBCLI
+```
+        /#
+
+    # Total packets specifies 
+        This part of the pipeline only adds packets to the process and doesn't
+        modify or remove any packets, and consists of two flags:
+
+        _# allinstalled
+            Adds all installed packets to the packet list. 
+
+            [[Note]]
+            The packets added here are guaranteed to be added in 
+            @[packet dependancy order](DependancyOrder.mbd). 
+        /#
+        _# alluser
+            Adds all user packets to the packet list. The order of how these
+            packets are added to the list is unspecified.
+        /#
+        
+        _# Examples
+        ```
+
+        ```
+        /#
+
+
+
+    # Packet modifiers 
+        This part of the pipeline takes the current packet list and creates a
+        new packet list. It currently consists of 2 flagsm, dependants, and
+        dependancies. 
+       
+        //Borde göra detta tydligare genom att ha en Terminology sektion som 
+        //beskriver begreppen Dependancy och dependant
+        _# dependancies
+            If this flag is specified, the packet list is replaced with the
+            *all* of the dependancies for the packets in the packet list. The
+            new packet list is guaranteed to have no duplicate packages. 
+
+            Dependancies for the packet list are always checked against the
+            installed packets, which means that all of the new packets are
+            always installed packets.
+
+            [[Note]]
+            "All of the dependancies" means that the complete list of packets
+            needed by the packets are added, which means that not only are the
+            first order dependancies added, but also the first orders
+            dependancies are added etc.
+        /#
+        _# dependants
+            If this flag is specified, the packet list is replaced with the
+            *all* of the dependants for the packets in the packet list. The
+            new packet list is guaranteed to have no duplicate packages. 
+
+            Dependants for the packet list are always checked against the
+            installed packets, which means that all of the new packets 
+            installed packets.
+
+            [[Note]]
+            A dependant of packet A is defined as a packet that either depends
+            on A, or depends on a packet that depends on A.
+        /#
+
+        If the semantics of these operations are not understood so is there
+        also a description of their function as @[algorithms](Algorithms.mbd).
+
+        _# Design note
+            These functions always returning the result based on the installed
+            packet is because all packets on a system is assumed to depend on
+            only the installed packets. While a user packet might be a modified
+            version of a installed packet that is being developed, so is the
+            user packet still assumed to only depend on installed packets.
+        /#
+        _# Examples
+        ```
+
+        ```
+        /#
+
+    # Packet filters
+        This part of the pipeline only removes packets from the packet list,
+        based on a predicate. This part of the pipeline consists of 2 single
+        argument options:
+        
+        _# a
+            This filter keeps all packets that have the attribute specified in
+            the argument.
+        /#
+        _# na
+            This filter keeps all packets that doesn't have the attribute
+            specified in it's argument.
+        /#
+        _# Examples
+        ```
+
+        ```
+        /#
+
+    # Location modifers
+        Location modifies keep all of the packets in the current packet list,
+        but modifies them to refer to a different location. For each packet, the
+        new packet is determined by finding the packet with the same name as
+        the current packet, but in the new location. This part of the pipeline
+        currently consists of one single argument option.
+
+        _# m
+            The argument can only be "installed" or "user", all other values are
+            treated as a fatal error.
+
+            All packets are modified to point to the packet of the same name in
+            the new location.
+        /#
+        
+        _# Design note
+            This part mostly exists in order to compensate for the fact that 
+            "--allinstalled" and "--alldependants" only returns the installed
+            packets. Often times the user packets might want to be specified,
+            especially in conjunction with the create top command.
+        /#
+
+    # Result
+        The result of a packet specifition is always a list of packets to be
+        processed by the given command. The command is guaranteed to process the
+        packets in the order of the resulting packet list.
+
+/_

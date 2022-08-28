@@ -600,7 +600,7 @@ namespace MBPM
                     continue;
                 }
                 DependancyStruct NewDependancy;  
-                NewDependancy.Path = Dependancy;
+                NewDependancy.Path = MBUnicode::PathToUTF8(std::filesystem::canonical(Dependancy));
                 NewDependancy.Flags &= ~DependancyFlag::IsUpdated;
                 NewDependancy.Flags &= ~DependancyFlag::FileChecked;
                 NewDependancy.WriteFlag = h_GetEntryWriteTimestamp(std::filesystem::directory_entry(NewDependancy.Path));
@@ -835,6 +835,11 @@ namespace MBPM
         {
             FilesToUpdate.push_back(MBUnicode::PathToUTF8(Path));   
         }
+
+        if (FilesToUpdate.size() == 0)
+        {
+            return ReturnValue;
+        }
         std::string GCCComand = GetGCCDependancyCommand(SourceDirectory,FilesToUpdate,{});
         MBSystem::UniDirectionalSubProcess GCCProccess(GCCComand,true); 
        
@@ -860,6 +865,8 @@ namespace MBPM
         MBError ReturnValue = true;
         std::vector<std::string> Result;
         bool CompileCommandsMatch = m_CompileOptions == CompileConfig.CompileFlags && CompileConfig.Toolchain == m_ToolChain;
+        m_CompileOptions = CompileConfig.CompileFlags;
+        m_ToolChain = CompileConfig.Toolchain;
         try
         {
             for(std::string const& Source : InputFiles)
@@ -872,6 +879,10 @@ namespace MBPM
                 auto const& It = m_PathToSourceIndex.find(Source.substr(1));  
                 if(It != m_PathToSourceIndex.end())
                 {
+                    if (!CompileCommandsMatch)
+                    {
+                        m_Sources[It->second].Flags |= DependancyFlag::IsUpdated;
+                    }
                     if(!CompileCommandsMatch || p_FileIsUpdated(SourceDirectory,It->second))
                     {
                         Result.push_back(Source);   
@@ -1181,11 +1192,6 @@ namespace MBPM
                 LinkCommand += ObjectFile;
                 LinkCommand += ' ';
             }
-            for(std::string const& LinkFlag : CompileConfig.LinkFlags)
-            {
-                LinkCommand += LinkFlag;   
-                LinkCommand += ' ';
-            }
             //extra libraries stuff
             for (std::string const& LibraryPath : ExtraLibraries)
             {
@@ -1201,6 +1207,11 @@ namespace MBPM
                 std::string Name = LibraryPath.substr(LastSlash+1);
                 LinkCommand += "-L" + Directory+ " ";
                 LinkCommand += "-l:" + Name+" ";
+            }
+            for (std::string const& LinkFlag : CompileConfig.LinkFlags)
+            {
+                LinkCommand += LinkFlag;
+                LinkCommand += ' ';
             }
             int LinkResult = std::system(LinkCommand.c_str());
             //if (LinkResult != 0)
@@ -1427,8 +1438,8 @@ namespace MBPM
                 return(ReturnValue);
             }
             LanguageConfiguration const& LanguageInfo = ConfIt->second;
-            TargetsAreValid = p_VerifyConfigs(LanguageInfo,Targets);
-            if(!TargetsAreValid)
+            bool ConfigsAreValid = p_VerifyConfigs(LanguageInfo,Configs);
+            if(!ConfigsAreValid)
             {
                 ReturnValue = false;
                 ReturnValue.ErrorMessage = "Invalid config: Configuration not found in C++ language configurations";

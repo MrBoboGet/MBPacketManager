@@ -2732,6 +2732,7 @@ namespace MBPM
 						AssociatedTerminal->PrintLine("");
 					}
 				}
+                std::exit(1);
 			}
 			else
 			{
