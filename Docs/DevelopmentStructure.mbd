@@ -1,0 +1,28 @@
+%title Development Structure
+
+This document describes the directory structure for this project, and is mostly
+aimed at developers.
+
+#_ Project structure
+    The project can be roughly split up into 2 parts, the networking part and
+    the local part. The networking protocol used to transfer packets between
+    computers builds use all of the same concepts employed by the local part,
+    but also a lot if complexity only related to it specifically. In order to
+    get a feeling for how the program is used, @CLI contains the command line
+    options. However, that doesn't fully explain all of the abstractions, which
+    are very much needed to understand the way the program is intended to be
+    used.
+    
+    In @Packets you can find the most core abstraction for the whole project,
+    what a packets is and the different kind of packets that the program sees. 
+
+    In @Index, the most fundamental datastructure is described, which in many
+    ways is the core of the whole implementation. The index file format
+    describes the files and directories a packet contains, and is used with the
+    internet protocoll for transfer of this information between computers.  The
+    index is what makes changing packets and uploading the efficient, as not
+    every single file has to be uploaded every single time.
+
+    In @Networking, the protocoll for the internet protocll is described, and
+    the functionality the server is intended to provide.
+/_

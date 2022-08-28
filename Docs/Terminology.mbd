@@ -1,0 +1,64 @@
+%title terminology
+
+This page describes the common terminology for the documentation of
+MBPacketManager and should read be read in order to understand the other parts
+of the documentation. 
+
+# Packet
+    A packet is the most fundamental part of MBPacketManager, but it's
+    definition may be a bit overloaded, and it's semantics cannot fully be
+    described here in succinct enough way. A more indepth descriptions of
+    packets can be found @[here](Packets.mbd).
+
+    A packet is any valid directory structure with a valid
+    @[MBPM_PacketInfo](PacketInfo.mbd) file in it's root directory. This
+    directory structure can either exist on a local filesystem, or be retrieved
+    from a remote server.
+
+    While this describes what a packet is in the most general so is there a
+    separate definition for this application, that serves to describe how
+    different kind of packets are identified and the semantics for the
+    operations on them. 
+
+    A packet is a tuple of 3 things, a name that is assumed to be unique, a
+    location URI and a location type. The location URI should uniquely identify
+    location of a packet, and the location type describes what type of location
+    this is. 
+
+# Dependancy list
+    Every packet has a list of dependancies, this list is called the packet's
+    dependancy list.
+     
+# Dependancy
+    Every packet has a list of dependancies, which is the names of other packets
+    it depends on. But a packet being a dependancy for another packet is defined
+    recursivly.
+
+    Packet A is a dependancy of packet B if it is in packet B's dependancy list,
+    or if it is a dependancy for any of the packet's in packet B's dependancy
+    list.
+
+# Dependant 
+    Packet A is a dependant of packet B if B is a dependancy for A.
+
+# Dependancy Depth
+    The dependancy depth for packet A to packet A is 0.
+
+    The dependancy depth for packet A to packet B is 1 + the shortest dependancy
+    depth for packet A to the packets in B's dependancy list.
+     
+# Packet depth
+    The packet depth of a packet is the 1 + the highest dependancy depth to any
+    of it's dependancies.
+
+# Dependancy order
+    A list of packet is in dependancy order of if for any 2 indexes A and B, the
+    packet depth of the packet at index A is lower than the packet depth for the
+    packet at index B.
+
+    [[Note]]
+    The main purpose of dependancy order is to describe the order packets need
+    to be compiled in order to ensure that all packets are compiled with the
+    newest versions of their dependancies. This is however the reversed order
+    that is needed for a traditional unix linker. A unix linker needs the packet
+    that is a dependancy for previous packet to be put last.

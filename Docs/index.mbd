@@ -1,74 +1,7 @@
 %title MBPacketManager
 
-MBPacketManager is a packet manager program, with a focus on simple packet structures and easy packet creation.
-
-The purpose of this document is to serve as a philosophical overview of the project, discussing the history and the most abstract goals that 
-the program intends to solve and the design decisions this leads to. For documentation on how to use the program,
-go to @CLI, to get a overview of the codebase go to @Codebase.
-
-#_ History
-    
-    When I first started writing programs, I bareley know how the build process actually worked. While I knew that one had to add include directories in visual studio 
-    in order to find headers, and link to different libraries to make it compile, I still didn't *truly* understand the process, which I realised when I was trying to 
-    make a new program utilizing old code.
-
-    Because I didn't have a good understanding of the build process, whenever I created a new program or library I just made a new subdirectory in a giga project,
-    and it therefore inherited all of the options, and worked. But at some point I wanted to make a project in a separate build system, in order to make the orginasation
-    a bit better. But there's where the problems began. I naivly assumed that I could just add the directory where the source for the libraries I wanted to use as extra
-    include directories, but then their own include's got screwed up. I also didn't actually compile the sources, or link to any libraries, which meant just about
-    every reference went unresolved, and this separate project couldn't come close to compiling.
-    
-    To an experienced C/C++ developer this struggle might be relatable, or one might say that it stems from a bad understanding on how the building works, which might be true.
-    But when trying to solve this problem, I also realised something, there isn't really a uniform way to do so, and alot of big project haven't really solved the problem at all.
-
-    But hold on, isn't this easy on linux? There exist a lot of good packet managers that make including external code easy. That is true. But there exist a nuance here that 
-    makes the problem a bit different from just including external code, which is *I want to compile the code on my machine*. A lot of linux packet managers distribute the
-    libraries in a already compiled form with some header files in a pre determined directory. While this might make compiling a single program with a set of  dependancies
-    that are "sudo apt install":able, how do you create the same structure for your own projects? What if you want to statically link your program? Does the 
-    packet include static libraries? What if you want to compile with options that are incompatible with the precompiled options? And perhaps most importantly
-    for myself at the time, what if you want to use windows?
-
-    A lot of big open source project have a very monolithic compilation process. You make and make install. But the dependancies of the project are mostly invisible. If a project
-    uses zlib it will probably just include it as a part of the tree. But that only works when you create a shared object, and if you link statically all of these implementation
-    details become something that you need to understand completely. And furthermore, the exact options used for compiling the program is also something that is genereally hidden
-    from the consumer of the library. But this can easily create incompatible builds, perhaps most prelevant with the different debug levels for the windows std library.
-
-    All of these problem made creating a new library or executable that reused old code difficult, and this program was initialliy concieved to solve all of these problems.
-    However, as development and usage has continued the original goals has been split into 2 projects, this project, and @(/{MBBuild}). The rest of the document 
-    specifies exactly what these goals are, and a top level overview of the componenents making up the solution.
-
-/_
-
-#_ The Goals
-    
-    # Easy transfer of packet directories between computers
-        In order to efficiently compile on differenct computers, the has to be a way to transfer the needed files, which preserves the directory structure.
-    # Easy dependancy specification
-        In order to efficiently modularize code, specifing which dependancies are neccesary to build it is needed. This goal is also related to the previous,
-        in that it has to be easy to transfer and download and transfer the needed dependancies.
-    # No mandated packet struture and easy creation
-        This is one of the goals that might differentiate this system from other packet managers, unlike for example ubuntu packets which has a very specific
-        structure and semantic, the way packets are constructed and distributed should be agnostic for the way they are in turn used. This is also one of the
-        separation of concerns that split of into @(/{MBBuild}), which is tasked with the easy compilation of C/C++ code. Packets should also be able to be 
-        hand made, without needing an external tool that hides all of the required components.
-    # Local compilation and local development
-        In order to efficiently devlop packets locally, there has to be a distinction between packets that are used in the compilation process and packets
-        that are in development. The goal is to make the kind of workflow where seperate packets developed on the same computer can compile easily under
-        development, and then be uploaded for use by the other packets.
-/_
+MBPacketManager is a packet manager program, with a focus on simple packet
+and generic packet structures, with a bias towards easing development for
+programming languages with the same dependancy and build semantics as C/C++.
 
 
-#_ Project structure
-    The project can be roughly split up into 2 parts, the networking part and the local part. The networking protocol used to transfer packets between computers
-    builds use all of the same concepts employed by the local part, but also a lot if complexity only related to it specifically. In order to get a feeling for how
-    the program is used, @CLI contains the command line options. However, that doesn't fully explain all of the abstractions, which are very much needed to understand
-    the way the program is intended to be used.
-    
-    In @Packets you can find the most core abstraction for the whole project, what a packets is and the different kind of packets that the program sees. 
-
-    In @Index, the most fundamental datastructure is described, which in many ways is the core of the whole implementation. The index
-    file format describes the files and directories a packet contains, and is used with the internet protocoll for transfer of this information between computers.
-    The index is what makes changing packets and uploading the efficient, as not every single file has to be uploaded every single time.
-
-    In @Networking, the protocoll for the internet protocll is described, and the functionality the server is intended to provide.
-/_

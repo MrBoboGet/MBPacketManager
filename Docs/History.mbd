@@ -1,0 +1,108 @@
+%title History and goals
+
+This document describes gives a brief history of the project, describing the
+motivation behind it, and the goals set up for it following that.
+
+This document is not needed in order to understand the codebase or the CLI, but
+serves as guide towards the development of it.
+
+#_ History
+    
+    When I first started writing programs, I bareley know how the build process
+    actually worked. While I knew that one had to add include directories in
+    visual studio in order to find headers, and link to different libraries to
+    make it compile, I still didn't *truly* understand the process, which I
+    realised when I was trying to make a new program utilizing old code.
+
+    Because I didn't have a good understanding of the build process, whenever I
+    created a new program or library I just made a new subdirectory in a giga
+    project, and it therefore inherited all of the options, and worked. But at
+    some point I wanted to make a project in a separate build system, in order
+    to make the organisation a bit better. But there's where the problems began.
+    I naivly assumed that I could just add the directory where the source for
+    the libraries where. I wanted to use as extra include directories, but then
+    their own include's got screwed up. I also didn't actually compile the
+    sources, or link to any libraries, which meant just about every reference
+    went unresolved, and this separate project couldn't come close to compiling.
+    
+    To un experienced C/C++ developer this struggle might be relatable, or one
+    might say that it stems from a bad understanding on how the building works,
+    which is true.  But when trying to solve this problem, I also realised
+    something, there isn't really a uniform way to do so, and alot of big
+    project haven't really solved the problem at all.
+
+    But hold on, isn't this easy on linux? There exist a lot of good packet
+    managers that make including external code easy. That is true. But there
+    exist a nuance here that makes the problem a bit different from just
+    including external code, which is *I want to compile the code on my machine
+    with my own options*. A lot of linux packet managers distribute the
+    libraries in a already compiled form with some header files in a pre
+    determined directory.  While this might make compiling a single program with
+    a set of  dependancies that are "sudo apt install":able, how do you create
+    the same structure for your own projects? What if you want to statically
+    link your program? Does the packet include static libraries? What if you
+    want to compile with options that are incompatible with the precompiled
+    options? And perhaps most importantly for myself at the time, what if you
+    want to use windows?
+
+    A lot of big open source project have a very monolithic compilation process.
+    You make and make install. But the dependancies of the project are mostly
+    invisible. If a project uses zlib it will probably just include it as a part
+    of the tree. But that only works when you create a shared object, and if you
+    link statically all of these implementation details become something that
+    you need to understand completely. And furthermore, the exact options used
+    for compiling the program is also something that is genereally hidden from
+    the consumer of the library. But this can easily create incompatible builds,
+    perhaps most prelevant with the different debug levels for the windows std
+    library.
+
+    All of these problem made creating a new library or executable that reused
+    old code difficult, and this program was initialliy concieved to solve all
+    of these problems.  However, as development and usage has continued the
+    original goals has been split into 2 projects, this project, and a child
+    project @(/{MBBuild}). MBPacketManager is designed to solve the problem of
+    managing packets, in a generic way, wheras MBBuild is designed to solve
+    building these packets, in a way specific to C/C++ and similar languages.
+
+    The rest of the document specifies exactly what the goals of MBPacketManager
+    is goals are.
+
+/_
+
+#_ The Goals
+    
+    # Easy transfer of packet directories between computers
+        In order to efficiently compile on differenct computers, there has to be
+        a way to transfer the needed files, which preserves the directory
+        structure.
+    # Easy dependancy specification
+        In order to efficiently modularize code, specifing which dependancies
+        are neccesary to build it is needed. This goal is also related to the
+        previous, in that it has to be easy to transfer and download the needed
+        dependancies.
+    # No mandated packet structure and easy creation
+        This is one of the goals that might differentiate this system from other
+        packet managers, unlike for example ubuntu packets which has a very
+        specific structure and semantic, the way packets are constructed and
+        distributed should be agnostic for the way they are in turn used. This
+        is also one of the separation of concerns that split of into
+        @(/{MBBuild}), which is tasked with the easy compilation of C/C++ code.
+        Packets should also be able to be hand made, without needing an external
+        tool that hides all of the required components.
+    # Local compilation and local development
+        In order to efficiently devlop packets locally, there has to be a
+        distinction between packets that are used in the compilation process and
+        packets that are in development. The goal is to make the kind of
+        workflow where seperate packets developed on the same computer can
+        compile easily under development, and then be uploaded for use by the
+        other packets.  
+    # Extensible and generic
+        Packet management for different programming languages are in almost
+        every way identical, except for a few specific parts which differ,
+        mainly compilation and installation. Having to create a new packet
+        manager for every langauge is ultimately a bit wasteful. But in order to
+        use the same packet manager for multiple languages so must the
+        program/codebase be easily extensible.
+/_
+
+
