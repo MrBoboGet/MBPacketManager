@@ -1,0 +1,298 @@
+%title CLI
+
+generic invocation
+[[Usage]]
+mbpm <top command> [<sub command>] <PacketSpecification> [<options>*]
+
+Here the command line interace for MBPacketManager is descrbied, and conventions
+used.
+
+# Invocation structure
+
+    Every invocation of consists of "top command". The top command is the first
+    string after the executable name that isn't a
+    @[flag](/{MBCLI}/TopCommandSyntax.mbd#Flags), or a 
+    @[single argument option](/{MBCLI}/TopCommandSyntax.mbd#Single argument options)
+    . The top command specifies the kind of operation to perform, and some top
+    commands have further subcommands that need to be specified.
+
+    _# Examples
+```
+# Here install is the top command
+mbpm install MBUtility
+# Here create is the top command, and compilecommands is the subcommand
+mbpm create compilecommands --alluser
+```
+    /#
+
+    If a command has a subcommand so has this to be the first 
+    @[argument](/{MBCLI}/TopCommandSyntax.mbd#Arguments) appearing after the top
+    command.
+
+#_ Commands
+   
+    # install
+        
+        [[Usage]]
+        mbpm install PacketName* [<install flags>*]
+
+        The command tasked with downloading a packet from a remote, along with
+        all of it's required dependancies. The directory where the downloads are
+        stored may depend on the @[packet type](Packets.mbd#Packet type). For
+        example vim packets are stored under "~/.vim/". However, for most
+        regular programming languages so is the directory usally under 
+        the directory specified by MBPM_PACKETS_INSTALL_DIRECTORY environment
+        variable.
+    
+        #_ Options 
+
+            Install only has one flag that modifies it's behaviour.
+
+            # nocomputerdiff
+                
+                This flags specifies that the @["computer diff"](ComputerDiff.mbd) 
+                used when downloading should be the empty, meaning that the
+                files downloaded should not depend on a specific operating
+                system, cpu, or other configuration.
+
+                This option can for example be used to skip downloading
+                precompiled versions of a packet.
+        /_
+
+
+    # update
+        
+        [[Usage]]
+        mbpm update <PacketSpecification> [<UpdateOptions>*]
+
+        The default @[location type](Packets.mbd#Location type) for the 
+        @[packet specification](PacketsSpecification.mbd) is installed.
+
+        This command updates a packet to match the file structure on a
+        remote, and updates the @[file index](FileIndex.mbd) in the directory to
+        match the new file structure.
+
+        [[Note]]
+        If no fileindex file named MBPM_FileInfo is present in the packet
+        directory so is a new MBPM_FileInfo file created, and already present
+        MBPM_FileInfo files are overwritten. These files are used to keep track
+        of which files have been changed since the last update and to compare
+        with the remote index.
+
+        [[Note]]
+        A remote packet or user packet appearing in the <PacketsSpecification>
+        is treated as a fatal error, meaning that no packets are updated.
+        
+        #_ Flags
+            
+            # nocomputerdiff
+                
+                This flags specifies that the @["computer diff"](ComputerDiff.mbd) 
+                used when downloading should be the empty, meaning that the
+                files downloaded should not depend on a specific operating
+                system, cpu, or other configuration.
+
+                This option can for example be used to skip downloading
+                precompiled versions of a packet, or prevent local compilations
+                from being overwritten.
+
+            # allowuser
+                
+                This flag make's it so that update can modify user packets. 
+                The default is to dissallow this in order to prevent accidentall
+                loss of local modifications.
+        /_
+
+    # upload
+
+        [[Usage]]
+        mbpm update <PacketsSpecification> [<UpdateOptions>*]
+
+        The command that upload packets on the machine to a remote, or to the
+        local installation directory. The default  
+        @[location type](Packets.mbd#Location type) for the packets in the 
+        @[packet specification](PacketsSpecification.mbd) is 'installed'.
+
+        The command checks checks wheter or not a MBPM_FileInfo index file is
+        present in the packet directory, uses it to compare the last
+        modification time for the files present in the packet, and then
+        overrides it with the new info. A new index file is created named
+        MBPM_FileInfo if no MBPM_FileInfo index file is present or a invalid
+        file index is present. Only new files and files that differ from the
+        ones on the remote is uploaded.
+
+        The default is to upload the packet with an empty
+        @[computer diff](ComputerDiff.mbd), meaning files present on all
+        configurations are modified.
+
+        #_ Flags
+            
+            # local
+
+                This option makes it so that the command instead of uploading
+                the packet  to the remote installs it on the local system. This
+                follow the exact same semantics as downloading this packet
+                through a remote with "mbpm install".
+
+            # computerdiff
+                
+                The local index is checked against the remote's computerdiff
+                index for the local computeres configuration, and uploads the
+                files to the packets computerdiff index for the local
+                configuration. 
+
+                This means that this upload is only visible for downloads also
+                utilising the same computer diff.
+
+        /_  
+
+        #_ Single argument options
+            
+            # f
+                
+                Specifies a specific file to upload instead of comparing the
+                index's for the packet on the machine against the remote index.
+
+                Specifying this option or @[-d](#d) makes it so that the upload
+                only upload the file specified by the options 
+                @[-f](#f) and @[-d](#d). 
+
+                [[Note]]
+                Both @[-f](#f) and @[-d](#d) skips comparison against a local
+                @[MBPM_FileInfoIgnore](IndexFile.mbd#File info ignore), which
+                enables uploading files that are otherwise ignored by default,
+                for example the dirctory "MBPM_Builds".
+
+            # d
+                
+                Specifies a specific directory to upload instead of comparing the
+                index for the packet on the machine against the remote index.
+
+                Specifying this option or @[-f](#f) makes it so that the upload
+                only upload the file's specified by the options 
+                @[-f](#f) and @[-d](#d). 
+
+                [[Note]]
+                Both @[-f](#f) and @[-d](#d) skips comparison against a local
+                @[MBPM_FileInfoIgnore](IndexFile.mbd#File info ignore), which
+                enables uploading files that are otherwise ignored by default,
+                for example the dirctory "MBPM_Builds".
+        /_
+
+    # packets
+        
+        [[Usage]]
+        mbpm packets <PacketSpecification> [<PacketsOptions>*]
+
+        Command used for visualising the result of a packet specification, and
+        provides a way to access this list from for example bash scripts.
+
+        The command prints the packet name, packet location type, and packet URI
+        for each packet in the @[packet specification](PacketsSpecification.mbd)
+        .
+
+        #_ Flags
+            
+            # path  
+
+                For each packet, only print the path to the packet. Remote
+                packets are skipped if this flag is present.
+            
+            # name  
+
+                For each packet, only print the name of the packet.
+
+            # location  
+
+                For each packet, only print the location type of the packet. 
+
+        /_
+
+    # compile
+
+        [[Usage]]
+        mbpm compile <PacketsSpecification> [<CompileOptions>*]
+
+        This command is works as a bridge between MBPacketManager and it's child
+        project, @[MBBuild]({MBBuild}). It is responsible for compiling packets,
+        but the nature of compilation means that exact semantics varies between
+        different langauges. The only part of the command line that is specified
+        by MBPacketManager is the one dealing with the packets specification,
+        and all other options are documented by MBBuild. Documentation for
+        MBBuild can be found @[here]({MBBuild).
+
+    #_ index
+
+        [[Usage]]
+        mbpm index (create | diff | list | update) ...
+
+        All commands under the index top command deals with the manipulation and
+        visualisation of @[file indexes](FileIndex.mbd). 
+        
+        # create
+            
+            [[Usage]]
+            mbpm index create <PacketsSpecification>
+
+            Creates or overwrites MBPM_FileInfo with a index file describing the
+            file's in the packet directory. 
+
+        # update
+
+            [[Usage]]
+            mbpm index update <PacketsSpecification>
+
+            Updates and existing MBPM_FileInfo index or creates on if it doesn't
+            already exist in the packet directories. 
+
+
+        # list 
+            
+            [[Usage]]]
+            mbpm index list <SinglePacketSpecification> ObjectToList="/"
+
+            Displays the content of MBPM_FileInfo index at the packet
+            specification.
+
+            ObjectToList can be a file or directory, directories are displayed
+            recursivly, and it defaults to displaying the whole index.
+        
+        # diff 
+
+            [[usage]]
+            mbpm index diff <SinglePacketSpecification> <SinglePacketSpecification>
+
+            Display the difference between the MBPM_FileInfo indexes. The first
+            packet is interpeted to be the "local" packet and the second is the
+            "server" packet. The semantics for differences between file indexes
+            can be found @[here](FileIndex.mbd#Index diff).
+    /_   
+
+    # get
+        
+        [[Usage]]
+        mbpm get <SinglePacketSpecification> <AbsolutePacketPath> [<GetOptions>*]
+        
+        Downloads the given filesystem object specified by the
+        AbsolutePacketPath, a file or a whole directory, from the provided
+        packet. The downloaded object is placed in the same relative directory
+        structure for the current working directory. This means that downloading
+        for example "/foo/bar" would create the directory "foo" if it doesn't
+        already exist in the current working directory, and then creates a new
+        file that is then copied from the packet. 
+        
+        When downloading from a remote so is the empty computer diff used by
+        default.
+
+        #_ Flags
+            
+            # computerdiff
+
+                Makes it so the downloaded files from a remote uses the computer
+                diff index for the local machines configuration.
+
+        /_
+
+
+        
+/_

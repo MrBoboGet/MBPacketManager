@@ -4,4 +4,33 @@ MBPacketManager is a packet manager program, with a focus on simple packet
 and generic packet structures, with a bias towards easing development for
 programming languages with the same dependancy and build semantics as C/C++.
 
+This documentation consists mainly of four parts: The documentation describing
+the general concepts and abstraction for MBPacketManager, documentation about
+the codebase, documentation about the fileformats used, and documentation about
+the command line interface.
 
+# History
+
+    The motivation behind the project and the overall design goals are described
+    in @[History](History.mbd).
+     
+# Codebase
+ 
+    The documentation for the codebase can be found @[here](Codebase).
+    
+    MBPacketManager is mostly designed as a command line utility, which means
+    that not many functions are exposed in a way usable for external use.
+    The most important functionality exposed is mainly regarding the parsing of
+    the various files used, and a convenience class for retrieving packets on the
+    system, aswell as a class defined for easily implementing the server side.
+
+# Development structure
+    
+    The @[development structure](DevelopmentStructure.mbd) describes what the
+    different files in the git repository are and how new files should be added,
+    and is aimed at people wanting to develop on the program. 
+
+# CLI
+
+    The command line interface is documented @[here](CLI.mbd), and large parts
+    of it can also be accesed from the program itself.
