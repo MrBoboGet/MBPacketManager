@@ -2,7 +2,7 @@
 
 generic invocation
 [[Usage]]
-mbpm <top command> [<sub command>] <PacketSpecification> [<options>*]
+mbpm <top command> [<sub command>] <PacketSpecification> [<options>\*]
 
 Here the command line interace for MBPacketManager is descrbied, and conventions
 used.
@@ -34,7 +34,7 @@ mbpm create compilecommands --alluser
     # install
         
         [[Usage]]
-        mbpm install PacketName* [<install flags>*]
+        mbpm install PacketName\* [<install flags>\*]
 
         The command tasked with downloading a packet from a remote, along with
         all of it's required dependancies. The directory where the downloads are
@@ -63,7 +63,7 @@ mbpm create compilecommands --alluser
     # update
         
         [[Usage]]
-        mbpm update <PacketSpecification> [<UpdateOptions>*]
+        mbpm update <PacketSpecification> [<UpdateOptions>\*]
 
         The default @[location type](Packets.mbd#Location type) for the 
         @[packet specification](PacketsSpecification.mbd) is installed.
@@ -106,7 +106,7 @@ mbpm create compilecommands --alluser
     # upload
 
         [[Usage]]
-        mbpm update <PacketsSpecification> [<UpdateOptions>*]
+        mbpm update <PacketsSpecification> [<UpdateOptions>\*]
 
         The command that upload packets on the machine to a remote, or to the
         local installation directory. The default  
@@ -182,7 +182,7 @@ mbpm create compilecommands --alluser
     # packets
         
         [[Usage]]
-        mbpm packets <PacketSpecification> [<PacketsOptions>*]
+        mbpm packets <PacketSpecification> [<PacketsOptions>\*]
 
         Command used for visualising the result of a packet specification, and
         provides a way to access this list from for example bash scripts.
@@ -211,7 +211,7 @@ mbpm create compilecommands --alluser
     # compile
 
         [[Usage]]
-        mbpm compile <PacketsSpecification> [<CompileOptions>*]
+        mbpm compile <PacketsSpecification> [<CompileOptions>\*]
 
         This command is works as a bridge between MBPacketManager and it's child
         project, @[MBBuild]({MBBuild}). It is responsible for compiling packets,
@@ -271,7 +271,7 @@ mbpm create compilecommands --alluser
     # get
         
         [[Usage]]
-        mbpm get <SinglePacketSpecification> <AbsolutePacketPath> [<GetOptions>*]
+        mbpm get <SinglePacketSpecification> <AbsolutePacketPath> [<GetOptions>\*]
         
         Downloads the given filesystem object specified by the
         AbsolutePacketPath, a file or a whole directory, from the provided

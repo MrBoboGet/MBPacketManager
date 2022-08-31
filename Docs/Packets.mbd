@@ -1,2 +1,220 @@
-% Packets
-Packets are the most fundamental part of 
+% title Packets
+
+Packets are the most fundamental part of MBPacketManager, and what makes the
+application do anything meaningfull.
+
+This document describes how packets are created, the different kinds of packet
+on the system, and the meaning of MBPM_PacketInfo file that describes the
+packet, aswell as the design philosophy behind packets and the problems they are
+intended to solve.
+
+# Design philosophy 
+    
+    Packets are designed to modularize functionality in some way, and to
+    make it easy to transfer between computers, aswell as keeping track of
+    exactly what this functionality depends on.
+
+    MBPacketManager initially started as purely a way to separate C++ projects
+    into multiple libraries, but has since then evolved to support generic
+    packets. 
+
+    In order to do this so is there a separation from the dependancy and package
+    management from the semantics of the package installed.
+
+    But one of the main goals of this project, more of which can be found 
+    @[here](History.mbd), is to also make it easy to create packets yourself and
+    use locally. Packets shouldn't be a hassle to create and distribute and
+    utilize, that would remove halft of the reason to use them in the first
+    place. This means that the structure of the packet is extremly free and few
+    things are mandated, which also ties in with the previous point in that
+    package managment should work for every type of packet. 
+
+# Packet structure and creating a packet
+    In order to create a packet so is exactly one thing needed: A valid
+    MBPM_PacketInfo file, it's content is 
+    @[described further down](#MBPM_PacketInfo).
+
+    Every directory which contains a MBPM_PacketInfo is interpreted as a packet
+    directory for the purpose of @[determining user packet](#User packets), and
+    for determining the @[installed packets](#Installed packets).
+
+    The content of a packet is simply a directory structure, all rooted under to
+    / directory of the packet, the directory containing the MBPM_PacketInfo.
+    This means that all packets contains atleast the file "/MBPM_PacketInfo".
+    While some different kind of packet type may have different restrictions to
+    how packet can be composed, so is it not something that is enforced during
+    the distribution, uploading and downloading, of packets.
+
+    While there only is one file that is required to exist, so are there a
+    couple of files and directories that are assumed not to. 
+
+    All files/directories with a name begining with "MBPM_" can be created,
+    removed, and modified by MBPacketManager, aswell as the special directory
+    ".mbpm". Having files in these directories as a part of the packet should
+    therefore be seen as undefined behaviour.
+
+    There also exist a small set of special directories with semantics intended
+    with common semantics intended to be used by multiple packet types.
+
+    _# MBPM_Builds
+        
+        This directory can optionally contain the compiled version of some
+        packet. For C/C++ projects so might this contain the compiled
+        executable or static library, and for documentation so can this be the
+        finished pdf etc. The exact semantics depends on the packet type.
+
+        # C/C++
+            
+            The directory contains a subdirectory for each build configuration,
+            which in turn contains the compiled version for a specific
+            configuration. The special directory "default" can be used to supply
+            a build that isn't specific to any compile configuration.
+            @[Exporting](PacketOperations.mbd) mbpm looks in the
+            @[default export configuration]({MBBuild}#Default export configuration)
+            for the @[exported executables/library](#Exported executables), or
+            in the default directory if the default export configuration is not
+            present. 
+
+            This means that the default directory can be used to reliable
+            distribute precompiled versions of a packet. However, it should be
+            noted that following the MBBuild standard for compilation is highly
+            encouraged.
+        
+    /#
+
+    _# MBPM_BuildFiles
+            
+        This directory contains the build files needed for building a specific
+        packet, and it's content like MBPM_Builds is highly dependant on the
+        packet type. This is it's use for the current builtin supported packet
+        types: 
+        
+        # C/C++
+
+            The build files for each configuration is stored in
+            "MBPM_BuildFiles/{ConfigurationName}", which includes the objects
+            produced during compilation, and MBBuildDependancyInfo, a file
+            listing the dependancies for each object and it's last compilation
+            time, used for determining which files needs to be compiled and
+            executables relinked for succesive compilations.
+
+    /#
+
+    _# Absolute packet path
+       
+        //flytta till något annat ställe
+        The philosophy behind mbpm states that packets should be as self
+        contained as possible, and not depend on modifying the filesystem
+        outside it's packet directory, and should only do so by a common
+        interface that is interprated by another program. Programs isn't
+        installed to /usr/bin by the packet, instead the programs available for
+        installation is listed, allowing the user to decide what installation
+        means. 
+
+        This also means the files included in a packet directory is in some
+        sense static, and should provide all information needed to understand
+        the packet. This also gives a natural way to adress files in a packet.
+
+        An absolute packet path is syntactically equivalent to a regular
+        POSIX fileystem absolute path, except that the directory ".." doesn't
+        exist for any directory. The root is the packet directory. 
+        
+    /#
+
+# MBPM_PacketInfo
+    
+    This is the most central configuration file in the project, the file
+    defining a packet. This configuration is a regular JSON file, the content
+    must be single JSON object containing only field describe here. There are a
+    couple of fields that are mandatory, which must be included, and omitting
+    them is treated as an error when parsing the file. Optional fields all have
+    well defined standard values.
+    
+    #_ Mandatory fields
+        
+        # PacketName
+
+            This field MUST be a string, describing the name of the packet. This
+            name should be unique in order to avoid clashes, but there are
+            ultimately no safegaurds against name's clashing. This field being a
+            empty string is also treated as an error.
+
+        # Dependancies
+
+            This field MUST be a list of strings, which are the names of the
+            packets this packet depend on. These dependancies are used for
+            example when installing a packet, and determining it's 
+            @[packet depth](Terminology.mbd#Packet depth).
+
+    /_         
+
+    #_ Optional fields
+       
+        # Type
+
+            Packet type is one of the extension mechanisms for mbpm. While the
+            commands install,upload,update,get should all work for every packet type in
+            the same ways so are there commands which might differ, compile and
+            export being the prime examples. Types might also be used by
+            @[extensions](Extensions.mbd) to override default behaviour.
+
+            The only commands which have different semantics depending on the
+            packet are compile and export. Both commands need to examine the
+            type of packet in order to determine what to do, compilation being
+            the command used for creating a executable or similar, while export
+            is tasked with making the result usable, both operations naturally
+            require specific information about the packet.
+
+            The default value for Type is "C++".
+
+        # TypeData
+            
+            A JSON object which is used pass type specific info to MBPM, and
+            it's semantics is therefore dependant on the packet. 
+
+            No matter the type of packet so is a empty TypeData always a valid
+            value, and the default is also the empty json object. 
+
+            Here the TypeData objects for the builtin types listed:
+
+            # C/C++
+                
+                A json object which might optionally contain the following
+                fields
+
+                #_ Fields
+                    
+                    # ExtraIncludeDirectories
+
+
+                /_
+
+        # Attributes 
+
+            This field field MUST be a list of strings. 
+
+            Attributes are a way to add properties to a packet which can either
+            be interpreted directly by mbpm to modify how the packet is treated,
+            or as a way for the user to group packets and assign their own
+            semantic. They can for example be used in a 
+            @[packet specification](PacketSpecification.mbd) so sort for packets
+            with specific attributes. The default value for the attributes field
+            is an empty list.
+
+            The default behaviour for mbpm for an attribute is to ignore it.
+            Attributes are also allowed to be given special meaning by
+            extensions, and may differ for different packet types.
+
+            Here the attributes which are builtin recognised and acted upon by
+            mbpm listed:
+            
+            # NonMBBuild
+                
+                Emits a cringe warning when installing the packet.
+            
+        # 
+
+        
+    /_
+
+     
