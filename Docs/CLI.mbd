@@ -124,6 +124,13 @@ mbpm create compilecommands --alluser
         The default is to upload the packet with an empty
         @[computer diff](ComputerDiff.mbd), meaning files present on all
         configurations are modified.
+        
+        [[Note]]
+        Uploading multiple packets with the same name is treated as a fatal
+        error, and terminates the program right after resolving the 
+        @[packet specification](PacketsSpecification.mbd). This is because
+        uploading packets with the same name is in almost all cases an error,
+        as these uploads would overwrite each other.
 
         #_ Flags
             

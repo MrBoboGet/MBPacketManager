@@ -1,0 +1,9 @@
+% Networking
+
+In order to download and upload files from a remote computer so are there some
+kind of networking protocol needed. This protocol is described here, along with
+it's design goals.
+
+# Goals
+
+    When doing any kind of 

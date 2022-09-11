@@ -1,0 +1,79 @@
+%title Installation
+
+mbpm contains a couple of parts where the user can configure and change the
+behaviour, and some parts that needs user input in order to function at all.
+This page describes all of the fileystem persistance mbpm requires in order to
+function, and what is needed to make the program function.
+
+# MBPM_PACKETS_INSTALL_DIRECTORY
+    
+    This is in some way the home of mbpm, the root of all configurations and
+    where all installed packets are stored. 
+
+    MBPM_PACKETS_INSTALL_DIRECTORY is an environemnt variable that needs to be
+    defined in order to run mbpm. It MUST be the name of a directory on the
+    filesystem. The user running mbpm also needs read and write access to the
+    folder and subfolders.
+
+    This directory also a couple of configurations files:
+
+    # UserDirectories.txt
+
+        This is a text file, which is a list of line separated directories. 
+
+        The directories list here are used to search for user packets. A
+        user packet is uniquely identified by it's name, and when a user packets
+        is with a specific name is searched for, for example during 
+        @[packet specification](PacketSpecification.mbd), so are all
+        subdirectories of these directoires inspected for a valid
+        @[MBPM_PacketInfo](Packets.mbd#MBPM_PacketInfo) file. If the directory
+        has a valid MBPM_PacketInfo file with the packet name equal to the
+        searched name so is a match found.
+    
+    # MBCompileConfigurations.json
+
+        This is a configuration file used by
+        @[MBBuild]({MBBuild}), and the full documentation for it can be found
+        @[here]({MBBuild}#MBCompileConfigurations.json).
+
+        The file is in short only used when compiling C/C++ code, and is
+        determines the compile and compile flags used for compilation, aswell as
+        the flags used for linking. It is needed in order to use the MBBuild
+        buildsystem.
+
+    # MBDependancySpecification.json
+
+        This is a configuration file used by
+        @[MBBuild]({MBBuild}), and the full documentation for it can be found
+        @[here]({MBBuild}#MBDependancySpecification.json).
+
+        The file is in short only used when compiling C/C++ code, and is used to
+        determine which for every configuration, how a compilations dependancies
+        should be linked. It can be used for example to specify how a packet
+        that doesn't use the MBBuild system should be linked, and is also a way
+        to make it so that very large and complicated packages aren't recompiled
+        for every new configuration/change in configuration.
+    
+    # RemoteConfiguration.json
+
+        This is the configuration file determining which remotes are used when
+        uploading / downloading packets, and some properties regarding their
+        behaviour.
+
+        It is a file in JSON format, and MUST consist of a single JSON object. 
+        It has some optional fields, and some mandatory fields. Any error when
+        parsing this configuration file results in an error when trying to open
+        a remote connection, resulting in a fatal error and terminating the
+        program at that stage. Optional fields aren't needed to be included in
+        the configuration file, and all have well defined standard values.
+
+        _# Mandatory fields
+            
+            Lorem ipsum
+        /#
+
+        _# Optional fields
+        
+            Lorem ipsum
+
+        /#

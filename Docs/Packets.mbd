@@ -189,7 +189,7 @@ intended to solve.
 
                 /_
 
-        # Attributes 
+        _# Attributes 
 
             This field field MUST be a list of strings. 
 
@@ -212,9 +212,80 @@ intended to solve.
                 
                 Emits a cringe warning when installing the packet.
             
-        # 
+        /# 
 
         
     /_
 
-     
+# Location types
+
+    Another concept used by mbpm is packet location. mbpm is designed to be able
+    to develop packages locally and replace the installed packet with these, and
+    to execute comands in a large amount of packets simultaneously. But this
+    means that there is a distinction among packet depending on where on the
+    system they are located, which is refered to as the location type. This
+    location type does however have no effect on the semantics or contents of
+    the packet.
+
+    There are currently 4 different location types defined by mbpm, all of which
+    can be used in a @[packet specification](PacketSpecification.mbd) in order
+    to select packets to execute commands on. 
+
+    How these packets are searched for and determined is highly dependant on the 
+    @[installation](Installation.mbd), and to get a complete picture of the
+    filesystem persistance so is a look at page recommended. How these things
+    relate to packets are also described here however.
+
+    _# Installed packet
+
+        A installed packet is every packet which is under the
+        "MBPM_PACKETS_INSTALL_DIRECTORY" environemnt variable.  
+
+        "MBPM_PACKETS_INSTALL_DIRECTORY" must point to a directory on the
+        filesystem, and it is in this directory that packets are placed when
+        installed by mbpm, and the directory name is the same as the packet
+        name. When determining wheter or not a installed packet with a given
+        name on the system exists, so is the first step to determine wheter or
+        not a directory with this packet name exists under
+        MBPM_PACKETS_INSTALL_DIRECTORY, and if it does, determine if it has a
+        valid MBPM_PacketInfo file with the same packet name. Any of these steps
+        being false means that the packet is not found, and considering as not
+        existing on the system.
+
+        Installed packets have the semantics as being the packets all other
+        packets on the system depend on. A user packet migh be developed
+        separately from the installed packet, but that user packet in turn
+        depend only on installed packet. Exactly what this means naturally
+        depends on the packet type, for "C/C++" so is this related to how the
+        packets are built, all packets are linked only to the installed packets.
+
+    /#
+
+    _# User packet
+
+        The file $MBPM_PACKETS_INSTALL_DIRECTORY/UserDirectories.txt contains a
+        list of directires separated by a new line. Whenever a user packet with
+        a particular name is searched for, so is each every sub directory of
+        every directory in UserDirectories.txt examined, but not recursivly. If
+        a subdirectory contains a valid MBPM_PacketInfo file, with the packet
+        name searched for so is a match found, and otherwise it fails.
+
+    /#
+
+    _# Local packet
+        
+        A local packet is a packet which is not determined to be either a user
+        packet, or a installed packet. This location type is used during 
+        @[packet specification](PacketSpecification.mbd) when a path to a packet
+        is specified instead of a name. 
+
+    /#
+
+    _# Remote packet
+        
+        A remote packet is a packet that is assumed to exist at a 
+        @[remote location](Networking.mbd). They are identified by a name only,
+        and the location and protocol used to access this is  determined by the 
+        @[remote configuration](Installation.mbd). 
+
+    /#
