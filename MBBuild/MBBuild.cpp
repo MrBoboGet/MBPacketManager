@@ -3,7 +3,7 @@
 #include "../MBPacketManager.h"
 #include "MBUtility/MBErrorHandling.h"
 #include "MBUtility/MBInterfaces.h"
-#include "MB_PacketProtocol.h"
+#include "../MB_PacketProtocol.h"
 #include <assert.h>
 #include <filesystem>
 #include <ios>
@@ -1382,10 +1382,10 @@ namespace MBPM
         for(MBPM_PacketInfo const& CurrentInfo : DependancyInfos)
         {
             std::string PacketConfig = DependancySpec.GetDependancyConfig(CurrentInfo,CompileConfName);
-            if(CurrentInfo.Attributes.find(MBPM_PacketAttribute::SubOnly) == CurrentInfo.Attributes.end())
-            {
-                ExtraLibraries.push_back(InstallDirectory+ CurrentInfo.PacketName+"/MBPM_Builds/"+PacketConfig+"/"+h_GetLibraryName(CurrentInfo.PacketName));
-            } 
+            //if(CurrentInfo.Attributes.find(MBPM_PacketAttribute::SubOnly) == CurrentInfo.Attributes.end())
+            //{
+            //    ExtraLibraries.push_back(InstallDirectory+ CurrentInfo.PacketName+"/MBPM_Builds/"+PacketConfig+"/"+h_GetLibraryName(CurrentInfo.PacketName));
+            //} 
             for(auto const& SubLib : CurrentInfo.SubLibraries)
             {
                 ExtraLibraries.push_back(InstallDirectory+ CurrentInfo.PacketName +"/MBPM_Builds/"+PacketConfig+"/"+h_GetLibraryName(SubLib.LibraryName));
@@ -1567,16 +1567,90 @@ namespace MBPM
         ReturnValue =  RetractPacket(PacketToHandle.PacketURI);
         return(ReturnValue);
     }
-    MBError MBBuild_Extension::p_Handle_Create(CommandInfo const& CommandToHandle,PacketIdentifier const& PacketToHandle,PacketRetriever& RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal)
+    MBError MBBuild_Extension::p_Handle_Create(CommandInfo const& CommandToHandle,PacketIdentifier const& Packet,PacketRetriever& RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal)
     {
         MBError ReturnValue = true;
         if(CommandToHandle.Arguments[0] == "sourceinfo")
         {
-            MBPM::MBPM_FileInfoExcluder Excluder(PacketToHandle.PacketURI+"/MBPM_FileInfoIgnore");
+            MBPM::MBPM_FileInfoExcluder Excluder(Packet.PacketURI+"/MBPM_FileInfoIgnore");
+
+            MBError Error = true;
+            MBPM_PacketInfo PacketInfo = RetrieverToUse.GetPacketInfo(Packet);
+            //ASSUMPTION only comes here on existing packets, file system dataraces are reported as exceptions
+            std::filesystem::recursive_directory_iterator PacketDirectoryIterator(Packet.PacketURI);
+            MBParsing::JSONObject SourceInfo(MBParsing::JSONObjectType::Aggregate);
+            SourceInfo["Language"] = "C++";
+            SourceInfo["Standard"] = "C++17";
+            SourceInfo["ExtraIncludes"] = PacketInfo.ExtraIncludeDirectories; 
+            //SourceInfo["Dependancies"] = PacketInfo.PacketDependancies;
+            SourceInfo["Dependancies"] = PacketInfo.PacketDependancies;
+            std::vector<std::string> AllSources;
+            for(auto const& Entry : PacketDirectoryIterator)
+            {
+                std::string PacketPath ="/"+MBUtility::ReplaceAll(MBUnicode::PathToUTF8(std::filesystem::relative(Entry.path(),Packet.PacketURI)),"\\","/");
+                if(Excluder.Excludes(PacketPath) && !Excluder.Includes(PacketPath))
+                {
+                    if (Entry.is_directory()) 
+                    {
+                        PacketDirectoryIterator.disable_recursion_pending();
+                    }
+                    continue;   
+                }
+                if(Entry.path().extension() == ".cpp")
+                {
+                    AllSources.push_back(PacketPath);   
+                }
+            }
+            MBParsing::JSONObject Targets(MBParsing::JSONObjectType::Aggregate);
+            MBParsing::JSONObject LibTarget(MBParsing::JSONObjectType::Aggregate);
+            LibTarget["TargetType"] = "Library";
+            LibTarget["Sources"] = AllSources;
+            LibTarget["OutputName"] = PacketInfo.PacketName;
+            Targets[Packet.PacketName] = std::move(LibTarget);
+            SourceInfo["Targets"] = std::move(Targets);
+
+            bool FileExist = std::filesystem::exists(Packet.PacketURI + "/MBSourceInfo.json");
+
+            if(FileExist && CommandToHandle.Flags.find("newonly") != CommandToHandle.Flags.end())
+            {
+                return(ReturnValue);
+            }
+            bool OverrideAll = CommandToHandle.Flags.find("override") == CommandToHandle.Flags.end();
+            if (!OverrideAll && FileExist)
+            {
+                std::string Response;
+                bool ContinueTop = false;
+                while (true)
+                {
+                    AssociatedTerminal.PrintLine("MBSourceInfo.json already exists for " + Packet.PacketURI + ". Do you want to override it? [y/n/all]");
+                    AssociatedTerminal.GetLine(Response);
+                    if (Response == "y")
+                    {
+                        break;
+                    }
+                    else if (Response == "n")
+                    {
+                        ContinueTop = true;
+                        break;
+                    }
+                    else if (Response == "all")
+                    {
+                        OverrideAll = true;
+                        break;
+                    }
+                }
+                if (ContinueTop)
+                {
+                    return(ReturnValue);
+                }
+            }
+            std::ofstream OutFile = std::ofstream(Packet.PacketURI+"/MBSourceInfo.json");
+            OutFile<<SourceInfo.ToPrettyString();
+
         }
         else if(CommandToHandle.Arguments[0] == "makefile")
         {
-            MBPM::MBPM_FileInfoExcluder Excluder(PacketToHandle.PacketURI+"/MBPM_FileInfoIgnore");
+            MBPM::MBPM_FileInfoExcluder Excluder(Packet.PacketURI+"/MBPM_FileInfoIgnore");
 
         }
         else if(CommandToHandle.Arguments[0] == "cmake")
@@ -1585,8 +1659,63 @@ namespace MBPM
         }
         else if(CommandToHandle.Arguments[0] == "compilecommands")
         {
-            MBPM::MBPM_FileInfoExcluder Excluder(PacketToHandle.PacketURI+"/MBPM_FileInfoIgnore");
-               
+            std::filesystem::path SourceInfoPath= Packet.PacketURI+"/MBSourceInfo.json";
+            if(!std::filesystem::exists(SourceInfoPath))
+            {
+                ReturnValue = false;
+                ReturnValue.ErrorMessage = "create compile_commands.json for packet requries existinb MBSourceInfo.json"; 
+                return(ReturnValue);
+            }
+            SourceInfo LocalSourceInfo;
+            ReturnValue = ParseSourceInfo(SourceInfoPath,LocalSourceInfo);
+            if(!ReturnValue) return(ReturnValue);
+
+            std::filesystem::path NewFilePath = Packet.PacketURI+"/compile_commands.json";
+            if(std::filesystem::exists(NewFilePath))
+            {
+                AssociatedTerminal.PrintLine("compile_commands.json already exists for packet \""+Packet.PacketName+"\"");
+                while(true)
+                {
+                    AssociatedTerminal.PrintLine("do you want to overrride it? (y/n)");
+                    std::string Response;
+                    AssociatedTerminal.GetLine(Response);
+                    if(Response == "y")
+                    {
+                        break;    
+                    }
+                    else if(Response  == "n")
+                    {
+                        return(ReturnValue);   
+                    }
+                }
+            }
+            std::ofstream OutStream = std::ofstream(NewFilePath,std::ios::out);
+            if(OutStream.is_open() == false)
+            {
+                ReturnValue = false;
+                ReturnValue.ErrorMessage = "Failed opening output file";   
+                return(ReturnValue);
+            }
+            std::vector<MBParsing::JSONObject> ObjectsToWrite;
+            std::vector<std::string> Sources = h_GetAllSources(LocalSourceInfo);
+            for(std::string const& Source : Sources)
+            {
+                MBParsing::JSONObject NewSource(MBParsing::JSONObjectType::Aggregate);   
+                NewSource["file"] = Source.substr(1);
+                NewSource["directory"] = Packet.PacketURI;
+                std::vector<std::string> Arguments; 
+                //TODO change to actually match the specified language/standard in the file
+                Arguments.push_back("clang++");
+                Arguments.push_back("-std=c++17");
+                Arguments.push_back("-c");
+                Arguments.push_back(Source.substr(1));
+                //TODO fix extra include directories for dependancies
+                Arguments.push_back("--include-directory="+MBPM::GetSystemPacketsDirectory());
+                NewSource["arguments"] = Arguments;
+                ObjectsToWrite.push_back(std::move(NewSource));
+            }
+            OutStream<<MBParsing::JSONObject(std::move(ObjectsToWrite)).ToPrettyString();
+            OutStream.flush();
         }
         return(ReturnValue);
     }

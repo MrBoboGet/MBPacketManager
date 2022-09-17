@@ -3,9 +3,10 @@ set(PROJECT_NAME "MBPacketManager")
 ##BEGIN MBPM_VARIABLES
 set(MBPM_DEPENDENCIES 
 	"MrBoboSockets"
+	"MBCLI"
 	"MBMime"
 	"MBCrypto"
-	"MBCLI"
+	"MBBenchmark"
 	"MrBigInt"
 	"MBUnicode"
 	"MBSystem"

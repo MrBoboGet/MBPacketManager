@@ -50,7 +50,7 @@ int main(int argc,const char** argv)
     }
     assert(ParsedDependancies == Dependancies);
     MBPM::PacketRetriever Retriever;    
-    MBPM::MBBuild::MBBuildCLI Builder(&Retriever);
+    //MBPM::MBBuild::MBBuildCLI Builder(&Retriever);
     //Builder.BuildPacket("../../", {"GNU_Debug"}, {});
-    Builder.BuildPacket("../../", {"Debug"}, {});
+    //Builder.BuildPacket("../../", {"Debug"}, {});
 }

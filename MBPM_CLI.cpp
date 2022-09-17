@@ -1869,12 +1869,24 @@ namespace MBPM
     void MBPM_ClI::p_HandleCustomCommand(MBCLI::ProcessedCLInput const& CommandInput,MBCLI::MBTerminal* AssociatedTerminal)
     {
         MBError PacketListError = true;
-        std::vector<PacketIdentifier> PacketList = p_GetCommandPackets(CommandInput, PacketLocationType::Installed,PacketListError);
+        size_t PacketOffset = 0;
+        auto TypeIt = m_CustomCommandTypes.find(CommandInput.TopCommand);
+        if(TypeIt == m_CustomCommandTypes.end())
+        {
+            AssociatedTerminal->PrintLine("Invalid command \""+CommandInput.TopCommand+"\"");   
+            std::exit(1);
+        }
+        if(TypeIt->second == CommandType::TopCommand)
+        {
+            PacketOffset = 1;   
+        }
+        std::vector<PacketIdentifier> PacketList = p_GetCommandPackets(CommandInput, PacketLocationType::Installed,PacketListError,PacketOffset);
         if(!PacketListError)
         {
             AssociatedTerminal->PrintLine("Error creating packet list: "+PacketListError.ErrorMessage);   
             std::exit(1);
         }
+        bool CommandExecuted = false;
         for(auto const& Packet : PacketList)
         {
             MBPM_PacketInfo CurrentPacketInfo = m_PacketRetriever.GetPacketInfo(Packet);
@@ -1892,10 +1904,39 @@ namespace MBPM
             }
         }        
     }
+    std::unordered_set<std::string> i_ReservedFlags = {"local","user","installed","remote","allinstalled"};
+    std::unordered_set<std::string> i_ReservedOptions = {"l","i","r"};
     CommandInfo h_ConvertCLIInput(MBCLI::ProcessedCLInput const& InputToConvert,CustomCommand const& TargetCommand)
     {
         CommandInfo ReturnValue;    
-
+        ReturnValue.CommandName = InputToConvert.TopCommand; 
+        for(auto const& Flag : InputToConvert.CommandOptions)
+        {
+            if(i_ReservedFlags.find(Flag.first) == i_ReservedFlags.end())
+            {
+                ReturnValue.Flags.insert(Flag.first);
+            }
+        }
+        for(auto const& Option : InputToConvert.CommandPositionalOptions)
+        {
+            std::string OptionName = Option.first;
+            if(i_ReservedOptions.find(OptionName) == i_ReservedOptions.end())
+            {
+                continue;   
+            }
+            for(auto const& OptionValue : InputToConvert.GetSingleArgumentOptionList(OptionName))
+            {
+                ReturnValue.SingleValueOptions[OptionName].push_back(OptionValue.first);
+            }
+        }
+        if(TargetCommand.Type == CommandType::SubCommand)
+        {
+            if(InputToConvert.TopCommandArguments.size() == 0)
+            {
+                throw std::runtime_error("subcommand not specified for command \""+InputToConvert.TopCommand+"\"");   
+            }
+            ReturnValue.Arguments.push_back(InputToConvert.TopCommandArguments[0]);
+        }
         return(ReturnValue);
     }
     std::pair<CLI_Extension*,CommandInfo> MBPM_ClI::p_GetHandlingExtension(MBCLI::ProcessedCLInput const& CLIInput,MBPM_PacketInfo const& Info)
@@ -1932,6 +1973,12 @@ namespace MBPM
         CustomCommandInfo NewCommandInfo = ExtensionToRegister->GetCustomCommands(); 
         for(auto const& Command : NewCommandInfo.Commands)
         {
+            if(m_CustomCommandTypes.find(Command.Name) != m_CustomCommandTypes.end() && m_CustomCommandTypes[Command.Name] 
+                    != Command.Type)
+            {
+                throw std::runtime_error("Extensions trying to register the same custom command with different type: "+Command.Name);   
+            }
+            m_CustomCommandTypes[Command.Name] = Command.Type;
             m_TopCommandHooks[Command.Name].push_back({Command,m_RegisteredExtensions.size()});
         } 
         m_RegisteredExtensions.push_back(std::move(ExtensionToRegister));
@@ -2236,24 +2283,6 @@ namespace MBPM
             AssociatedTerminal->PrintLine("Error retrieving command packets: " + ParseError.ErrorMessage);
             return;
         }
-        std::string MBPMStaticData = "";
-        if (CommandInput.CommandPositionalOptions.find("sdata") != CommandInput.CommandPositionalOptions.end())
-        {
-            size_t DataPosition = CommandInput.CommandPositionalOptions.at("sdata")[0];
-            if (CommandInput.TotalCommandTokens.size() <= DataPosition + 1)
-            {
-                AssociatedTerminal->PrintLine("Error with sdata option: No filepath supplied");
-                return;
-            }
-            std::string Filepath = CommandInput.TotalCommandTokens[DataPosition + 1];
-            if (!std::filesystem::exists(Filepath))
-            {
-                AssociatedTerminal->PrintLine("Error with sdata option: Cant't find file \"" + Filepath + "\"");
-                return;
-            }
-            MBPMStaticData = h_ReadMBPMStaticData(Filepath);
-        }
-        //allinstalled �r incompatible med att uppdatera packets manuellt, eftersom den g�r det i dependancy ordning
         if (CommandInput.CommandOptions.find("cmake") != CommandInput.CommandOptions.end())
         {
             bool UpdateCmake = true;
@@ -2405,234 +2434,10 @@ namespace MBPM
         }
         else if(CommandInput.CommandOptions.find("sourceinfo") != CommandInput.CommandOptions.end())
         {
-            std::vector<PacketIdentifier> FailedPackets;
-            bool OverrideAll = false;
-            if (CommandInput.CommandOptions.find("override") != CommandInput.CommandOptions.end())
-            {
-                OverrideAll = true;
-            }
-            for(auto const& Packet : PacketDirectories)
-            {
-                MBError Error = true;
-                MBPM_PacketInfo PacketInfo = p_GetPacketInfo(Packet,&Error);
-                if(!Error)
-                {
-                    AssociatedTerminal->PrintLine("No MBPM_PacketInfo present in packet: "+Packet.PacketName);
-                    FailedPackets.push_back(Packet); 
-                    continue;
-                }
-                MBPM_FileInfoExcluder Excluder(Packet.PacketURI+"/MBPM_FileInfoIgnore");
-                MBError DependanciesError = true;
-                std::filesystem::recursive_directory_iterator PacketDirectoryIterator(Packet.PacketURI);
-                MBParsing::JSONObject SourceInfo(MBParsing::JSONObjectType::Aggregate);
-                SourceInfo["Language"] = "C++";
-                SourceInfo["Standard"] = "C++17";
-                SourceInfo["ExtraIncludes"] = PacketInfo.ExtraIncludeDirectories; 
-                //SourceInfo["Dependancies"] = PacketInfo.PacketDependancies;
-                std::vector<std::string> MissingPackets;
-                std::vector<PacketIdentifier> FirstDegreeDependancies;
-                for (std::string const& PacketName: PacketInfo.PacketDependancies)
-                {
-                    FirstDegreeDependancies.push_back(p_GetInstalledPacket(PacketName));
-                }
-                auto DependancyInfo = p_GetPacketDependancieInfo(FirstDegreeDependancies, DependanciesError, &MissingPackets);
-                if (!DependanciesError)
-                {
-                    AssociatedTerminal->PrintLine("Error with constructing source info: missing dependancies:");
-                    for (size_t i = 0; i < MissingPackets.size(); i++)
-                    {
-                        AssociatedTerminal->PrintLine(MissingPackets[i]);
-                    }
-                    continue;
-                }
-                std::vector<PacketIdentifier> AllDependancies = p_UnrollPacketDependancyInfo(DependancyInfo);
-                std::vector<std::string> DependancyNames;
-                for (PacketIdentifier const& PacketToInsert : AllDependancies)
-                {
-                    DependancyNames.push_back(PacketToInsert.PacketName);
-                }
-                std::reverse(DependancyNames.begin(), DependancyNames.end());
-                SourceInfo["Dependancies"] = DependancyNames;
-                std::vector<std::string> AllSources;
-                for(auto const& Entry : PacketDirectoryIterator)
-                {
-                    std::string PacketPath ="/"+MBUtility::ReplaceAll(MBUnicode::PathToUTF8(std::filesystem::relative(Entry.path(),Packet.PacketURI)),"\\","/");
-                    if(Excluder.Excludes(PacketPath) && !Excluder.Includes(PacketPath))
-                    {
-                        if (Entry.is_directory()) 
-                        {
-                            PacketDirectoryIterator.disable_recursion_pending();
-                        }
-                        continue;   
-                    }
-                    if(Entry.path().extension() == ".cpp")
-                    {
-                        AllSources.push_back(PacketPath);   
-                    }
-                }
-                MBParsing::JSONObject Targets(MBParsing::JSONObjectType::Aggregate);
-                MBParsing::JSONObject LibTarget(MBParsing::JSONObjectType::Aggregate);
-                LibTarget["TargetType"] = "Library";
-                LibTarget["Sources"] = AllSources;
-                LibTarget["OutputName"] = PacketInfo.PacketName;
-                Targets[Packet.PacketName] = std::move(LibTarget);
-                SourceInfo["Targets"] = std::move(Targets);
-
-                bool FileExist = std::filesystem::exists(Packet.PacketURI + "/MBSourceInfo.json");
-
-                if(FileExist && CommandInput.CommandOptions.find("newonly") != CommandInput.CommandOptions.end())
-                {
-                    continue;
-                }
-                if (!OverrideAll && FileExist)
-                {
-                    std::string Response;
-                    bool ContinueTop = false;
-                    while (true)
-                    {
-                        AssociatedTerminal->PrintLine("MBSourceInfo.json already exists for " + Packet.PacketURI + ". Do you want to override it? [y/n/all]");
-                        AssociatedTerminal->GetLine(Response);
-                        if (Response == "y")
-                        {
-                            break;
-                        }
-                        else if (Response == "n")
-                        {
-                            ContinueTop = true;
-                            break;
-                        }
-                        else if (Response == "all")
-                        {
-                            OverrideAll = true;
-                            break;
-                        }
-                    }
-                    if (ContinueTop)
-                    {
-                        continue;
-                    }
-                }
-                std::ofstream OutFile = std::ofstream(Packet.PacketURI+"/MBSourceInfo.json");
-                OutFile<<SourceInfo.ToPrettyString();
-            }    
+            
         }
         else if (CommandInput.CommandOptions.find("compilecommands") != CommandInput.CommandOptions.end())
         {
-            std::vector<PacketIdentifier> FailedPackets;
-            for (auto const& Packet : PacketDirectories)
-            {
-                MBError CurrentPacketInfoResult = true;
-                MBPM_PacketInfo CurrentPacketInfo = p_GetPacketInfo(Packet,&CurrentPacketInfoResult);
-                if (!CurrentPacketInfoResult)
-                {
-                    AssociatedTerminal->PrintLine("Skipping packet " + Packet.PacketName + ": couldn't read packet info, "+CurrentPacketInfoResult.ErrorMessage);
-                    FailedPackets.push_back(Packet);
-                    continue;
-                }
-                //if (CurrentPacketInfo.Attributes.find(MBPM_PacketAttribute::NonMBBuild) != CurrentPacketInfo.Attributes.end())
-                //{
-                //    continue;
-                //}
-                if (Packet.PacketLocation == PacketLocationType::Remote)
-                {
-                    AssociatedTerminal->PrintLine("Skipping packet " + Packet.PacketName+": packet is remote");
-                    FailedPackets.push_back(Packet);
-                    continue;
-                }
-                std::vector<MBParsing::JSONObject> CompileCommands;
-                if (!std::filesystem::exists(Packet.PacketURI) || !std::filesystem::is_directory(Packet.PacketURI))
-                {
-                    AssociatedTerminal->PrintLine("Skipping packet " + Packet.PacketName+": filesystem error, couldnt find directory "+Packet.PacketURI);
-                    FailedPackets.push_back(Packet);
-                    continue; 
-                }
-                //eventuall method for including arbitrary defines too
-                std::vector<std::string> ExtraFlags;
-                //
-                ExtraFlags.push_back("--include-directory=" + p_GetPacketInstallDirectory());
-                std::vector<PacketIdentifier> PacketToCheck;
-                PacketToCheck.push_back(Packet);
-                //prolly a bit innefective as it requires alot of redundant reads, but easier to implement
-                MBError DependancyError = true;
-                std::vector<std::string> MissingPackets;
-                std::vector<PacketIdentifier> PacketDependancies = p_GetPacketDependancies_DependancyOrder(PacketToCheck, DependancyError, &MissingPackets);
-                if (!DependancyError)
-                {
-                    AssociatedTerminal->PrintLine("Skipping packet " + Packet.PacketName + ": Error retrieving dependancys " + DependancyError.ErrorMessage);
-                    FailedPackets.push_back(Packet);
-                    continue;
-                }
-                for (auto const& Dependancy : PacketDependancies)
-                {
-                    MBError InfoError = true;
-                    MBPM_PacketInfo DependancyInfo = p_GetPacketInfo(Dependancy, &InfoError);
-                    if (!InfoError)
-                    {
-                        AssociatedTerminal->PrintLine("Skipping packet " + Packet.PacketName + ": Error retrieving dependancy info for "+Dependancy.PacketName+","+ InfoError.ErrorMessage);
-                        FailedPackets.push_back(Packet);
-                        continue;
-                    }
-                    std::string InstallDirectory = p_GetPacketInstallDirectory();
-                    for (std::string const& ExtraIncludes : DependancyInfo.ExtraIncludeDirectories)
-                    {
-                        ExtraFlags.push_back("--include-directory=" + InstallDirectory + Dependancy.PacketName + "/" + ExtraIncludes);
-                    }
-                }
-                //
-
-                std::filesystem::directory_iterator Iterator(Packet.PacketURI);
-                MBPM_FileInfoExcluder Excluder;
-                if (std::filesystem::exists(Packet.PacketURI + "/MBPM_FileInfoExcluder"))
-                {
-                    Excluder = MBPM_FileInfoExcluder(Packet.PacketURI + "/MBPM_FileInfoExcluder");
-                }
-                for (auto& Entry : Iterator)
-                {
-                    std::string PacketPath = "/"+MBUnicode::PathToUTF8(std::filesystem::relative(Entry.path(), Packet.PacketURI));
-                    if (Excluder.Excludes(PacketPath) && !Excluder.Includes(PacketPath))
-                    {
-                        continue;
-                    }
-                    std::string Extension = MBUnicode::PathToUTF8(Entry.path().extension());
-                    if (!(Entry.path().extension() == ".cpp" || Entry.path().extension() == ".c"))
-                    {
-                        continue;
-                    }
-                    MBParsing::JSONObject CompilationUnit(MBParsing::JSONObjectType::Aggregate);
-                    CompilationUnit["directory"] = MBUnicode::PathToUTF8(std::filesystem::absolute(Packet.PacketURI));
-                    CompilationUnit["file"] = PacketPath.substr(1);
-                    MBParsing::JSONObject Arguments(MBParsing::JSONObjectType::Array);
-                    auto& ArgumentArray = Arguments.GetArrayData();
-                    ArgumentArray.push_back("clang++");
-                    ArgumentArray.push_back("--include-directory=./");
-                    ArgumentArray.push_back("-std=c++17");
-                    for (std::string const& Flag : ExtraFlags)
-                    {
-                        ArgumentArray.push_back(Flag);
-                    }
-                    ArgumentArray.push_back("-c");
-                    ArgumentArray.push_back(PacketPath.substr(1));
-                    CompilationUnit["arguments"] = std::move(Arguments);
-                    CompileCommands.push_back(std::move(CompilationUnit));
-                }
-                MBParsing::JSONObject FinishedObject = MBParsing::JSONObject(std::move(CompileCommands));
-                std::ofstream OutStream = std::ofstream(Packet.PacketURI + "/compile_commands.json");
-                if (!OutStream.is_open())
-                {
-                    AssociatedTerminal->PrintLine("Error opening output for " + Packet.PacketName);
-                    FailedPackets.push_back(Packet);
-                    continue;
-                }
-                OutStream << FinishedObject.ToString();
-            }
-            if (FailedPackets.size() > 0)
-            {
-                AssociatedTerminal->PrintLine("Failed creating compile_commands.json for following packets:");
-                for (auto const& Packet : FailedPackets)
-                {
-                    AssociatedTerminal->PrintLine(Packet.PacketName + " " + Packet.PacketURI);
-                }
-            }
         }
         else
         {
@@ -2955,7 +2760,7 @@ namespace MBPM
         }
         else
         {
-            AssociatedTerminal->PrintLine("Invalid command \"" + CommandInput.TopCommand + "\"");
+            p_HandleCustomCommand(CommandInput,AssociatedTerminal);
         }
     }
     //END MBPM_CLI

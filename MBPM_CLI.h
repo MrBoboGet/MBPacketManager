@@ -1,4 +1,5 @@
 #include "MBUtility/MBErrorHandling.h"
+#include <unordered_set>
 #pragma p_HandleRetract
 #include "MBPacketManager.h"
 #include <MBCLI/MBCLI.h>
@@ -27,7 +28,7 @@ namespace MBPM
     {
         std::string CommandName = "";
         std::vector<std::string> Arguments;
-        std::set<std::string> Flags;
+        std::unordered_set<std::string> Flags;
         std::unordered_map<std::string, std::vector<std::string>> SingleValueOptions;
     };
     enum class CommandType
@@ -71,6 +72,7 @@ namespace MBPM
         PacketRetriever m_PacketRetriever;
         
         std::vector<std::unique_ptr<CLI_Extension,void (*)(void*)>> m_RegisteredExtensions;
+        std::unordered_map<std::string, CommandType> m_CustomCommandTypes;
         std::unordered_map<std::string,std::vector<std::pair<CustomCommand,size_t>>> m_TopCommandHooks;
 
 
