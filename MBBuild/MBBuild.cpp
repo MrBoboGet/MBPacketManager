@@ -3,6 +3,7 @@
 #include "../MBPacketManager.h"
 #include "MBUtility/MBErrorHandling.h"
 #include "MBUtility/MBInterfaces.h"
+#include "MB_PacketProtocol.h"
 #include <assert.h>
 #include <filesystem>
 #include <ios>
@@ -908,10 +909,10 @@ namespace MBPM
   
     //BEGIN MBBuildCLI 
     
-    UserConfigurationsInfo MBBuildCLI::p_GetGlobalCompileConfigurations()
+    UserConfigurationsInfo MBBuild_Extension::p_GetGlobalCompileConfigurations()
     {
        UserConfigurationsInfo ReturnValue;
-       std::filesystem::path ConfigPath = MBPM::GetSystemPacketsDirectory()+"MBCompileConfigurations.json";
+       std::filesystem::path ConfigPath = m_ConfigDirectory/"MBCompileConfigurations.json";
        MBError Result = ParseUserConfigurationInfo(ConfigPath,ReturnValue);
        if(!Result)
        {
@@ -919,10 +920,10 @@ namespace MBPM
        }
        return(ReturnValue);
     }
-    DependancyConfigSpecification MBBuildCLI::p_GetGlobalDependancySpecification()
+    DependancyConfigSpecification MBBuild_Extension::p_GetGlobalDependancySpecification()
     {
         DependancyConfigSpecification ReturnValue;
-        std::filesystem::path ConfigPath = MBPM::GetSystemPacketsDirectory()+"MBDependancySpecification.json";
+        std::filesystem::path ConfigPath =m_ConfigDirectory/"MBDependancySpecification.json";
         if(std::filesystem::exists(ConfigPath))
         {
             std::ifstream FileInput(ConfigPath);    
@@ -935,7 +936,7 @@ namespace MBPM
         }
         return(ReturnValue);    
     }
-    SourceInfo MBBuildCLI::p_GetPacketSourceInfo(std::filesystem::path const& PacketPath)
+    SourceInfo MBBuild_Extension::p_GetPacketSourceInfo(std::filesystem::path const& PacketPath)
     {
         SourceInfo ReturnValue;
         MBError Result = ParseSourceInfo(PacketPath/"MBSourceInfo.json",ReturnValue);
@@ -946,7 +947,7 @@ namespace MBPM
         return(ReturnValue); 
     }
 
-    MBPM_PacketInfo MBBuildCLI::p_GetPacketInfo(std::filesystem::path const& PacketPath)
+    MBPM_PacketInfo MBBuild_Extension::p_GetPacketInfo(std::filesystem::path const& PacketPath)
     {
         MBPM_PacketInfo ReturnValue = ParseMBPM_PacketInfo(MBUnicode::PathToUTF8(PacketPath/"MBPM_PacketInfo")); 
         if(ReturnValue.PacketName == "")
@@ -955,14 +956,14 @@ namespace MBPM
         }
         return(ReturnValue);  
     }
-    DependancyConfigSpecification MBBuildCLI::p_GetConfigSpec(std::filesystem::path const& PacketPath)
+    DependancyConfigSpecification MBBuild_Extension::p_GetConfigSpec(std::filesystem::path const& PacketPath)
     {
         DependancyConfigSpecification  ReturnValue;
          
         return(ReturnValue); 
     }
 
-    bool MBBuildCLI::p_VerifyConfigs(LanguageConfiguration const& Config,std::vector<std::string> const& ConfigNames)
+    bool MBBuild_Extension::p_VerifyConfigs(LanguageConfiguration const& Config,std::vector<std::string> const& ConfigNames)
     {
         bool ReturnValue = true;
         for(std::string const& ConfigName : ConfigNames)
@@ -974,7 +975,7 @@ namespace MBPM
         }
         return(ReturnValue);      
     }
-    bool MBBuildCLI::p_VerifyTargets(SourceInfo const& InfoToCompile,std::vector<std::string> const& Targests)
+    bool MBBuild_Extension::p_VerifyTargets(SourceInfo const& InfoToCompile,std::vector<std::string> const& Targests)
     {
         bool ReturnValue = true;
         for(std::string const& TargetName : Targests)
@@ -987,7 +988,7 @@ namespace MBPM
         return(ReturnValue);
     }
     
-    bool MBBuildCLI::p_VerifyToolchain(SourceInfo const& InfoToCompile,CompileConfiguration const& CompileConfigToVerify)
+    bool MBBuild_Extension::p_VerifyToolchain(SourceInfo const& InfoToCompile,CompileConfiguration const& CompileConfigToVerify)
     {
         bool ToolchainSupported = false; 
         for(auto const& Toolchain : {"msvc","gcc","clang"})
@@ -1003,7 +1004,7 @@ namespace MBPM
             throw std::runtime_error("Unsupported toolchain: "+CompileConfigToVerify.Toolchain);   
         }
         //TODO per toolchain verify that booth the language and standard is supported
-
+        return(ToolchainSupported);
     }
 
     std::vector<std::string> h_SourcesToObjectFiles(std::vector<std::string> const& Sources,std::string const& Extension)
@@ -1048,7 +1049,7 @@ namespace MBPM
         return(ReturnValue);
     }
 
-    void MBBuildCLI::p_Compile_MSVC(CompileConfiguration const& CompileConf,SourceInfo const& SInfo,std::vector<std::string> const& SourcesToCompile,std::vector<std::string> const& ExtraIncludeDirectories)
+    void MBBuild_Extension::p_Compile_MSVC(CompileConfiguration const& CompileConf,SourceInfo const& SInfo,std::vector<std::string> const& SourcesToCompile,std::vector<std::string> const& ExtraIncludeDirectories)
     {
         //std::string CompileCommand = "vcvars64.bat & cl /c ";
         std::string CompileCommand = "vcvarsall.bat x86_x64 & cl /c ";
@@ -1073,7 +1074,7 @@ namespace MBPM
             throw std::runtime_error("Failed compiling sources");   
         }
     }
-    void MBBuildCLI::p_Link_MSVC(CompileConfiguration const& CompileConfig,SourceInfo const& SInfo, std::string const& ConfigName, Target const& TargetToLink, std::vector<std::string> ExtraLibraries)
+    void MBBuild_Extension::p_Link_MSVC(CompileConfiguration const& CompileConfig,SourceInfo const& SInfo, std::string const& ConfigName, Target const& TargetToLink, std::vector<std::string> ExtraLibraries)
     {
         std::vector<std::string> ObjectFiles = h_SourcesToObjectFiles(TargetToLink.SourceFiles,".obj");
         
@@ -1143,7 +1144,7 @@ namespace MBPM
         ReturnValue += " ";
         return(ReturnValue); 
     }
-    void MBBuildCLI::p_Compile_GCC(std::string const& CompilerName,CompileConfiguration const& CompileConf,SourceInfo const& SInfo,std::vector<std::string> const& SourcesToCompile,std::vector<std::string> const& ExtraIncludeDirectories)
+    void MBBuild_Extension::p_Compile_GCC(std::string const& CompilerName,CompileConfiguration const& CompileConf,SourceInfo const& SInfo,std::vector<std::string> const& SourcesToCompile,std::vector<std::string> const& ExtraIncludeDirectories)
     {
         std::string CompileCommand =  CompilerName+" -c ";    
         CompileCommand += h_MBStandardToGCCStandard(SInfo.Language,SInfo.Standard);
@@ -1169,7 +1170,7 @@ namespace MBPM
         }
     }
     
-    void MBBuildCLI::p_Link_GCC(std::string const& CompilerName,CompileConfiguration const& CompileConfig,SourceInfo const& SInfo,std::string const& ConfigName,Target const& TargetToLink,std::vector<std::string> ExtraLibraries)
+    void MBBuild_Extension::p_Link_GCC(std::string const& CompilerName,CompileConfiguration const& CompileConfig,SourceInfo const& SInfo,std::string const& ConfigName,Target const& TargetToLink,std::vector<std::string> ExtraLibraries)
     {
         
         std::vector<std::string> ObjectFiles = h_SourcesToObjectFiles(TargetToLink.SourceFiles,".o");
@@ -1254,7 +1255,7 @@ namespace MBPM
             return("lib"+TargetName+".a");       
         }
     }
-    void MBBuildCLI::p_Compile(CompileConfiguration const& CompileConf,SourceInfo const& SInfo,std::vector<std::string> const& SourcesToCompile,std::vector<std::string> const& ExtraIncludeDirectories)
+    void MBBuild_Extension::p_Compile(CompileConfiguration const& CompileConf,SourceInfo const& SInfo,std::vector<std::string> const& SourcesToCompile,std::vector<std::string> const& ExtraIncludeDirectories)
     {
         if(CompileConf.Toolchain == "gcc")
         {
@@ -1279,7 +1280,7 @@ namespace MBPM
             p_Compile_MSVC(CompileConf,SInfo,SourcesToCompile,ExtraIncludeDirectories);
         }
     }
-    void MBBuildCLI::p_Link(CompileConfiguration const& CompileConfig,SourceInfo const& SInfo, std::string const& ConfigName, Target const& TargetToLink, std::vector<std::string> ExtraLibraries)
+    void MBBuild_Extension::p_Link(CompileConfiguration const& CompileConfig,SourceInfo const& SInfo, std::string const& ConfigName, Target const& TargetToLink, std::vector<std::string> ExtraLibraries)
     {
         if(CompileConfig.Toolchain == "gcc")
         {
@@ -1305,7 +1306,7 @@ namespace MBPM
         }
     }
 
-    void MBBuildCLI::p_BuildLanguageConfig(std::filesystem::path const& PacketPath,MBPM_PacketInfo const& PacketInfo,DependancyConfigSpecification const& DependancySpec,CompileConfiguration const& CompileConf,std::string const& CompileConfName, SourceInfo const& InfoToCompile,std::vector<std::string> const& Targets)
+    void MBBuild_Extension::p_BuildLanguageConfig(std::filesystem::path const& PacketPath,MBPM_PacketInfo const& PacketInfo,DependancyConfigSpecification const& DependancySpec,CompileConfiguration const& CompileConf,std::string const& CompileConfName, SourceInfo const& InfoToCompile,std::vector<std::string> const& Targets)
     {
         //Create build info   
         DependancyInfo SourceDependancies; 
@@ -1411,11 +1412,7 @@ namespace MBPM
         SourceDependancies.WriteDependancyInfo(DependancyOutputStream);
         DependancyOutputStream.Flush();
     }
-    MBBuildCLI::MBBuildCLI(PacketRetriever* Retriever)
-    {
-        m_AssociatedRetriever = Retriever;    
-    }
-    MBError MBBuildCLI::BuildPacket(std::filesystem::path const& PacketPath,std::vector<std::string> Configs,std::vector<std::string> Targets)
+    MBError MBBuild_Extension::BuildPacket(std::filesystem::path const& PacketPath,std::vector<std::string> Configs,std::vector<std::string> Targets)
     {
         MBError ReturnValue = true;
         try
@@ -1470,15 +1467,128 @@ namespace MBPM
         } 
         return(ReturnValue);    
     }
-    MBError MBBuildCLI::ExportTarget(std::filesystem::path const& PacketPath,std::vector<std::string> const& TargetsToExport,std::string const& ExportConfig)
+    MBError MBBuild_Extension::ExportPacket(std::filesystem::path const& PacketPath)
     {
         MBError ReturnValue = true;
 
         return(ReturnValue);    
     }
-    int MBBuildCLI::Run(int argc,const char** argv,MBCLI::MBTerminal* TerminalToUse)
+    const char* MBBuild_Extension::GetName()
     {
-        return(0);        
+        return("MBBuild"); 
+    }
+    CustomCommandInfo MBBuild_Extension::GetCustomCommands()
+    {
+        CustomCommandInfo ReturnValue; 
+        CustomCommand CompileCommand;
+        CompileCommand.Name = "compile";
+        CompileCommand.Type = CommandType::TopCommand;
+        CompileCommand.SupportedTypes = {"C","C++"};
+        CustomCommand CreateCommand;
+        CreateCommand.Name = "create";
+        CreateCommand.Type = CommandType::SubCommand;
+        CreateCommand.SupportedTypes = {"C","C++"};
+        CustomCommand ExportCommand;
+        ExportCommand.Name = "export";
+        ExportCommand.Type = CommandType::TopCommand;
+        ExportCommand.SupportedTypes = {"C","C++"};
+        CustomCommand RetractCommand;
+        RetractCommand.Name = "retract";
+        RetractCommand.Type = CommandType::TopCommand;
+        RetractCommand.SupportedTypes = {"C","C++"};
+
+        ReturnValue.Commands = {CompileCommand,CreateCommand,ExportCommand,RetractCommand};
+        return(ReturnValue);
+    }
+    void MBBuild_Extension::SetConfigurationDirectory(const char* ConfigurationDirectory,const char** OutError)
+    {
+        m_ConfigDirectory =  ConfigurationDirectory; 
+        //Should maybe read the contents of the config to make sure it's valid, a question of wheter or not
+        //failure should be noticed at runtime for specific packets or not
+    }
+    MBError MBBuild_Extension::HandleCommand(CommandInfo const& CommandToHandle,PacketIdentifier const& PacketToHandle,PacketRetriever& RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal)
+    {
+        MBError ReturnValue = true;
+        if(CommandToHandle.CommandName == "compile")
+        {
+            ReturnValue = p_Handle_Compile(CommandToHandle,PacketToHandle,RetrieverToUse,AssociatedTerminal); 
+        }       
+        else if(CommandToHandle.CommandName == "export")
+        {
+            ReturnValue = p_Handle_Export(CommandToHandle,PacketToHandle,RetrieverToUse,AssociatedTerminal);
+        }
+        else if(CommandToHandle.CommandName == "create")
+        {
+            ReturnValue = p_Handle_Create(CommandToHandle,PacketToHandle,RetrieverToUse,AssociatedTerminal);
+        }
+        else if(CommandToHandle.CommandName == "retract")
+        {
+            ReturnValue = p_Handle_Retract(CommandToHandle,PacketToHandle,RetrieverToUse,AssociatedTerminal);
+        }
+        return(ReturnValue);
+    }
+    void MBBuild_Extension::HandleHelp(CommandInfo const& CommandToHandle,MBCLI::MBTerminal& AssociatedTerminal)
+    {
+        AssociatedTerminal.PrintLine("MBBuild: compile code the good MBG way");
+    }
+    MBError MBBuild_Extension::p_Handle_Compile(CommandInfo const& CommandToHandle,PacketIdentifier const& PacketToHandle,PacketRetriever & RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal)
+    {
+        MBError ReturnValue = true;
+        std::vector<std::string> Targets; 
+        std::vector<std::string> Configurations;
+        auto TargetsIt = CommandToHandle.SingleValueOptions.find("t");
+        if(TargetsIt != CommandToHandle.SingleValueOptions.end())
+        {
+            for(std::string const& Target : TargetsIt->second)
+            {
+                Targets.push_back(Target);   
+            } 
+        }
+        auto ConfigurationsIt = CommandToHandle.SingleValueOptions.find("c");
+        if(ConfigurationsIt != CommandToHandle.SingleValueOptions.end())
+        {
+            for(std::string const& Configuration : ConfigurationsIt->second)
+            {
+                Targets.push_back(Configuration);   
+            } 
+        }
+        ReturnValue =  BuildPacket(PacketToHandle.PacketURI,Configurations,Targets);
+        return(ReturnValue);    
+    }
+    MBError MBBuild_Extension::p_Handle_Export(CommandInfo const& CommandToHandle,PacketIdentifier const& PacketToHandle,PacketRetriever& RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal)
+    {
+        MBError ReturnValue = true;
+        ReturnValue =  ExportPacket(PacketToHandle.PacketURI);
+        return(ReturnValue);    
+   }
+    MBError MBBuild_Extension::p_Handle_Retract(CommandInfo const& CommandToHandle,PacketIdentifier const& PacketToHandle,PacketRetriever& RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal)
+    {
+        MBError ReturnValue = true; 
+        ReturnValue =  RetractPacket(PacketToHandle.PacketURI);
+        return(ReturnValue);
+    }
+    MBError MBBuild_Extension::p_Handle_Create(CommandInfo const& CommandToHandle,PacketIdentifier const& PacketToHandle,PacketRetriever& RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal)
+    {
+        MBError ReturnValue = true;
+        if(CommandToHandle.Arguments[0] == "sourceinfo")
+        {
+            MBPM::MBPM_FileInfoExcluder Excluder(PacketToHandle.PacketURI+"/MBPM_FileInfoIgnore");
+        }
+        else if(CommandToHandle.Arguments[0] == "makefile")
+        {
+            MBPM::MBPM_FileInfoExcluder Excluder(PacketToHandle.PacketURI+"/MBPM_FileInfoIgnore");
+
+        }
+        else if(CommandToHandle.Arguments[0] == "cmake")
+        {
+             
+        }
+        else if(CommandToHandle.Arguments[0] == "compilecommands")
+        {
+            MBPM::MBPM_FileInfoExcluder Excluder(PacketToHandle.PacketURI+"/MBPM_FileInfoIgnore");
+               
+        }
+        return(ReturnValue);
     }
     //END MBBuildCLI 
 
@@ -1509,11 +1619,7 @@ namespace MBPM
         {
             for(std::string const& String : p_ParseStringArray(ObjectToParse["Attribute"]))
             {
-                ReturnValue.Attribute.push_back(MBPM::StringToPacketAttribute(String));           
-                if(ReturnValue.Attribute.back() == MBPM_PacketAttribute::Null)
-                {
-                    throw std::runtime_error("Invalid attribute found: "+String);   
-                }
+                ReturnValue.Attribute.push_back(String);           
             }
         }
         if(ObjectToParse.HasAttribute("ConfigurationName"))
@@ -1597,7 +1703,7 @@ namespace MBPM
         bool ReturnValue = false;
         ReturnValue |= std::find(PredicateToVerify.PacketName.begin(),PredicateToVerify.PacketName.end(),DependancyPacket.PacketName) != PredicateToVerify.PacketName.end();
         ReturnValue |= std::find(PredicateToVerify.ConfigurationName.begin(),PredicateToVerify.ConfigurationName.end(),CompileConfig) != PredicateToVerify.ConfigurationName.end();
-        for (MBPM_PacketAttribute Attribute : DependancyPacket.Attributes)
+        for (std::string const& Attribute : DependancyPacket.Attributes)
         {
             ReturnValue |= std::find(PredicateToVerify.Attribute.begin(), PredicateToVerify.Attribute.end(), Attribute) != PredicateToVerify.Attribute.end();
             if (ReturnValue)

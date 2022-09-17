@@ -22,126 +22,126 @@
 namespace MBPM
 {
 	//BEGIN Private functions
-	MBError h_AddDirectoryFiles(MBPM_CmakeProject& ProjectToPopulate, std::string const& ProjectDirectory,std::string const& ProjectName)
-	{
-		MBError ReturnValue = true;
-		std::filesystem::recursive_directory_iterator ProjectIterator(ProjectDirectory);
-		MBPM_FileInfoExcluder FileExcluder;
-		if (std::filesystem::exists(ProjectDirectory + "/MBPM_FileInfoIgnore") && std::filesystem::directory_entry(ProjectDirectory + "/MBPM_FileInfoIgnore").is_regular_file())
-		{
-			FileExcluder = MBPM_FileInfoExcluder(ProjectDirectory + "/MBPM_FileInfoIgnore");
-		}
-		for (auto const& Entries : ProjectIterator)
-		{
-			if (Entries.is_regular_file())
-			{
-				//Kommer ge fel p� windows med paths som har u8, f�r l�gga till den dependancyn
-				std::string RelativeFilePath = std::filesystem::relative(Entries.path(),ProjectDirectory).generic_u8string();
-				std::string FilePacketPath = +"/" + RelativeFilePath;
-				std::string Filename = Entries.path().filename().generic_u8string();	
-				std::string FileEnding = "";
-				size_t LastDot = Filename.find_last_of('.');
-				if (FileExcluder.Excludes(FilePacketPath) && !FileExcluder.Includes(FilePacketPath))
-				{
-					continue;
-				}
-				if (LastDot != Filename.npos && LastDot != Filename.size()-1)
-				{
-					FileEnding = Filename.substr(LastDot + 1);
-				}
-				if (FileEnding == "h" || FileEnding == "hpp")
-				{
-					ProjectToPopulate.CommonHeaders.push_back(ProjectName + "/" + RelativeFilePath);
-				}
-				if (FileEnding == "c" || FileEnding == "cpp")
-				{
-					ProjectToPopulate.CommonSources.push_back(ProjectName + "/" + RelativeFilePath);
-				}
-			}
-		}
-		return(ReturnValue);
-	}
-	MBError h_EmbeddPacket_CmakeFile(MBPM_CmakeProject& ProjectToPopulate, MBPM_MakefileGenerationOptions const& CompileConfiguration, MBPM_PacketInfo const& PacketInfo, std::string const& PacketDirectory)
-	{
-		//Just nu l�gger vi bara till om det g�r, annars tar bort, i framtiden kanske vi vill l�gga till
-		MBError ReturnValue = "";
-		if (PacketInfo.Attributes.find(MBPM_PacketAttribute::TriviallyEmbedabble) != PacketInfo.Attributes.end())
-		{
-			ReturnValue = false;
-			ReturnValue.ErrorMessage = "Error embedding packet\"" + PacketInfo.PacketName + "\": Embedding not supported";
-			return(ReturnValue);
-			//if (PacketInfo.SupportedOutputConfigurations.find(MBPM_CompileOutputConfiguration::StaticDebug) == PacketInfo.SupportedOutputConfigurations.end())
-			//{
-			//
-			//}
-		}
-		else
-		{
-			ReturnValue = h_AddDirectoryFiles(ProjectToPopulate,PacketDirectory,"${MBPM_PACKETS_DIRECTORY}/"+PacketInfo.PacketName);
-		}
-		return(ReturnValue);
-	}
-	MBError h_GenerateCmakeFile(MBPM_CmakeProject& ProjectToPopulate, MBPM_MakefileGenerationOptions const& CompileConfiguration,MBPM_PacketInfo const& PacketInfo,std::string const& PacketDirectory)
-	{
-		MBError GenerationError = true;
-		bool IsTopPacket = false;
-		if (ProjectToPopulate.ProjectName == "")
-		{
-			IsTopPacket = true;
-		}
-		if (IsTopPacket)
-		{
-			ProjectToPopulate.ProjectName = PacketInfo.PacketName;
-		}
-		std::stack<std::string> TotalDependancies = {};
-		for (size_t i = 0; i < PacketInfo.PacketDependancies.size(); i++)
-		{
-			TotalDependancies.push(PacketInfo.PacketDependancies[i]);
-			//ProjectToPopulate.ProjectPacketsDepandancies.insert(PacketInfo.PacketDependancies[i]);
-		}
-		while (TotalDependancies.size() > 0)
-		{
-			std::string Dependancies = TotalDependancies.top();
-			TotalDependancies.pop();
-			if (ProjectToPopulate.ProjectPacketsDepandancies.find(Dependancies) == ProjectToPopulate.ProjectPacketsDepandancies.end())
-			{
-				std::string DependancyPath = GetSystemPacketsDirectory() + Dependancies+"/";
-				MBPM_PacketInfo DependancyInfo;
-				if (std::filesystem::exists(DependancyPath + "MBPM_PacketInfo"))
-				{
-					DependancyInfo = ParseMBPM_PacketInfo(DependancyPath + "MBPM_PacketInfo");
-				}
-				else
-				{
-					GenerationError = false;
-					GenerationError.ErrorMessage = "Missing Dependancy \""+Dependancies+"\"";
-					return(GenerationError);
-				}
-				for (auto const& NewDependancies : DependancyInfo.PacketDependancies)
-				{
-					if (ProjectToPopulate.ProjectPacketsDepandancies.find(NewDependancies) == ProjectToPopulate.ProjectPacketsDepandancies.end())
-					{
-						TotalDependancies.push(NewDependancies);
-					}
-				}
-				ProjectToPopulate.ProjectPacketsDepandancies.insert(Dependancies);
-			}
-		}
-		if (IsTopPacket)
-		{
-			h_AddDirectoryFiles(ProjectToPopulate, PacketDirectory,"");
-		}
-		return(GenerationError);
-	}
-	MBError h_GenerateCmakeFile(MBPM_CmakeProject& ProjectToPopulate, MBPM_MakefileGenerationOptions const& CompileConfiguration, std::string const& PacketDirectory)
-	{
-		MBError GenerationError = true;
-		MBPM_PacketInfo PacketInfo = ParseMBPM_PacketInfo(PacketDirectory + "MBPM_PacketInfo");
+	//MBError h_AddDirectoryFiles(MBPM_CmakeProject& ProjectToPopulate, std::string const& ProjectDirectory,std::string const& ProjectName)
+	//{
+	//	MBError ReturnValue = true;
+	//	std::filesystem::recursive_directory_iterator ProjectIterator(ProjectDirectory);
+	//	MBPM_FileInfoExcluder FileExcluder;
+	//	if (std::filesystem::exists(ProjectDirectory + "/MBPM_FileInfoIgnore") && std::filesystem::directory_entry(ProjectDirectory + "/MBPM_FileInfoIgnore").is_regular_file())
+	//	{
+	//		FileExcluder = MBPM_FileInfoExcluder(ProjectDirectory + "/MBPM_FileInfoIgnore");
+	//	}
+	//	for (auto const& Entries : ProjectIterator)
+	//	{
+	//		if (Entries.is_regular_file())
+	//		{
+	//			//Kommer ge fel p� windows med paths som har u8, f�r l�gga till den dependancyn
+	//			std::string RelativeFilePath = std::filesystem::relative(Entries.path(),ProjectDirectory).generic_u8string();
+	//			std::string FilePacketPath = +"/" + RelativeFilePath;
+	//			std::string Filename = Entries.path().filename().generic_u8string();	
+	//			std::string FileEnding = "";
+	//			size_t LastDot = Filename.find_last_of('.');
+	//			if (FileExcluder.Excludes(FilePacketPath) && !FileExcluder.Includes(FilePacketPath))
+	//			{
+	//				continue;
+	//			}
+	//			if (LastDot != Filename.npos && LastDot != Filename.size()-1)
+	//			{
+	//				FileEnding = Filename.substr(LastDot + 1);
+	//			}
+	//			if (FileEnding == "h" || FileEnding == "hpp")
+	//			{
+	//				ProjectToPopulate.CommonHeaders.push_back(ProjectName + "/" + RelativeFilePath);
+	//			}
+	//			if (FileEnding == "c" || FileEnding == "cpp")
+	//			{
+	//				ProjectToPopulate.CommonSources.push_back(ProjectName + "/" + RelativeFilePath);
+	//			}
+	//		}
+	//	}
+	//	return(ReturnValue);
+	//}
+	//MBError h_EmbeddPacket_CmakeFile(MBPM_CmakeProject& ProjectToPopulate, MBPM_MakefileGenerationOptions const& CompileConfiguration, MBPM_PacketInfo const& PacketInfo, std::string const& PacketDirectory)
+	//{
+	//	//Just nu l�gger vi bara till om det g�r, annars tar bort, i framtiden kanske vi vill l�gga till
+	//	MBError ReturnValue = "";
+	//	if (PacketInfo.Attributes.find(MBPM_PacketAttribute::TriviallyEmbedabble) != PacketInfo.Attributes.end())
+	//	{
+	//		ReturnValue = false;
+	//		ReturnValue.ErrorMessage = "Error embedding packet\"" + PacketInfo.PacketName + "\": Embedding not supported";
+	//		return(ReturnValue);
+	//		//if (PacketInfo.SupportedOutputConfigurations.find(MBPM_CompileOutputConfiguration::StaticDebug) == PacketInfo.SupportedOutputConfigurations.end())
+	//		//{
+	//		//
+	//		//}
+	//	}
+	//	else
+	//	{
+	//		ReturnValue = h_AddDirectoryFiles(ProjectToPopulate,PacketDirectory,"${MBPM_PACKETS_DIRECTORY}/"+PacketInfo.PacketName);
+	//	}
+	//	return(ReturnValue);
+	//}
+	//MBError h_GenerateCmakeFile(MBPM_CmakeProject& ProjectToPopulate, MBPM_MakefileGenerationOptions const& CompileConfiguration,MBPM_PacketInfo const& PacketInfo,std::string const& PacketDirectory)
+	//{
+	//	MBError GenerationError = true;
+	//	bool IsTopPacket = false;
+	//	if (ProjectToPopulate.ProjectName == "")
+	//	{
+	//		IsTopPacket = true;
+	//	}
+	//	if (IsTopPacket)
+	//	{
+	//		ProjectToPopulate.ProjectName = PacketInfo.PacketName;
+	//	}
+	//	std::stack<std::string> TotalDependancies = {};
+	//	for (size_t i = 0; i < PacketInfo.PacketDependancies.size(); i++)
+	//	{
+	//		TotalDependancies.push(PacketInfo.PacketDependancies[i]);
+	//		//ProjectToPopulate.ProjectPacketsDepandancies.insert(PacketInfo.PacketDependancies[i]);
+	//	}
+	//	while (TotalDependancies.size() > 0)
+	//	{
+	//		std::string Dependancies = TotalDependancies.top();
+	//		TotalDependancies.pop();
+	//		if (ProjectToPopulate.ProjectPacketsDepandancies.find(Dependancies) == ProjectToPopulate.ProjectPacketsDepandancies.end())
+	//		{
+	//			std::string DependancyPath = GetSystemPacketsDirectory() + Dependancies+"/";
+	//			MBPM_PacketInfo DependancyInfo;
+	//			if (std::filesystem::exists(DependancyPath + "MBPM_PacketInfo"))
+	//			{
+	//				DependancyInfo = ParseMBPM_PacketInfo(DependancyPath + "MBPM_PacketInfo");
+	//			}
+	//			else
+	//			{
+	//				GenerationError = false;
+	//				GenerationError.ErrorMessage = "Missing Dependancy \""+Dependancies+"\"";
+	//				return(GenerationError);
+	//			}
+	//			for (auto const& NewDependancies : DependancyInfo.PacketDependancies)
+	//			{
+	//				if (ProjectToPopulate.ProjectPacketsDepandancies.find(NewDependancies) == ProjectToPopulate.ProjectPacketsDepandancies.end())
+	//				{
+	//					TotalDependancies.push(NewDependancies);
+	//				}
+	//			}
+	//			ProjectToPopulate.ProjectPacketsDepandancies.insert(Dependancies);
+	//		}
+	//	}
+	//	if (IsTopPacket)
+	//	{
+	//		h_AddDirectoryFiles(ProjectToPopulate, PacketDirectory,"");
+	//	}
+	//	return(GenerationError);
+	//}
+	//MBError h_GenerateCmakeFile(MBPM_CmakeProject& ProjectToPopulate, MBPM_MakefileGenerationOptions const& CompileConfiguration, std::string const& PacketDirectory)
+	//{
+	//	MBError GenerationError = true;
+	//	MBPM_PacketInfo PacketInfo = ParseMBPM_PacketInfo(PacketDirectory + "MBPM_PacketInfo");
 
-		GenerationError = h_GenerateCmakeFile(ProjectToPopulate, CompileConfiguration, PacketInfo, PacketDirectory);
+	//	GenerationError = h_GenerateCmakeFile(ProjectToPopulate, CompileConfiguration, PacketInfo, PacketDirectory);
 
-		return(GenerationError);
-	}
+	//	return(GenerationError);
+	//}
 	//END PrivateFunctions
 
 	std::string GetSystemPacketsDirectory()
@@ -170,31 +170,7 @@ namespace MBPM
 //	}
 
     
-    MBPM_PacketAttribute StringToPacketAttribute(std::string const& StringToConvert)
-    {
-        MBPM_PacketAttribute ReturnValue = MBPM_PacketAttribute::Null;
-        if (StringToConvert == "Embeddable")
-        {
-            ReturnValue = MBPM_PacketAttribute::Embedabble;
-        }
-        if (StringToConvert == "NonMBBuild")
-        {
-            ReturnValue = MBPM_PacketAttribute::NonMBBuild;
-        }
-        if (StringToConvert == "IncludeOnly")
-        {
-            ReturnValue = MBPM_PacketAttribute::IncludeOnly;
-        }
-        if (StringToConvert == "TriviallyCompilable")
-        {
-            ReturnValue = MBPM_PacketAttribute::TriviallyCompilable; 
-        }
-		if (StringToConvert == "SubOnly")
-		{
-			ReturnValue = MBPM_PacketAttribute::SubOnly;
-		}
-        return(ReturnValue);
-    }
+    
 	MBPM_PacketInfo ParseMBPM_PacketInfo(std::string const& PacketPath)
 	{
 		std::string JsonData = std::string(std::filesystem::file_size(PacketPath), 0);
@@ -212,11 +188,7 @@ namespace MBPM
 			ReturnValue.PacketName = ParsedJson.GetAttribute("PacketName").GetStringData();
 			for (auto const& Attribute : ParsedJson.GetAttribute("Attributes").GetArrayData())
 			{
-                MBPM_PacketAttribute NewAttribute = StringToPacketAttribute(Attribute.GetStringData());
-                if(NewAttribute != MBPM_PacketAttribute::Null)
-                {
-                    ReturnValue.Attributes.insert(NewAttribute);   
-                }
+                ReturnValue.Attributes.insert(Attribute.GetStringData());
 			}
 			//ExportedExecutableTargets
 			if (ParsedJson.HasAttribute("ExportedExecutableTargets"))
@@ -236,22 +208,11 @@ namespace MBPM
 			}
 			if (ParsedJson.HasAttribute("PacketType"))
 			{
-				if (ParsedJson["PacketType"].GetStringData() == "C++")
-				{
-					ReturnValue.Type = PacketType::CPP;
-				}
-				else if (ParsedJson["PacketType"].GetStringData() == "MBDoc")
-				{
-					ReturnValue.Type = PacketType::MBDoc;
-				}
-				else
-				{
-					ReturnValue.Type = PacketType::Unkown;
-				}
+                ReturnValue.Type = ParsedJson["PacketType"].GetStringData();
 			}
 			else
 			{
-				ReturnValue.Type = PacketType::CPP;
+                ReturnValue.Type = "C++";
 			}
 			//F�r include
 			if (ParsedJson.HasAttribute("ExtraIncludeDirectories"))
@@ -347,10 +308,11 @@ namespace MBPM
 				if (std::filesystem::exists(PacketsDirectory + "/" + CurrentPacket + "/MBPM_PacketInfo"))
 				{
 					MBPM_PacketInfo DependancyPacket = ParseMBPM_PacketInfo(PacketsDirectory + "/" + CurrentPacket + "/MBPM_PacketInfo");
-					if (DependancyPacket.Attributes.find(MBPM_PacketAttribute::IncludeOnly) == DependancyPacket.Attributes.end())
-					{
-						ReturnValue.push_back(CurrentPacket);
-					}
+                    //TODO add to C++ PacketInfo
+					//if (DependancyPacket.Attributes.find(MBPM_PacketAttribute::IncludeOnly) == DependancyPacket.Attributes.end())
+					//{
+					//	ReturnValue.push_back(CurrentPacket);
+					//}
 					if (DependancyPacket.PacketName != "")
 					{
 						for (size_t i = 0; i < DependancyPacket.PacketDependancies.size(); i++)
@@ -397,10 +359,10 @@ namespace MBPM
 
 		for (auto const& Packet : TargetDependancies)
 		{
-			if(Packet.Attributes.find(MBPM_PacketAttribute::SubOnly) == Packet.Attributes.end())
-			{
-				OutputFile << "\t" <<"\""<< Packet.PacketName<<"\"" << "\n";
-			}
+			///if(Packet.Attributes.find(MBPM_PacketAttribute::SubOnly) == Packet.Attributes.end())
+			///{
+			///	OutputFile << "\t" <<"\""<< Packet.PacketName<<"\"" << "\n";
+			///}
 			for (size_t i = 0; i < Packet.SubLibraries.size(); i++)
 			{
 				OutputFile << "\t"<<"\""<<Packet.PacketName<<"#" << Packet.SubLibraries[i].LibraryName<<"\""<<"\n";
@@ -465,57 +427,57 @@ namespace MBPM
 		}
 
 	}
-	MBError WriteCMakeProjectToFile(MBPM_CmakeProject const& ProjectToWrite, std::string const& OutputFilePath)
-	{
-		MBError ReturnValue = true;
-		std::ofstream OutputFile = std::ofstream(OutputFilePath, std::ios::out | std::ios::binary);
-		OutputFile << "project("+ProjectToWrite.ProjectName+")\n";
-		OutputFile << "set(PROJECT_NAME \"" + ProjectToWrite.ProjectName + "\")\n";
-		
-		//MBPM variablar
-		std::vector<std::string> Dependancies = {};
-		for (auto const& Packets : ProjectToWrite.ProjectPacketsDepandancies)
-		{
-			Dependancies.push_back(Packets);
-		}
-		h_WriteMBPMCmakeValues(Dependancies, OutputFile,"");
-		//write common sources
+	//MBError WriteCMakeProjectToFile(MBPM_CmakeProject const& ProjectToWrite, std::string const& OutputFilePath)
+	//{
+	//	MBError ReturnValue = true;
+	//	std::ofstream OutputFile = std::ofstream(OutputFilePath, std::ios::out | std::ios::binary);
+	//	OutputFile << "project("+ProjectToWrite.ProjectName+")\n";
+	//	OutputFile << "set(PROJECT_NAME \"" + ProjectToWrite.ProjectName + "\")\n";
+	//	
+	//	//MBPM variablar
+	//	std::vector<std::string> Dependancies = {};
+	//	for (auto const& Packets : ProjectToWrite.ProjectPacketsDepandancies)
+	//	{
+	//		Dependancies.push_back(Packets);
+	//	}
+	//	h_WriteMBPMCmakeValues(Dependancies, OutputFile,"");
+	//	//write common sources
 
-		OutputFile << "set(PROJECT_SOURCES \n\n";
-		for (std::string const& SourceFiles : ProjectToWrite.CommonSources)
-		{
-			OutputFile <<"\t\"${CMAKE_CURRENT_SOURCE_DIR}/"<< SourceFiles<<"\"" << std::endl;
-		}
-		OutputFile << ")\n";
-		//write common headers
-		OutputFile << "set(PROJECT_HEADERS \n";
-		for (std::string const& Headers : ProjectToWrite.CommonHeaders)
-		{
-			OutputFile << "\t\"${CMAKE_CURRENT_SOURCE_DIR}/"<< Headers <<"\""<< std::endl;
-		}
-		OutputFile << ")\n";
-		OutputFile << "set(COMMON_FILES ${PROJECT_SOURCES} ${PROJECT_HEADERS})\n";
+	//	OutputFile << "set(PROJECT_SOURCES \n\n";
+	//	for (std::string const& SourceFiles : ProjectToWrite.CommonSources)
+	//	{
+	//		OutputFile <<"\t\"${CMAKE_CURRENT_SOURCE_DIR}/"<< SourceFiles<<"\"" << std::endl;
+	//	}
+	//	OutputFile << ")\n";
+	//	//write common headers
+	//	OutputFile << "set(PROJECT_HEADERS \n";
+	//	for (std::string const& Headers : ProjectToWrite.CommonHeaders)
+	//	{
+	//		OutputFile << "\t\"${CMAKE_CURRENT_SOURCE_DIR}/"<< Headers <<"\""<< std::endl;
+	//	}
+	//	OutputFile << ")\n";
+	//	OutputFile << "set(COMMON_FILES ${PROJECT_SOURCES} ${PROJECT_HEADERS})\n";
 
-		//librarys
-		OutputFile << "set(COMMON_DYNAMIC_LIBRARIES \n";
-		for (auto const& CommonDynamicLibraries : ProjectToWrite.CommonDynamicLibrarysNeeded)
-		{
-			OutputFile << '\t' << CommonDynamicLibraries << '\n';
-		}
-		OutputFile << ")\n";
-		OutputFile << "set(COMMON_STATIC_LIBRARIES \n";
-		for(auto const& CommonStaticLibraries : ProjectToWrite.CommonStaticLibrarysNeeded)
-		{
-			OutputFile << '\t' << CommonStaticLibraries << '\n';
-		}
-		OutputFile << ")\n";
+	//	//librarys
+	//	OutputFile << "set(COMMON_DYNAMIC_LIBRARIES \n";
+	//	for (auto const& CommonDynamicLibraries : ProjectToWrite.CommonDynamicLibrarysNeeded)
+	//	{
+	//		OutputFile << '\t' << CommonDynamicLibraries << '\n';
+	//	}
+	//	OutputFile << ")\n";
+	//	OutputFile << "set(COMMON_STATIC_LIBRARIES \n";
+	//	for(auto const& CommonStaticLibraries : ProjectToWrite.CommonStaticLibrarysNeeded)
+	//	{
+	//		OutputFile << '\t' << CommonStaticLibraries << '\n';
+	//	}
+	//	OutputFile << ")\n";
 
-		OutputFile << "set(COMMON_LIBRARIES ${MBPM_SystemLibraries} ${COMMON_STATIC_LIBRARIES} ${COMMON_DYNAMIC_LIBRARIES})\n";
+	//	OutputFile << "set(COMMON_LIBRARIES ${MBPM_SystemLibraries} ${COMMON_STATIC_LIBRARIES} ${COMMON_DYNAMIC_LIBRARIES})\n";
 
 
 
-		return(ReturnValue);
-	}
+	//	return(ReturnValue);
+	//}
 	MBError UpdateCmakeMBPMVariables(std::string const& PacketPath, std::vector<std::string> const& TotalPacketDependancies, std::string const& StaticMBPMData)
 	{
 		MBError ReturnValue = true;
@@ -583,47 +545,47 @@ namespace MBPM
 		return(ReturnValue);
 	}
 
-	MBError GenerateCmakeFile(MBPM_PacketInfo const& PacketToConvert, std::string const& PacketDirectory, MBPM_MakefileGenerationOptions const& CompileConfiguration,std::string const& OutputName)
-	{
-		MBError ReturnValue = true;
-		MBPM_CmakeProject GeneratedProject;
-		ReturnValue = h_GenerateCmakeFile(GeneratedProject, CompileConfiguration, PacketToConvert, PacketDirectory);
-		if (ReturnValue)
-		{
-			WriteCMakeProjectToFile(GeneratedProject, PacketDirectory + "/" + OutputName);
-		}
-		return(ReturnValue);
-	}
-	MBError GenerateCmakeFile(std::string const& PacketPath, MBPM_MakefileGenerationOptions const& CompileConfiguration,std::string const& OutputName)
-	{
-		MBPM_PacketInfo ProjectToConvert = ParseMBPM_PacketInfo(PacketPath + "/MBPM_PacketInfo");
-		MBError ReturnValue = GenerateCmakeFile(ProjectToConvert, PacketPath, CompileConfiguration, OutputName);
-		return(ReturnValue);
-	}
-	MBError GenerateCmakeFile(std::string const& PacketPath, std::string const& CmakeName)
-	{
-		MBPM_PacketInfo PacketToConvert = ParseMBPM_PacketInfo(PacketPath + "/MBPM_PacketInfo");
-		MBPM_MakefileGenerationOptions OptionsToUse;
-		return(GenerateCmakeFile(PacketToConvert, PacketPath, OptionsToUse, CmakeName));
-	}
+	//MBError GenerateCmakeFile(MBPM_PacketInfo const& PacketToConvert, std::string const& PacketDirectory, MBPM_MakefileGenerationOptions const& CompileConfiguration,std::string const& OutputName)
+	//{
+	//	MBError ReturnValue = true;
+	//	MBPM_CmakeProject GeneratedProject;
+	//	ReturnValue = h_GenerateCmakeFile(GeneratedProject, CompileConfiguration, PacketToConvert, PacketDirectory);
+	//	if (ReturnValue)
+	//	{
+	//		WriteCMakeProjectToFile(GeneratedProject, PacketDirectory + "/" + OutputName);
+	//	}
+	//	return(ReturnValue);
+	//}
+	//MBError GenerateCmakeFile(std::string const& PacketPath, MBPM_MakefileGenerationOptions const& CompileConfiguration,std::string const& OutputName)
+	//{
+	//	MBPM_PacketInfo ProjectToConvert = ParseMBPM_PacketInfo(PacketPath + "/MBPM_PacketInfo");
+	//	MBError ReturnValue = GenerateCmakeFile(ProjectToConvert, PacketPath, CompileConfiguration, OutputName);
+	//	return(ReturnValue);
+	//}
+	//MBError GenerateCmakeFile(std::string const& PacketPath, std::string const& CmakeName)
+	//{
+	//	MBPM_PacketInfo PacketToConvert = ParseMBPM_PacketInfo(PacketPath + "/MBPM_PacketInfo");
+	//	MBPM_MakefileGenerationOptions OptionsToUse;
+	//	return(GenerateCmakeFile(PacketToConvert, PacketPath, OptionsToUse, CmakeName));
+	//}
 
-	MBError EmbeddDependancies(std::string const& PacketDirectory, MBPM_MakefileGenerationOptions const& CompileConfiguration, std::string const& TargetFilepath)
-	{
-		MBError ReturnValue = true;
-		MBPM_PacketInfo CurrentProject = ParseMBPM_PacketInfo(PacketDirectory + "MBPM_PacketInfo");
-		ReturnValue = EmbeddDependancies(PacketDirectory, CompileConfiguration, TargetFilepath);
-		return(ReturnValue);
-	}
-	MBError EmbeddDependancies(MBPM_PacketInfo const& PacketInfo, std::string const& PacketDirectory, MBPM_MakefileGenerationOptions const& CompileConfiguration, std::string const& TargetFilepath)
-	{
-		MBError ReturnValue = true;
-		MBPM_CmakeProject EmbeddProject;
-		//ReturnValue = h_GenerateCmakeFile(EmbeddProject, CompileConfiguration, PacketInfo,PacketDirectory);
+	//MBError EmbeddDependancies(std::string const& PacketDirectory, MBPM_MakefileGenerationOptions const& CompileConfiguration, std::string const& TargetFilepath)
+	//{
+	//	MBError ReturnValue = true;
+	//	MBPM_PacketInfo CurrentProject = ParseMBPM_PacketInfo(PacketDirectory + "MBPM_PacketInfo");
+	//	ReturnValue = EmbeddDependancies(PacketDirectory, CompileConfiguration, TargetFilepath);
+	//	return(ReturnValue);
+	//}
+	//MBError EmbeddDependancies(MBPM_PacketInfo const& PacketInfo, std::string const& PacketDirectory, MBPM_MakefileGenerationOptions const& CompileConfiguration, std::string const& TargetFilepath)
+	//{
+	//	MBError ReturnValue = true;
+	//	MBPM_CmakeProject EmbeddProject;
+	//	//ReturnValue = h_GenerateCmakeFile(EmbeddProject, CompileConfiguration, PacketInfo,PacketDirectory);
 
 
 
-		return(ReturnValue);
-	}
+	//	return(ReturnValue);
+	//}
 	struct CompileTargetInfo_MSBuild
 	{
 		std::string Solution = "";
@@ -958,24 +920,24 @@ namespace MBPM
 	}
 
 	[[deprecated]]
-	MBError CompilePacket(std::string const& PacketDirectory)
-	{
-		MBError ReturnValue = true;
-		MBPM_PacketInfo PacketInfo = ParseMBPM_PacketInfo(PacketDirectory + "/MBPM_PacketInfo");
-		if (PacketInfo.Attributes.find(MBPM_PacketAttribute::Embedabble) != PacketInfo.Attributes.end() || PacketInfo.Attributes.find(MBPM_PacketAttribute::TriviallyCompilable) != PacketInfo.Attributes.end())
-		{
-			ReturnValue = h_CompilePacket_MBBuild(PacketDirectory);
-		}
-		else if(std::filesystem::exists(PacketDirectory+"/MBPM_CompileInfo.json"))
-		{
-			ReturnValue = h_CompilePacket_CompileInfo(PacketDirectory);
-		}
-		else
-		{
-			ReturnValue = false;
-		}
-		return(ReturnValue);
-	}
+	//MBError CompilePacket(std::string const& PacketDirectory)
+	//{
+	//	MBError ReturnValue = true;
+	//	MBPM_PacketInfo PacketInfo = ParseMBPM_PacketInfo(PacketDirectory + "/MBPM_PacketInfo");
+	//	if (PacketInfo.Attributes.find(MBPM_PacketAttribute::Embedabble) != PacketInfo.Attributes.end() || PacketInfo.Attributes.find(MBPM_PacketAttribute::TriviallyCompilable) != PacketInfo.Attributes.end())
+	//	{
+	//		ReturnValue = h_CompilePacket_MBBuild(PacketDirectory);
+	//	}
+	//	else if(std::filesystem::exists(PacketDirectory+"/MBPM_CompileInfo.json"))
+	//	{
+	//		ReturnValue = h_CompilePacket_CompileInfo(PacketDirectory);
+	//	}
+	//	else
+	//	{
+	//		ReturnValue = false;
+	//	}
+	//	return(ReturnValue);
+	//}
 	MBError InstallCompiledPacket(std::string const& PacketDirectory)
 	{
 		MBError ReturnValue = true;
@@ -1055,12 +1017,13 @@ namespace MBPM
 	}
 	MBError CompileAndInstallPacket(std::string const& PacketToCompileDirectory)
 	{
-		MBError ReturnValue = CompilePacket(PacketToCompileDirectory);
-		if (ReturnValue)
-		{
-			ReturnValue = InstallCompiledPacket(PacketToCompileDirectory);
-		}
-		return(ReturnValue);
+		//MBError ReturnValue = CompilePacket(PacketToCompileDirectory);
+		//if (ReturnValue)
+		//{
+		//	ReturnValue = InstallCompiledPacket(PacketToCompileDirectory);
+		//}
+		//return(ReturnValue);
+        return(false);
 	}
 	bool PacketIsPrecompiled(std::string const& PacketDirectoryToCheck, MBError* OutError)
 	{

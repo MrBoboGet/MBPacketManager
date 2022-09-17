@@ -1045,7 +1045,7 @@ namespace MBPM
 				{
                     AddInclude(CurrentLine);
 				}
-				else
+                else
 				{
                     AddExcludeFile(CurrentLine);
 				}

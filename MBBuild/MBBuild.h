@@ -8,6 +8,8 @@
 #include <filesystem>
 #include <MBCLI/MBCLI.h>
 
+#include "../MBPM_CLI.h"
+
 namespace MBPM
 {
     namespace MBBuild
@@ -62,7 +64,7 @@ namespace MBPM
         {
             bool Negated = false;
             std::vector<std::string> PacketName;      
-            std::vector<MBPM_PacketAttribute> Attribute;      
+            std::vector<std::string> Attribute;      
             std::vector<std::string> ConfigurationName;      
         };
         struct Specification
@@ -233,16 +235,21 @@ namespace MBPM
 
     };
 
-    class MBBuildCLI
+    class MBBuild_Extension : CLI_Extension
     {
     private:
         PacketRetriever* m_AssociatedRetriever = nullptr; 
+        std::filesystem::path m_ConfigDirectory;
         //[[Throws]] 
         UserConfigurationsInfo p_GetGlobalCompileConfigurations();
         DependancyConfigSpecification p_GetGlobalDependancySpecification();
         SourceInfo p_GetPacketSourceInfo(std::filesystem::path const& PacketPath);        
         MBPM_PacketInfo p_GetPacketInfo(std::filesystem::path const& PacketPath);
         DependancyConfigSpecification p_GetConfigSpec(std::filesystem::path const& PacketPath);
+
+
+        void p_Handle_Create();
+        void p_Handle_Compile();
 
         bool p_VerifyConfigs(LanguageConfiguration const& Config,std::vector<std::string> const& ConfigNames);
         bool p_VerifyTargets(SourceInfo const& InfoToCompile,std::vector<std::string> const& Targests);
@@ -259,11 +266,22 @@ namespace MBPM
         void p_Link_GCC( std::string const& CompilerName,CompileConfiguration const& CompileConfig, SourceInfo const& SInfo,std::string const& ConfigName, Target const& TargetToLink, std::vector<std::string> ExtraLibraries);
         
         void p_BuildLanguageConfig(std::filesystem::path const& PacketPath,MBPM_PacketInfo const& PacketInfo,DependancyConfigSpecification const& Dependancies,CompileConfiguration const& CompileConf,std::string const& CompileConfName, SourceInfo const& InfoToCompile,std::vector<std::string> const& Targets);
+
+
+        MBError p_Handle_Compile(CommandInfo const& CommandToHandle,PacketIdentifier const& PacketToHandle,PacketRetriever & RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal);
+        MBError p_Handle_Export(CommandInfo const& CommandToHandle,PacketIdentifier const& PacketToHandle,PacketRetriever& RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal);
+        MBError p_Handle_Retract(CommandInfo const& CommandToHandle,PacketIdentifier const& PacketToHandle,PacketRetriever& RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal);
+        MBError p_Handle_Create(CommandInfo const& CommandToHandle,PacketIdentifier const& PacketToHandle,PacketRetriever& RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal);
     public:
-        MBBuildCLI(PacketRetriever* Retriever);
+        virtual const char* GetName() override; 
+        virtual CustomCommandInfo GetCustomCommands() override;
+        virtual void SetConfigurationDirectory(const char* ConfigurationDirectory,const char** OutError) override;
+        virtual MBError HandleCommand(CommandInfo const& CommandToHandle,PacketIdentifier const& PacketToHandle,PacketRetriever& RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal) override;
+        virtual void HandleHelp(CommandInfo const& CommandToHandle,MBCLI::MBTerminal& AssociatedTerminal) override;
+
         MBError BuildPacket(std::filesystem::path const& PacketPath,std::vector<std::string> Configs,std::vector<std::string> Targets);
-        MBError ExportTarget(std::filesystem::path const& PacketPath,std::vector<std::string> const& TargetsToExport,std::string const& ExportConfig);
-        int Run(int argc,const char** argv,MBCLI::MBTerminal* TerminalToUse);
+        MBError ExportPacket(std::filesystem::path const& PacketPath);
+        MBError RetractPacket(std::filesystem::path const& PacketPath);
     };
 }
 }
