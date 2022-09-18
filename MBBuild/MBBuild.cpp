@@ -1,20 +1,22 @@
 #include "MBBuild.h"
-#include "MBSystem/MBSystem.h"
 #include "../MBPacketManager.h"
-#include "MBUtility/MBErrorHandling.h"
-#include "MBUtility/MBInterfaces.h"
 #include "../MB_PacketProtocol.h"
+
 #include <assert.h>
 #include <filesystem>
 #include <ios>
 #include <stdexcept>
+#include <unordered_map>
+#include <stdint.h>
+
+#include <MBSystem/MBSystem.h>
+#include <MBSystem/MBSystem.h>
 #include <MBUnicode/MBUnicode.h>
 #include <MBParsing/MBParsing.h>
 #include <MBUtility/MBFiles.h>
 #include <MBUtility/MBStrings.h>
-#include <stdint.h>
-#include <unordered_map>
-#include <MBSystem/MBSystem.h>
+#include <MBUtility/MBErrorHandling.h>
+#include <MBUtility/MBInterfaces.h>
 namespace MBPM
 {
     namespace MBBuild
@@ -1579,8 +1581,6 @@ namespace MBPM
         if(CommandToHandle.Arguments[0] == "sourceinfo")
         {
             MBPM::MBPM_FileInfoExcluder Excluder(Packet.PacketURI+"/MBPM_FileInfoIgnore");
-
-            MBError Error = true;
             MBPM_PacketInfo PacketInfo = RetrieverToUse.GetPacketInfo(Packet);
             //ASSUMPTION only comes here on existing packets, file system dataraces are reported as exceptions
             std::filesystem::recursive_directory_iterator PacketDirectoryIterator(Packet.PacketURI);
@@ -1661,7 +1661,145 @@ namespace MBPM
         }
         else if(CommandToHandle.Arguments[0] == "cmake")
         {
-             
+            std::filesystem::path SourceInfoPath= Packet.PacketURI+"/MBSourceInfo.json";
+            if(!std::filesystem::exists(SourceInfoPath))
+            {
+                ReturnValue = false;
+                ReturnValue.ErrorMessage = "create cmake for packet requries existing MBSourceInfo.json"; 
+                return(ReturnValue);
+            }
+            SourceInfo LocalSourceInfo;
+            ReturnValue = ParseSourceInfo(SourceInfoPath,LocalSourceInfo);
+            if(!ReturnValue) return(ReturnValue);
+            MBPM_PacketInfo CurrentPacketInfo = RetrieverToUse.GetPacketInfo(Packet);
+            std::string DependanciesConfig = "Debug";
+            std::filesystem::path OutFilePath = Packet.PacketURI+"/CMakeLists.txt";
+            if(CommandToHandle.Flags.find("override") == CommandToHandle.Flags.end() && std::filesystem::exists(OutFilePath))
+            {
+                if(CommandToHandle.Flags.find("newonly") != CommandToHandle.Flags.end())
+                {
+                    return(ReturnValue);   
+                }
+                AssociatedTerminal.PrintLine("CMakeLists.txt already exists for packet. Do you want to override it? (y/n)");
+                while(true)
+                {
+                    std::string Input;
+                    AssociatedTerminal.GetLine(Input);
+                    if(Input == "y")
+                    {
+                        break;
+                    }
+                    else if(Input == "n")
+                    {
+                        return(ReturnValue);   
+                    }
+                }
+            }
+            std::vector<PacketIdentifier> Dependancies = RetrieverToUse.GetPacketDependancies(Packet);
+            std::reverse(Dependancies.begin(),Dependancies.end());
+            std::string TotalCmakeData = "";
+            TotalCmakeData += "project("+CurrentPacketInfo.PacketName+")\n";
+            TotalCmakeData += "set(TOTAL_MBPM_PACKET_LIBRARIES\n";
+            for(PacketIdentifier const& Dependancie : Dependancies)
+            {
+                //4 spaces
+                TotalCmakeData += "    $ENV{MBPM_PACKETS_INSTALL_DIRECTORY}/"+Dependancie.PacketName+"/MBPM_Builds/"+DependanciesConfig+"/"+h_GetLibraryName(Dependancie.PacketName)+"\n";
+            }
+            TotalCmakeData += ")\n";
+            TotalCmakeData += "set(SYSTEM_LIBRARIES\n";
+            if constexpr(MBUtility::IsWindows())
+            {
+                TotalCmakeData += "Ws2_32.lib\n"
+                    "Secur32.lib\n"
+                    "Bcrypt.lib\n"
+                    "Mfplat.lib\n"
+                    "opengl32\n"
+                    "Mfuuid.lib\n	"
+                    "Strmiids.lib\n";
+            }
+            //ASSUMPTION !MBWindows -> IsPOSIX
+            else
+            {
+                TotalCmakeData += "    dl\n    m    \n    pthread\n    stdc++fs\n";       
+            }
+            TotalCmakeData += ")\n";
+            
+            //creating sources
+            for(auto const& Target : LocalSourceInfo.Targets)
+            {
+                TotalCmakeData += "set(SOURCES_"+Target.first+"\n";    
+                for(std::string const& Source : Target.second.SourceFiles)
+                {
+                    TotalCmakeData += std::string(4,' ')+Source.substr(1)+"\n";
+                }
+                TotalCmakeData += ")\n";
+            }
+            //creating cmake targets
+            for(auto const& Target : LocalSourceInfo.Targets)
+            {
+
+                if(Target.second.Type == TargetType::Executable)
+                {
+                    TotalCmakeData += "add_executable("+Target.first+" ${SOURCES_"+Target.first+"})\n";
+                }
+                //TODO add support for multiple library types
+                else if(Target.second.Type == TargetType::Library)
+                {
+                    TotalCmakeData += "add_library("+Target.first+" STATIC ${SOURCES_"+Target.first+"})\n";
+                }
+                else
+                {
+                    ReturnValue = false;
+                    ReturnValue.ErrorMessage = "unsuported library type for cmake";   
+                    return(ReturnValue);
+                }
+                TotalCmakeData += "target_compile_features("+Target.first+" PRIVATE ";
+                if(LocalSourceInfo.Language == "C++")
+                {
+                    TotalCmakeData += "cxx";   
+                }
+                else
+                {
+                    ReturnValue = false;
+                    ReturnValue.ErrorMessage = "unsupported language type for target: "+LocalSourceInfo.Language;   
+                    return(ReturnValue);
+                }
+                TotalCmakeData += "_std";
+                if(LocalSourceInfo.Standard == "C++17")
+                {
+                    TotalCmakeData += "_17";   
+                }
+                else
+                {
+                    ReturnValue = false;
+                    ReturnValue.ErrorMessage = "unsupported standard for target: "+LocalSourceInfo.Standard;   
+                    return(ReturnValue);
+                }
+                TotalCmakeData += ")\n";
+                //TODO add "extra include directories" for packets
+                TotalCmakeData += "target_include_directories("+Target.first+" PRIVATE $ENV{MBPM_PACKETS_INSTALL_DIRECTORY})\n";
+                TotalCmakeData += "target_link_libraries("+Target.first+" PRIVATE ${TOTAL_MBPM_PACKET_LIBRARIES} ${SYSTEM_LIBRARIES})\n";
+                TotalCmakeData += "set_target_properties(" + Target.first + " PROPERTIES \n";
+                TotalCmakeData += "ARCHIVE_OUTPUT_DIRECTORY $<1:${CMAKE_CURRENT_SOURCE_DIR}/MBPM_Builds/${CMAKE_BUILD_TYPE}/>\n";
+                TotalCmakeData += "RUNTIME_OUTPUT_DIRECTORY $<1:${CMAKE_CURRENT_SOURCE_DIR}/MBPM_Builds/${CMAKE_BUILD_TYPE}/>\n";
+                TotalCmakeData += "LIBRARY_OUTPUT_DIRECTORY $<1:${CMAKE_CURRENT_SOURCE_DIR}/MBPM_Builds/${CMAKE_BUILD_TYPE}/>\n)\n\n";
+                /*
+                	set_target_properties(${TargetToUpdate} 
+	PROPERTIES 
+	ARCHIVE_OUTPUT_DIRECTORY $<1:${CMAKE_CURRENT_SOURCE_DIR}/MBPM_Builds/${BuildDirectorySuffix}/>
+	LIBRARY_OUTPUT_DIRECTORY $<1:${CMAKE_CURRENT_SOURCE_DIR}/MBPM_Builds/${BuildDirectorySuffix}/>
+	RUNTIME_OUTPUT_DIRECTORY $<1:${CMAKE_CURRENT_SOURCE_DIR}/MBPM_Builds/${BuildDirectorySuffix}/>
+	)
+                */
+            }
+            std::ofstream OutFile = std::ofstream(OutFilePath, std::ios::out);
+            if (!OutFile.is_open())
+            {
+                ReturnValue = false;
+                ReturnValue.ErrorMessage = "error creating cmake: failed to open CMakeLists.txt";
+                return(ReturnValue);
+            }
+            OutFile<<TotalCmakeData;
         }
         else if(CommandToHandle.Arguments[0] == "compilecommands")
         {
