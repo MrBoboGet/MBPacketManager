@@ -12,7 +12,7 @@
 #include <MBUtility/MBFiles.h>
 #include <system_error>
 #include <unordered_set>
-
+#include "MBBuild/MBBuild.h"
 //#include "MBBuild/MBBuild.h"
 //#include "MBCLI/"
 
@@ -1876,7 +1876,7 @@ namespace MBPM
             AssociatedTerminal->PrintLine("Invalid command \""+CommandInput.TopCommand+"\"");   
             std::exit(1);
         }
-        if(TypeIt->second == CommandType::TopCommand)
+        if(TypeIt->second == CommandType::SubCommand)
         {
             PacketOffset = 1;   
         }
@@ -1919,8 +1919,9 @@ namespace MBPM
         }
         for(auto const& Option : InputToConvert.CommandPositionalOptions)
         {
-            std::string OptionName = Option.first;
-            if(i_ReservedOptions.find(OptionName) == i_ReservedOptions.end())
+            std::string OptionData = Option.first;
+            std::string OptionName = OptionData.substr(0, OptionData.find(':'));
+            if(i_ReservedOptions.find(OptionName) != i_ReservedOptions.end())
             {
                 continue;   
             }
@@ -1971,6 +1972,11 @@ namespace MBPM
     {
         //std::string ExtensionName = ExtensionToRegister->GetName();
         CustomCommandInfo NewCommandInfo = ExtensionToRegister->GetCustomCommands(); 
+        std::string ExtensionName = ExtensionToRegister->GetName();
+        if (ExtensionName.find('/') != ExtensionName.npos || ExtensionName.find('\\') != ExtensionName.npos)
+        {
+            throw std::runtime_error("Error registering extension: name contains invalid characters");
+        }
         for(auto const& Command : NewCommandInfo.Commands)
         {
             if(m_CustomCommandTypes.find(Command.Name) != m_CustomCommandTypes.end() && m_CustomCommandTypes[Command.Name] 
@@ -1980,7 +1986,10 @@ namespace MBPM
             }
             m_CustomCommandTypes[Command.Name] = Command.Type;
             m_TopCommandHooks[Command.Name].push_back({Command,m_RegisteredExtensions.size()});
-        } 
+        }
+        std::string ExtensionDataPath = MBPM::GetSystemPacketsDirectory() + "/Extensions/" + ExtensionName + "/";
+        const char* Error = nullptr;
+        ExtensionToRegister->SetConfigurationDirectory(ExtensionDataPath.c_str(),&Error);
         m_RegisteredExtensions.push_back(std::move(ExtensionToRegister));
     }
 
@@ -2714,9 +2723,20 @@ namespace MBPM
     //    }
     //    return(ReturnValue);
     //}
+    template <typename T>
+    void __Delete(void* PointerToDelete)
+    {
+        delete (T*)PointerToDelete;
+    }
     void MBPM_ClI::HandleCommand(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
     {
         //denna �r en global inst�llning
+        //Extensions
+        std::unique_ptr<CLI_Extension, void (*)(void*)> BuildExtension = std::unique_ptr<CLI_Extension, void (*)(void*)>(new MBBuild::MBBuild_Extension(),
+            __Delete<MBBuild::MBBuild_Extension>);
+        //
+        p_RegisterExtension(std::move(BuildExtension));
+
         if (CommandInput.CommandOptions.find("computerdiff") != CommandInput.CommandOptions.end())
         {
             m_ClientToUse.SetComputerInfo(MBPM::MBPP_Client::GetSystemComputerInfo());
@@ -2764,7 +2784,6 @@ namespace MBPM
         }
     }
     //END MBPM_CLI
-
     int MBCLI_Main(int argc,const char** argv)
     {
         try

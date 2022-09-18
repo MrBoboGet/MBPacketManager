@@ -1384,7 +1384,7 @@ namespace MBPM
             std::string PacketConfig = DependancySpec.GetDependancyConfig(CurrentInfo,CompileConfName);
             //if(CurrentInfo.Attributes.find(MBPM_PacketAttribute::SubOnly) == CurrentInfo.Attributes.end())
             //{
-            //    ExtraLibraries.push_back(InstallDirectory+ CurrentInfo.PacketName+"/MBPM_Builds/"+PacketConfig+"/"+h_GetLibraryName(CurrentInfo.PacketName));
+                ExtraLibraries.push_back(InstallDirectory+ CurrentInfo.PacketName+"/MBPM_Builds/"+PacketConfig+"/"+h_GetLibraryName(CurrentInfo.PacketName));
             //} 
             for(auto const& SubLib : CurrentInfo.SubLibraries)
             {
@@ -1473,6 +1473,12 @@ namespace MBPM
 
         return(ReturnValue);    
     }
+    MBError MBBuild_Extension::RetractPacket(std::filesystem::path const& PacketPath)
+    {
+        MBError ReturnValue = true;
+
+        return(ReturnValue);
+    }
     const char* MBBuild_Extension::GetName()
     {
         return("MBBuild"); 
@@ -1549,7 +1555,7 @@ namespace MBPM
         {
             for(std::string const& Configuration : ConfigurationsIt->second)
             {
-                Targets.push_back(Configuration);   
+                Configurations.push_back(Configuration);   
             } 
         }
         ReturnValue =  BuildPacket(PacketToHandle.PacketURI,Configurations,Targets);
@@ -1702,7 +1708,7 @@ namespace MBPM
             {
                 MBParsing::JSONObject NewSource(MBParsing::JSONObjectType::Aggregate);   
                 NewSource["file"] = Source.substr(1);
-                NewSource["directory"] = Packet.PacketURI;
+                NewSource["directory"] = MBUnicode::PathToUTF8(std::filesystem::absolute(Packet.PacketURI));
                 std::vector<std::string> Arguments; 
                 //TODO change to actually match the specified language/standard in the file
                 Arguments.push_back("clang++");

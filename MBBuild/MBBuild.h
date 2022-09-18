@@ -1,3 +1,4 @@
+#pragma once
 #include "../MBPacketManager.h"
 #include <MBUtility/MBInterfaces.h>
 #include <stdint.h>
@@ -235,7 +236,7 @@ namespace MBPM
 
     };
 
-    class MBBuild_Extension : CLI_Extension
+    class MBBuild_Extension : public CLI_Extension
     {
     private:
         PacketRetriever* m_AssociatedRetriever = nullptr; 
@@ -247,10 +248,7 @@ namespace MBPM
         MBPM_PacketInfo p_GetPacketInfo(std::filesystem::path const& PacketPath);
         DependancyConfigSpecification p_GetConfigSpec(std::filesystem::path const& PacketPath);
 
-
-        void p_Handle_Create();
-        void p_Handle_Compile();
-
+       
         bool p_VerifyConfigs(LanguageConfiguration const& Config,std::vector<std::string> const& ConfigNames);
         bool p_VerifyTargets(SourceInfo const& InfoToCompile,std::vector<std::string> const& Targests);
         //Responsible both for verifying that the toolchain is supported, and that the standard is supported by the toolchain 

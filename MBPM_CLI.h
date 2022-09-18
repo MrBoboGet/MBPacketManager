@@ -1,6 +1,7 @@
+#pragma once
 #include "MBUtility/MBErrorHandling.h"
 #include <unordered_set>
-#pragma p_HandleRetract
+//#pragma p_HandleRetract
 #include "MBPacketManager.h"
 #include <MBCLI/MBCLI.h>
 #include <MBUnicode/MBUnicode.h>
