@@ -109,6 +109,7 @@ namespace MBPM
         PacketIdentifier GetInstalledPacket(std::string const& PacketName);
         PacketIdentifier GetUserPacket(std::string const& PacketName);
         std::vector<PacketIdentifier> GetPacketDependancies(PacketIdentifier const& PacketToInspect);
+        std::vector<PacketIdentifier> GetTotalDependancies(std::vector<std::string> const& DependancyNames,MBError& OutError);
         std::vector<PacketIdentifier> GetPacketDependees(std::string const& PacketName);
         MBPM_PacketInfo GetPacketInfo(PacketIdentifier const& PacketToRetrieve);
     };

@@ -1367,6 +1367,12 @@ namespace MBPM
         std::vector<PacketIdentifier> ReturnValue = p_GetPacketDependancies_DependancyOrder({Packet},Result,&MissingPackets);
         return(ReturnValue);
     }
+    std::vector<PacketIdentifier> PacketRetriever::GetTotalDependancies(std::vector<std::string> const& Dependancies,MBError& OutError)
+    {
+        std::vector<PacketIdentifier> ReturnValue;
+        //ReturnValue = p_GetPacketDependancies_DependancyOrder(
+        return(ReturnValue);        
+    }
     MBPM_PacketInfo PacketRetriever::GetPacketInfo(PacketIdentifier const& PacketToRetrieve)
     {
         MBError Result = true;

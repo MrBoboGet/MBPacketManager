@@ -21,6 +21,30 @@ namespace MBPM
 {
     namespace MBBuild
 {
+    std::string h_ReplaceExtension(std::string OriginalString,std::string const& NewExtension)
+    {
+        size_t LastDot = OriginalString.find_last_of(LastDot);    
+        if(LastDot == OriginalString.npos)
+        {
+            LastDot = OriginalString.size();   
+        }
+        OriginalString.resize(LastDot);
+        OriginalString += '.';
+        OriginalString += NewExtension;
+        return(OriginalString);   
+    }
+    std::string h_CreateCompileString(CompileConfiguration const& CompileInfo)
+    {
+        std::string ReturnValue;
+
+        return(ReturnValue);   
+    }
+    std::string h_CreateLinkString(CompileConfiguration const& CompileInfo)
+    {
+        std::string ReturnValue;
+        
+        return(ReturnValue);   
+    }
     //MBPM Build
     CompileConfiguration ParseCompileConfiguration(MBParsing::JSONObject const& ObjectToParse)
     {
@@ -155,6 +179,8 @@ namespace MBPM
                 {
                     TargetInfo.SourceFiles.push_back(Source.GetStringData());   
                 }
+                //normalizing sources, mainly for use in order to determine wheter or not source list are identical
+                std::sort(TargetInfo.SourceFiles.begin(),TargetInfo.SourceFiles.end());
                 Result.Targets[TargetData.first] = std::move(TargetInfo);
             }
         }
@@ -414,39 +440,37 @@ namespace MBPM
 
 
     
-    uint32_t h_GetEntryWriteTimestamp(std::filesystem::directory_entry const& Entry)
+    uint64_t h_GetEntryWriteTimestamp(std::filesystem::directory_entry const& Entry)
     {
-        uint32_t ReturnValue = 0;
+        uint64_t ReturnValue = 0;
         ReturnValue = Entry.last_write_time().time_since_epoch().count();
         return(ReturnValue);
     }
 
     //BEGIN DependancyInfo
-    bool DependancyInfo::p_DependancyIsUpdated(FileID Index)
+    bool DependancyInfo::p_DependancyIsUpdated(uint64_t LastCompileTime,FileID Index)
     {
         bool ReturnValue = false;
         assert(Index - 1 < m_Dependancies.size());
         DependancyStruct& CurrentStruct = m_Dependancies[Index-1];
-        if((CurrentStruct.Flags & DependancyFlag::FileChecked) != DependancyFlag::Null)
+        if(CurrentStruct.LastWriteTime == 0)
         {
-            return((CurrentStruct.Flags & DependancyFlag::IsUpdated) != DependancyFlag::Null);      
+            std::filesystem::directory_entry FileStatus = std::filesystem::directory_entry(CurrentStruct.Path);
+            if(!FileStatus.exists())
+            {
+                throw std::runtime_error("Failed retrieving status for: \""+MBUnicode::PathToUTF8(CurrentStruct.Path)+"\". Update dependancies?");
+            }
+            uint32_t CurrentTimestamp = h_GetEntryWriteTimestamp(FileStatus);  
+            CurrentStruct.LastWriteTime = CurrentTimestamp;
         }
-        std::filesystem::directory_entry FileStatus = std::filesystem::directory_entry(CurrentStruct.Path);
-        if(!FileStatus.exists())
+        if(CurrentStruct.LastWriteTime > LastCompileTime)
         {
-            throw std::runtime_error("Failed retrieving status for: \""+MBUnicode::PathToUTF8(CurrentStruct.Path)+"\". Update dependancies?");
-        }
-        CurrentStruct.Flags |= DependancyFlag::FileChecked;       
-        uint32_t CurrentTimestamp = h_GetEntryWriteTimestamp(FileStatus);  
-        if(CurrentTimestamp != CurrentStruct.WriteFlag)
-        {
-            CurrentStruct.Flags |= DependancyFlag::IsUpdated;       
-            CurrentStruct.WriteFlag = CurrentTimestamp;
-            return(true);
+            return(true);   
         }
         for(FileID Dependancy : CurrentStruct.Dependancies)
         {
-            if(p_DependancyIsUpdated(Dependancy))
+            //potential for cache:ing
+            if(p_DependancyIsUpdated(LastCompileTime,Dependancy))
             {
                 ReturnValue = true;
                 break;
@@ -454,48 +478,31 @@ namespace MBPM
         }
         return(ReturnValue);     
     }
-    bool DependancyInfo::p_FileIsUpdated(std::filesystem::path const& SourceDirectory ,FileID Index)
+    //ASSUMPTION only called once per source file for maximal efficiency
+    bool DependancyInfo::p_FileIsUpdated(std::filesystem::path const& SourceDirectory ,SourceDependancyInfo& Source)
     {
         bool ReturnValue = false;
-        assert(Index <= m_Sources.size());
-        DependancyStruct& CurrentStruct = m_Sources[Index];
-        if((CurrentStruct.Flags & DependancyFlag::FileChecked) != DependancyFlag::Null)
-        {
-            return((CurrentStruct.Flags & DependancyFlag::IsUpdated) != DependancyFlag::Null);      
-        }
+        SourceDependancyInfo& CurrentStruct = Source;
         std::filesystem::directory_entry FileStatus = std::filesystem::directory_entry(SourceDirectory/CurrentStruct.Path);
         if(!FileStatus.exists())
         {
             throw std::runtime_error("Failed retrieving status for: \""+MBUnicode::PathToUTF8(CurrentStruct.Path)+"\". Update dependancies?");
         }
-        CurrentStruct.Flags |= DependancyFlag::FileChecked;       
         uint32_t CurrentTimestamp = h_GetEntryWriteTimestamp(FileStatus);  
-        if(CurrentTimestamp != CurrentStruct.WriteFlag)
+        if(CurrentTimestamp > CurrentStruct.LastCompileTime)
         {
-            CurrentStruct.Flags |= DependancyFlag::IsUpdated;       
-            CurrentStruct.WriteFlag = CurrentTimestamp;
+            CurrentStruct.LastCompileTime = CurrentTimestamp;
             return(true);
         }
         for(FileID Dependancy : CurrentStruct.Dependancies)
         {
-            if(p_DependancyIsUpdated(Dependancy))
+            if(p_DependancyIsUpdated(CurrentStruct.LastCompileTime,Dependancy))
             {
                 ReturnValue = true;
                 break;
             } 
         }
         return(ReturnValue);     
-    }
-    void DependancyInfo::p_CreateSourceMap()
-    {
-        m_PathToSourceIndex.clear();
-        m_PathToSourceIndex.reserve(m_Sources.size());
-        FileID i = 0;
-        for(auto const& Source : m_Sources)
-        {
-            m_PathToSourceIndex[Source.Path] = i;
-            i++;
-        } 
     }
     void DependancyInfo::p_CreateDependancyMap()
     {
@@ -578,21 +585,19 @@ namespace MBPM
         }
         return(ReturnValue);
     }
-    std::vector<DependancyInfo::DependancyStruct> DependancyInfo::p_NormalizeDependancies(std::vector<MakeDependancyInfo>  const& InfoToConvert, 
+    std::vector<DependancyInfo::SourceDependancyInfo> DependancyInfo::p_NormalizeDependancies(std::vector<MakeDependancyInfo>  const& InfoToConvert, 
         std::filesystem::path const& SourceRoot,std::unordered_map<std::string,FileID>& IDMap,std::vector<DependancyStruct>& OutDependancies, std::vector<std::string> const& OriginalSources)
     {
-        std::vector<DependancyStruct> ReturnValue;
+        std::vector<SourceDependancyInfo> ReturnValue;
         ReturnValue.resize(InfoToConvert.size());
         size_t CurrentSourceOffset = 0;
         FileID CurrentFileID = 1;
         size_t i = 0;
         for(MakeDependancyInfo const& SourceFile : InfoToConvert)
         {
-            DependancyStruct NewInfo;
-            NewInfo.Flags |= DependancyFlag::FileChecked;
-            NewInfo.Flags |= DependancyFlag::IsUpdated;
+            SourceDependancyInfo NewInfo;
             NewInfo.Path = OriginalSources[i];
-            NewInfo.WriteFlag = h_GetEntryWriteTimestamp(std::filesystem::directory_entry(SourceRoot/NewInfo.Path));
+            NewInfo.LastCompileTime = h_GetEntryWriteTimestamp(std::filesystem::directory_entry(SourceRoot/NewInfo.Path));
 
             for(std::string const& Dependancy : SourceFile.Dependancies)
             {
@@ -604,9 +609,7 @@ namespace MBPM
                 }
                 DependancyStruct NewDependancy;  
                 NewDependancy.Path = MBUnicode::PathToUTF8(std::filesystem::canonical(Dependancy));
-                NewDependancy.Flags &= ~DependancyFlag::IsUpdated;
-                NewDependancy.Flags &= ~DependancyFlag::FileChecked;
-                NewDependancy.WriteFlag = h_GetEntryWriteTimestamp(std::filesystem::directory_entry(NewDependancy.Path));
+                NewDependancy.LastWriteTime = h_GetEntryWriteTimestamp(std::filesystem::directory_entry(NewDependancy.Path));
                 DependancyID = CurrentFileID;
                 NewInfo.Dependancies.push_back(CurrentFileID);
                 //ReturnValue.push_back(NewDependancy);
@@ -656,8 +659,8 @@ namespace MBPM
         MBError ReturnValue = true;    
         DependancyInfo Result;
         //Test, assumes same working directory as build root
-        Result.m_CompileOptions = CompileConfig.CompileFlags;
-        Result.m_ToolChain = CompileConfig.Toolchain;
+        //Result. = CompileConfig.CompileFlags;
+        //Result.m_ToolChain = CompileConfig.Toolchain;
         std::vector<std::string> AllSources = h_GetAllSources(CurrentBuild);
         for (std::string& Source : AllSources)
         {
@@ -670,8 +673,14 @@ namespace MBPM
         //    GCCDependancyCommand += " ";
         //}
         MBSystem::UniDirectionalSubProcess SubProcess(GCCCommand,true);
-        Result.m_Sources = p_NormalizeDependancies(p_ParseMakeDependancyInfo(SubProcess),BuildRoot,Result.m_PathToDependancyIndex,Result.m_Dependancies,AllSources);
-        Result.p_CreateSourceMap();
+        //Result.m_Sources = p_NormalizeDependancies(p_ParseMakeDependancyInfo(SubProcess),BuildRoot,Result.m_PathToDependancyIndex,Result.m_Dependancies,AllSources);
+        std::vector<SourceDependancyInfo> NewSources = p_NormalizeDependancies(p_ParseMakeDependancyInfo(SubProcess),BuildRoot,Result.m_PathToDependancyIndex,Result.m_Dependancies,AllSources);
+        for(SourceDependancyInfo& Source : NewSources)
+        {
+            std::string SourceName = Source.Path;
+            //TODO is the left hand side guaranteed to be evaluated before the right hand side?
+            Result.m_Sources[SourceName] = std::move(Source);   
+        }
         *OutInfo = std::move(Result);
         return(ReturnValue);
     }
@@ -683,12 +692,89 @@ namespace MBPM
     {
         return(m_Dependancies != OtherInfo.m_Dependancies);            
     }
+    void h_WriteString(MBUtility::MBOctetOutputStream& OutStream,std::string const& StringToWrite)
+    {
+        MBParsing::WriteBigEndianInteger(OutStream,StringToWrite.size(),2); 
+        OutStream.Write(StringToWrite.data(),StringToWrite.size());
+    }
+    std::string h_ParseString(MBUtility::MBOctetInputStream& InStream)
+    {
+        std::string ReturnValue;
+        uint16_t StringSize = uint16_t(MBParsing::ParseBigEndianInteger(InStream,2));
+        ReturnValue.resize(StringSize);
+        size_t ReadBytes = InStream.Read(ReturnValue.data(),StringSize);
+        if(ReadBytes < StringSize)
+        {
+            throw std::exception("Failed to parse string: insufficient bytes left in stream");   
+        }
+        return(ReturnValue);    
+    }
+    void DependancyInfo::p_WriteSourceDependancyStruct(MBUtility::MBOctetOutputStream& OutStream,SourceDependancyInfo const& StructToWrite) const
+    {
+        MBParsing::WriteBigEndianInteger(OutStream,StructToWrite.LastCompileTime,8);
+        h_WriteString(OutStream,StructToWrite.Path);
+        h_WriteString(OutStream,StructToWrite.CompileString);
+        MBParsing::WriteBigEndianInteger(OutStream,StructToWrite.Dependancies.size(),4);
+        for(FileID ID : StructToWrite.Dependancies)
+        {
+            MBParsing::WriteBigEndianInteger(OutStream,ID,4);
+        }
+    }
+    DependancyInfo::SourceDependancyInfo DependancyInfo::p_ParseSourceDependancyStruct(MBUtility::MBOctetInputStream& InStream)
+    {
+        SourceDependancyInfo ReturnValue;
+        ReturnValue.LastCompileTime = MBParsing::ParseBigEndianInteger(InStream,8);
+        ReturnValue.Path = h_ParseString(InStream);
+        ReturnValue.CompileString = h_ParseString(InStream);
+        uint32_t DependancyCount = MBParsing::ParseBigEndianInteger(InStream,4);
+        if(DependancyCount > 1000000)
+        {
+            throw std::runtime_error("Error parsing dependancy struct: Dependancies count assumed to be under 1000000");
+        }
+        ReturnValue.Dependancies.reserve(DependancyCount);
+        for(uint32_t i = 0; i < DependancyCount;i++)
+        {
+            ReturnValue.Dependancies.push_back(MBParsing::ParseBigEndianInteger(InStream,4));
+        }
+        return(ReturnValue);
+    }
+    void DependancyInfo::p_WriteTargetInfo(MBUtility::MBOctetOutputStream& OutStream, LinkedTargetInfo const& StructToWrite) const
+    {
+        h_WriteString(OutStream,StructToWrite.TargetName);
+        MBParsing::WriteBigEndianInteger(OutStream,StructToWrite.TargetType,2);
+        h_WriteString(OutStream,StructToWrite.OutputName);
+        h_WriteString(OutStream,StructToWrite.LinkOptionsString);  
+        MBParsing::WriteBigEndianInteger(OutStream,StructToWrite.LastLinkTime,8);
+        MBParsing::WriteBigEndianInteger(OutStream,StructToWrite.NeededSources.size(),4);
+        for(size_t i = 0; i < StructToWrite.NeededSources.size();i++)
+        {
+            h_WriteString(OutStream,StructToWrite.NeededSources[i]);
+        }
+    }
+    DependancyInfo::LinkedTargetInfo DependancyInfo::p_ParseTargetInfo(MBUtility::MBOctetInputStream& InStream)
+    {
+        LinkedTargetInfo ReturnValue;
+        ReturnValue.TargetName = h_ParseString(InStream); 
+        ReturnValue.TargetType = uint16_t(MBParsing::ParseBigEndianInteger(InStream,2));
+        ReturnValue.OutputName = h_ParseString(InStream); 
+        ReturnValue.LinkOptionsString = h_ParseString(InStream); 
+        ReturnValue.LastLinkTime = MBParsing::ParseBigEndianInteger(InStream,8);
+        uint32_t SourcesCount = MBParsing::ParseBigEndianInteger(InStream,4);
+        if(SourcesCount > 1000000)
+        {
+            throw std::runtime_error("Source count for target assumed to be under 1000000");   
+        }
+        ReturnValue.NeededSources.reserve(SourcesCount);
+        for(uint32_t i = 0; i < SourcesCount;i++)
+        {
+            ReturnValue.NeededSources.push_back(h_ParseString(InStream));   
+        }
+        return(ReturnValue);
+    }
     void DependancyInfo::p_WriteDependancyStruct(MBUtility::MBOctetOutputStream& OutStream, DependancyInfo::DependancyStruct const& StructToWrite) const
     {
-        MBParsing::WriteBigEndianInteger(OutStream, StructToWrite.WriteFlag, 4);
         std::string FilePath = MBUnicode::PathToUTF8(StructToWrite.Path);
-        MBParsing::WriteBigEndianInteger(OutStream, FilePath.size(), 2);
-        OutStream.Write(FilePath.data(), FilePath.size());
+        h_WriteString(OutStream,FilePath);
         MBParsing::WriteBigEndianInteger(OutStream, StructToWrite.Dependancies.size(), 4);
         for (FileID IDToWrite : StructToWrite.Dependancies)
         {
@@ -698,13 +784,8 @@ namespace MBPM
     DependancyInfo::DependancyStruct DependancyInfo::p_ParseDependancyStruct(MBUtility::MBOctetInputStream& InputStream)
     {
         DependancyStruct NewStruct;
-        NewStruct.WriteFlag = MBParsing::ParseBigEndianInteger(InputStream, 4);
-        std::string SerializedString;
-        uint16_t StringSize = MBParsing::ParseBigEndianInteger(InputStream, 2);
-        SerializedString.resize(StringSize);
-        InputStream.Read(SerializedString.data(), StringSize);
-        NewStruct.Path = SerializedString;
-        uint32_t DependanciesCount = MBParsing::ParseBigEndianInteger(InputStream, 4);
+        NewStruct.Path = h_ParseString(InputStream);
+        uint64_t DependanciesCount = MBParsing::ParseBigEndianInteger(InputStream, 4);
         if (DependanciesCount >= 1000000)
         {
             throw std::runtime_error("Error parsing dependancy struct: Dependancies count assumed to be under 1000000");
@@ -722,37 +803,6 @@ namespace MBPM
         DependancyInfo Result;
         try
         {
-            uint16_t ToolchainSize = uint16_t(MBParsing::ParseBigEndianInteger(InputStream, 2));
-            Result.m_ToolChain = std::string(ToolchainSize, 0);
-            size_t ReadBytes = InputStream.Read(Result.m_ToolChain.data(), Result.m_ToolChain.size());
-            if (ReadBytes < ToolchainSize)
-            {
-                ReturnValue = false;
-                ReturnValue.ErrorMessage = "Not enough bytes provided for toolchain name";
-                return(ReturnValue);
-            }
-            uint32_t CompileOptionsCount = uint32_t(MBParsing::ParseBigEndianInteger(InputStream, 4));
-            if (CompileOptionsCount > 1000000)
-            {
-                ReturnValue = false;
-                ReturnValue.ErrorMessage = "Invalid number of compile options: compile options assumed to be under 1 million";
-                return(ReturnValue);
-            }
-            Result.m_CompileOptions.reserve(CompileOptionsCount);
-            for (size_t i = 0; i < CompileOptionsCount; i++)
-            {
-                uint16_t CompileCommandSize = uint16_t(MBParsing::ParseBigEndianInteger(InputStream, 2));
-                std::string CompileCommand = std::string(CompileCommandSize, 0);
-                size_t ReadBytes = InputStream.Read(CompileCommand.data(), CompileCommand.size());
-                if (ReadBytes < CompileCommandSize)
-                {
-                    ReturnValue = false;
-                    ReturnValue.ErrorMessage = "Not enough bytes provided for compile option";
-                    return(ReturnValue);
-                }
-                Result.m_CompileOptions.push_back(std::move(CompileCommand));
-            }
-
             uint32_t NumberOfSources = uint32_t(MBParsing::ParseBigEndianInteger(InputStream, 4));
             if (NumberOfSources >= 1000000)
             {
@@ -762,10 +812,10 @@ namespace MBPM
             Result.m_Sources.reserve(NumberOfSources);
             for (uint32_t i = 0; i < NumberOfSources; i++)
             {
-                DependancyStruct NewStruct = p_ParseDependancyStruct(InputStream);
-                Result.m_Sources.push_back(std::move(NewStruct));
+                SourceDependancyInfo NewStruct = p_ParseSourceDependancyStruct(InputStream);
+                Result.m_Sources[NewStruct.Path] = NewStruct;
+                //Result.m_Sources.push_back(std::move(NewStruct));
             }
-
             uint32_t NumberOfDependancies = uint32_t(MBParsing::ParseBigEndianInteger(InputStream,4));
             if(NumberOfDependancies >= 1000000)
             {
@@ -778,10 +828,18 @@ namespace MBPM
                 DependancyStruct NewStruct = p_ParseDependancyStruct(InputStream);
                 Result.m_Dependancies.push_back(std::move(NewStruct));
             }
-
-
+            uint32_t TargetsCount = uint32_t(MBParsing::ParseBigEndianInteger(InputStream,4));
+            if(TargetsCount >= 1000000)
+            {
+                ReturnValue = false;
+                ReturnValue.ErrorMessage = "Invalid number of targets: assumed to be under 1 million";  
+            } 
+            for(uint32_t i = 0; i < TargetsCount;i++)
+            {
+                LinkedTargetInfo NewStruct = p_ParseTargetInfo(InputStream);
+                Result.m_LinkedTargetsInfo[NewStruct.TargetName] = NewStruct;
+            }
             Result.p_CreateDependancyMap();
-            Result.p_CreateSourceMap();
         }
         catch(std::exception const& e)
         {
@@ -795,25 +853,20 @@ namespace MBPM
     }
     void DependancyInfo::WriteDependancyInfo(MBUtility::MBOctetOutputStream& OutStream) const
     {
-        //string
-        MBParsing::WriteBigEndianInteger(OutStream, m_ToolChain.size(), 2);
-        OutStream.Write(m_ToolChain.data(), m_ToolChain.size());
-        MBParsing::WriteBigEndianInteger(OutStream, m_CompileOptions.size(), 4); 
-        for (std::string const& Option : m_CompileOptions)
-        {
-            MBParsing::WriteBigEndianInteger(OutStream, Option.size(), 2);
-            OutStream.Write(Option.data(), Option.size());
-        }
-
         MBParsing::WriteBigEndianInteger(OutStream,m_Sources.size(),4);
-        for(DependancyStruct const& Dependancy : m_Sources)
+        for(auto const& Source : m_Sources)
         {
-            p_WriteDependancyStruct(OutStream, Dependancy);
+            p_WriteSourceDependancyStruct(OutStream, Source.second);
         } 
         MBParsing::WriteBigEndianInteger(OutStream, m_Dependancies.size(), 4);
         for (DependancyStruct const& Dependancy : m_Dependancies)
         {
             p_WriteDependancyStruct(OutStream, Dependancy);
+        }
+        MBParsing::WriteBigEndianInteger(OutStream, m_LinkedTargetsInfo.size(), 4);
+        for (auto const& Target : m_LinkedTargetsInfo)
+        {
+            p_WriteTargetInfo(OutStream, Target.second);
         }
     }
     MBError DependancyInfo::UpdateUpdatedFilesDependancies(std::filesystem::path const& SourceDirectory)
@@ -824,9 +877,9 @@ namespace MBPM
         std::vector<std::string> UpdatedFiles;
         for(auto const& Source : m_Sources)
         {
-            if((Source.Flags & DependancyFlag::IsUpdated) != DependancyFlag::Null)
+            if(Source.second.Updated)
             {
-                UpdatedFiles.push_back(Source.Path);
+                UpdatedFiles.push_back(Source.second.Path);
             }
         }
         std::vector<std::string> FilesToUpdate;
@@ -847,15 +900,20 @@ namespace MBPM
         MBSystem::UniDirectionalSubProcess GCCProccess(GCCComand,true); 
        
         size_t CurrentDepCount = m_Dependancies.size(); 
-        std::vector<DependancyStruct> UpdatedInfo = p_NormalizeDependancies(p_ParseMakeDependancyInfo(GCCProccess),SourceDirectory,m_PathToDependancyIndex,m_Dependancies,FilesToUpdate);
-        for(size_t i = 0; i < AddedFiles.size();i++)
+        std::vector<SourceDependancyInfo> UpdatedInfo = p_NormalizeDependancies(p_ParseMakeDependancyInfo(GCCProccess),SourceDirectory,m_PathToDependancyIndex,m_Dependancies,FilesToUpdate);
+        //for(size_t i = 0; i < AddedFiles.size();i++)
+        //{
+        //    //m_PathToSourceIndex[AddedFiles[i]] = m_Sources.size();
+        //    //m_Sources.push_back(std::move(UpdatedInfo[i]));
+        //    
+        //}
+        //for(size_t i = 0; i < UpdatedFiles.size();i++)
+        //{
+        //    m_Sources[m_PathToSourceIndex.at(UpdatedFiles[i])] = std::move(UpdatedInfo[i+AddedFiles.size()]);                
+        //}
+        for(SourceDependancyInfo const& Source : UpdatedInfo)
         {
-            m_PathToSourceIndex[AddedFiles[i]] = m_Sources.size();
-            m_Sources.push_back(std::move(UpdatedInfo[i]));
-        }
-        for(size_t i = 0; i < UpdatedFiles.size();i++)
-        {
-            m_Sources[m_PathToSourceIndex.at(UpdatedFiles[i])] = std::move(UpdatedInfo[i+AddedFiles.size()]);                
+            m_Sources[Source.Path] = Source;   
         }
         for(size_t i = CurrentDepCount; i < m_Dependancies.size();i++)
         {
@@ -863,13 +921,29 @@ namespace MBPM
         }
         return(ReturnValue);
     }
-    MBError DependancyInfo::GetUpdatedFiles(std::filesystem::path const& SourceDirectory,CompileConfiguration const& CompileConfig,std::vector<std::string> const& InputFiles,std::vector<std::string>* OutFilesToCompile) 
+    bool DependancyInfo::IsSourceOutOfDate(std::filesystem::path const& SourceDirectory,std::string const& SourceToCheck,std::string const& CompileString,MBError& OutError)
+    {
+        bool ReturnValue = false;
+        //dependancy not existing can't be considred an exception, it simply means that the file has to be compiled to determine wheter or not it works
+        auto const& It = m_Sources.find(SourceToCheck);
+        if(It == m_Sources.end())
+        {
+            m_AddedSources.push_back(SourceToCheck);
+            return(true);
+        }
+        SourceDependancyInfo const& DepInfo = It->second;
+        if(DepInfo.CompileString != CompileString)
+        {
+            return(false);       
+        }
+        //dependancy not existing can't be considred an exception, it simply means that the file has to be compiled to determine wheter or not it works
+        ReturnValue = p_FileIsUpdated(SourceDirectory,It->second);
+        return(ReturnValue);
+    }
+    MBError DependancyInfo::GetUpdatedFiles(std::filesystem::path const& SourceDirectory,std::string const& CompileString,std::vector<std::string> const& InputFiles,std::vector<std::string>* OutFilesToCompile) 
     {
         MBError ReturnValue = true;
         std::vector<std::string> Result;
-        bool CompileCommandsMatch = m_CompileOptions == CompileConfig.CompileFlags && CompileConfig.Toolchain == m_ToolChain;
-        m_CompileOptions = CompileConfig.CompileFlags;
-        m_ToolChain = CompileConfig.Toolchain;
         try
         {
             for(std::string const& Source : InputFiles)
@@ -879,23 +953,24 @@ namespace MBPM
                 //{
                 //    LastSlashPosition = -1;
                 //}
-                auto const& It = m_PathToSourceIndex.find(Source.substr(1));  
-                if(It != m_PathToSourceIndex.end())
-                {
-                    if (!CompileCommandsMatch)
-                    {
-                        m_Sources[It->second].Flags |= DependancyFlag::IsUpdated;
-                    }
-                    if(!CompileCommandsMatch || p_FileIsUpdated(SourceDirectory,It->second))
-                    {
-                        Result.push_back(Source);   
-                    }
-                }
-                else
-                {
-                    m_AddedSources.push_back(Source);
-                    Result.push_back(Source);
-                }
+                //auto const& It = m_PathToSourceIndex.find(Source.substr(1));  
+                //if(It != m_PathToSourceIndex.end())
+                //{
+                //    if(m_Sources[It->second].CompileString != CompileString)
+                //    {
+                //        Result.push_back(Source);
+                //        continue;
+                //    }
+                //    if(p_FileIsUpdated(SourceDirectory,It->second))
+                //    {
+                //        Result.push_back(Source); 
+                //    }
+                //}
+                //else
+                //{
+                //    m_AddedSources.push_back(Source);
+                //    Result.push_back(Source);
+                //}
             } 
         } 
         catch(std::exception const& e)
@@ -1051,9 +1126,10 @@ namespace MBPM
         return(ReturnValue);
     }
 
-    void MBBuild_Extension::p_Compile_MSVC(CompileConfiguration const& CompileConf,SourceInfo const& SInfo,std::vector<std::string> const& SourcesToCompile,std::vector<std::string> const& ExtraIncludeDirectories)
+    bool MBBuild_Extension::p_Compile_MSVC(CompileConfiguration const& CompileConf,SourceInfo const& SInfo,std::string const& SourceToCompile,std::string const& OutDir,std::vector<std::string> const& ExtraIncludeDirectories)
     {
         //std::string CompileCommand = "vcvars64.bat & cl /c ";
+        bool ReturnValue = true;
         std::string CompileCommand = "vcvarsall.bat x86_x64 & cl /c ";
         CompileCommand += h_MBStandardToMSVCStandard(SInfo.Language, SInfo.Standard);
         for(std::string const& Flag : CompileConf.CompileFlags)
@@ -1066,20 +1142,21 @@ namespace MBPM
             CompileCommand += "/I \""+ExtraInclude+"\"";
             CompileCommand += ' ';
         }
-        for(std::string const& Source : SourcesToCompile)
-        {
-            CompileCommand += Source+' ';
-        }
+        CompileCommand += SourceToCompile+' ';
+        //output path
+        CompileCommand += "/Fo\"";
+        CompileCommand += OutDir;
+        CompileCommand += "/"+h_ReplaceExtension(SourceToCompile,"o");
+        CompileCommand += "\"";
+         
         int Result = std::system(CompileCommand.c_str());    
-        if(Result != 0)
-        {
-            throw std::runtime_error("Failed compiling sources");   
-        }
+        ReturnValue = Result == 0;
+        return(ReturnValue);
     }
-    void MBBuild_Extension::p_Link_MSVC(CompileConfiguration const& CompileConfig,SourceInfo const& SInfo, std::string const& ConfigName, Target const& TargetToLink, std::vector<std::string> ExtraLibraries)
+    bool MBBuild_Extension::p_Link_MSVC(CompileConfiguration const& CompileConfig,SourceInfo const& SInfo, std::string const& ConfigName, Target const& TargetToLink, std::vector<std::string> ExtraLibraries)
     {
+        bool ReturnValue = true;
         std::vector<std::string> ObjectFiles = h_SourcesToObjectFiles(TargetToLink.SourceFiles,".obj");
-        
         std::string OutputDirectory = "../../MBPM_Builds/"+ConfigName+"/";
         if(!std::filesystem::exists(OutputDirectory))
         {
@@ -1128,9 +1205,7 @@ namespace MBPM
         {
             throw std::runtime_error("Unsupported target type");   
         }
-       
-        
-          
+        return(ReturnValue);   
     }
     std::string h_MBStandardToGCCStandard(std::string const& Language,std::string const& Standard)
     {
@@ -1146,8 +1221,9 @@ namespace MBPM
         ReturnValue += " ";
         return(ReturnValue); 
     }
-    void MBBuild_Extension::p_Compile_GCC(std::string const& CompilerName,CompileConfiguration const& CompileConf,SourceInfo const& SInfo,std::vector<std::string> const& SourcesToCompile,std::vector<std::string> const& ExtraIncludeDirectories)
+    bool MBBuild_Extension::p_Compile_GCC(std::string const& CompilerName,CompileConfiguration const& CompileConf,SourceInfo const& SInfo,std::string const& SourceToCompile,std::string const& OutDir,std::vector<std::string> const& ExtraIncludeDirectories)
     {
+        bool ReturnValue = true;
         std::string CompileCommand =  CompilerName+" -c ";    
         CompileCommand += h_MBStandardToGCCStandard(SInfo.Language,SInfo.Standard);
         for(std::string const& Flag : CompileConf.CompileFlags)
@@ -1160,21 +1236,16 @@ namespace MBPM
             CompileCommand += "-I"+ExtraInclude;
             CompileCommand += ' ';
         }
-        for(std::string const& Source : SourcesToCompile)
-        {
-            CompileCommand += Source+' ';
-        }
-
+        CompileCommand += SourceToCompile+' ';
+        CompileCommand += "-o "+OutDir+"/"+h_ReplaceExtension(SourceToCompile,"o");
         int Result = std::system(CompileCommand.c_str());
-        if(Result != 0)
-        {
-            throw std::runtime_error("Failed compiling sources");   
-        }
+        ReturnValue = Result == 0;
+        return(ReturnValue);
     }
     
-    void MBBuild_Extension::p_Link_GCC(std::string const& CompilerName,CompileConfiguration const& CompileConfig,SourceInfo const& SInfo,std::string const& ConfigName,Target const& TargetToLink,std::vector<std::string> ExtraLibraries)
+    bool MBBuild_Extension::p_Link_GCC(std::string const& CompilerName,CompileConfiguration const& CompileConfig,SourceInfo const& SInfo,std::string const& ConfigName,Target const& TargetToLink,std::vector<std::string> ExtraLibraries)
     {
-        
+        bool ReturnValue = true;
         std::vector<std::string> ObjectFiles = h_SourcesToObjectFiles(TargetToLink.SourceFiles,".o");
         std::string OutputDirectory = "../../MBPM_Builds/"+ConfigName+"/";
         if(!std::filesystem::exists(OutputDirectory))
@@ -1217,10 +1288,7 @@ namespace MBPM
                 LinkCommand += ' ';
             }
             int LinkResult = std::system(LinkCommand.c_str());
-            //if (LinkResult != 0)
-            //{
-            //    throw std::runtime_error("Error linking executable");
-            //}
+            ReturnValue = LinkResult == 0;
         }
         else if(TargetToLink.Type == TargetType::Library)
         {
@@ -1240,11 +1308,9 @@ namespace MBPM
             }
             //Dependancy stuff
             int Result = std::system(LinkCommand.c_str());
-            if(Result != 0)
-            {
-                throw std::runtime_error("Failed linking target: "+TargetToLink.OutputName); 
-            }
+            ReturnValue = Result == 0;
         }
+        return(ReturnValue);
     }
     std::string h_GetLibraryName(std::string const& TargetName)
     {
@@ -1257,8 +1323,9 @@ namespace MBPM
             return("lib"+TargetName+".a");       
         }
     }
-    void MBBuild_Extension::p_Compile(CompileConfiguration const& CompileConf,SourceInfo const& SInfo,std::vector<std::string> const& SourcesToCompile,std::vector<std::string> const& ExtraIncludeDirectories)
+    bool MBBuild_Extension::p_Compile(CompileConfiguration const& CompileConf,SourceInfo const& SInfo,std::string const& SourceToCompile,std::string const& OutDir,std::vector<std::string> const& ExtraIncludeDirectories)
     {
+        bool ReturnValue = false;
         if(CompileConf.Toolchain == "gcc")
         {
             std::string CompilerName = "g++";
@@ -1266,7 +1333,7 @@ namespace MBPM
             {
                 CompilerName = "gcc";
             }
-            p_Compile_GCC(CompilerName,CompileConf,SInfo,SourcesToCompile,ExtraIncludeDirectories);
+            ReturnValue = p_Compile_GCC(CompilerName,CompileConf,SInfo,SourceToCompile,OutDir,ExtraIncludeDirectories);
         }
         else if(CompileConf.Toolchain == "clang")
         {
@@ -1275,15 +1342,17 @@ namespace MBPM
             {
                 CompilerName = "clang";
             }
-            p_Compile_GCC(CompilerName,CompileConf,SInfo,SourcesToCompile,ExtraIncludeDirectories);
+            ReturnValue = p_Compile_GCC(CompilerName,CompileConf,SInfo,SourceToCompile,OutDir,ExtraIncludeDirectories);
         }
         else if(CompileConf.Toolchain == "msvc")
         {
-            p_Compile_MSVC(CompileConf,SInfo,SourcesToCompile,ExtraIncludeDirectories);
+            ReturnValue = p_Compile_MSVC(CompileConf,SInfo,SourceToCompile,OutDir,ExtraIncludeDirectories);
         }
+        return(ReturnValue);
     }
-    void MBBuild_Extension::p_Link(CompileConfiguration const& CompileConfig,SourceInfo const& SInfo, std::string const& ConfigName, Target const& TargetToLink, std::vector<std::string> ExtraLibraries)
+    bool MBBuild_Extension::p_Link(CompileConfiguration const& CompileConfig,SourceInfo const& SInfo, std::string const& ConfigName, Target const& TargetToLink, std::vector<std::string> ExtraLibraries)
     {
+        bool ReturnValue = true;
         if(CompileConfig.Toolchain == "gcc")
         {
             std::string CompilerName = "g++";
@@ -1291,7 +1360,7 @@ namespace MBPM
             {
                 CompilerName = "gcc";   
             }
-            p_Link_GCC(CompilerName,CompileConfig, SInfo,ConfigName,TargetToLink,ExtraLibraries);
+            ReturnValue = p_Link_GCC(CompilerName,CompileConfig, SInfo,ConfigName,TargetToLink,ExtraLibraries);
         }
         else if(CompileConfig.Toolchain == "clang")
         {
@@ -1300,16 +1369,18 @@ namespace MBPM
             {
                 CompilerName = "clang";   
             }
-            p_Link_GCC(CompilerName,CompileConfig, SInfo,ConfigName,TargetToLink,ExtraLibraries);
+            ReturnValue = p_Link_GCC(CompilerName,CompileConfig, SInfo,ConfigName,TargetToLink,ExtraLibraries);
         }
         else if(CompileConfig.Toolchain == "msvc")
         {
-            p_Link_MSVC(CompileConfig, SInfo,ConfigName,TargetToLink,ExtraLibraries);
+            ReturnValue = p_Link_MSVC(CompileConfig, SInfo,ConfigName,TargetToLink,ExtraLibraries);
         }
+        return(ReturnValue);
     }
 
-    void MBBuild_Extension::p_BuildLanguageConfig(std::filesystem::path const& PacketPath,MBPM_PacketInfo const& PacketInfo,DependancyConfigSpecification const& DependancySpec,CompileConfiguration const& CompileConf,std::string const& CompileConfName, SourceInfo const& InfoToCompile,std::vector<std::string> const& Targets)
+    MBError MBBuild_Extension::p_BuildLanguageConfig(std::filesystem::path const& PacketPath,MBPM_PacketInfo const& PacketInfo,DependancyConfigSpecification const& DependancySpec,CompileConfiguration const& CompileConf,std::string const& CompileConfName, SourceInfo const& InfoToCompile,std::vector<std::string> const& Targets)
     {
+        MBError ReturnValue = true;
         //Create build info   
         DependancyInfo SourceDependancies; 
         std::vector<std::string> TotalSources = h_GetAllSources(InfoToCompile);
@@ -1333,28 +1404,14 @@ namespace MBPM
         }
         if (!DependancyInfoResult)
         {
-            throw std::runtime_error("Error creatign dependancy info when compiling packet for configuration \"" + CompileConfName + "\": " + DependancyInfoResult.ErrorMessage);
+            throw std::runtime_error("Error creating dependancy info when compiling packet for configuration \"" + CompileConfName + "\": " + DependancyInfoResult.ErrorMessage);
         }
-        std::vector<std::string> UpdatedSources; 
-        DependancyInfoResult = SourceDependancies.GetUpdatedFiles(PacketPath,CompileConf, TotalSources, &UpdatedSources);
-        if (!DependancyInfoResult)
-        {
-            throw std::runtime_error(DependancyInfoResult.ErrorMessage);
-        }
-        if (UpdatedSources.size() == 0)
-        {
-            return;
-        }
-        if(!DependancyInfoResult)
-        {
-            throw std::runtime_error("Error reading dependancies for \"" +CompileConfName+"\": "+DependancyInfoResult.ErrorMessage);
-        }
-        std::filesystem::path PreviousWD = std::filesystem::current_path();
-        std::filesystem::current_path(BuildFilesDirectory);
-        for(std::string& Source : UpdatedSources)
-        {
-            Source = "../../"+Source;   
-        }
+        //std::filesystem::path PreviousWD = std::filesystem::current_path();
+        //std::filesystem::current_path(BuildFilesDirectory);
+        //for(std::string& Source : UpdatedSources)
+        //{
+        //    Source = "../../"+Source;   
+        //}
         //Dependacies
         std::string InstallDirectory = GetSystemPacketsDirectory();
         std::vector<std::string> ExtraIncludes = {InstallDirectory};
@@ -1366,6 +1423,7 @@ namespace MBPM
         LocalPacket.PacketName = PacketInfo.PacketName;
         LocalPacket.PacketURI = "../../";
         LocalPacket.PacketLocation = PacketLocationType::Local;
+        //TODO use the source info instead of the MBPM_PacketInfo
         std::vector<PacketIdentifier> TotalDependancies = m_AssociatedRetriever->GetPacketDependancies(LocalPacket);
         std::vector<MBPM_PacketInfo> DependancyInfos;
         for(PacketIdentifier const& Packet : TotalDependancies)
@@ -1377,10 +1435,34 @@ namespace MBPM
             }
             DependancyInfos.push_back(std::move(DependancyInfo));
         }
-        p_Compile(CompileConf,InfoToCompile, UpdatedSources,ExtraIncludes);
-
+        //TODO fix
+        std::string CompileString;
+        std::string OutDir = MBUnicode::PathToUTF8(PacketPath/"MBPM_Builds"/CompileConfName)+"/";
+        bool CompilationResult = true;
+        bool CompilationNeeded = false;
+        for (std::string const& Source : TotalSources)
+        {
+            if(!SourceDependancies.IsSourceOutOfDate(PacketPath,Source,CompileString,DependancyInfoResult))
+            {
+                continue;    
+            }
+            CompilationNeeded = true;
+            CompilationResult = p_Compile(CompileConf,InfoToCompile,Source,OutDir,ExtraIncludes);
+            if(!CompilationResult)
+            {
+                break;   
+            }
+            SourceDependancies.UpdateSource(Source,CompileString);
+        }
+        if(!CompilationResult)
+        {
+            //Do stuff   
+        }
+        //Link step
         std::vector<std::string> ExtraLibraries = {};
         std::reverse(DependancyInfos.begin(),DependancyInfos.end());
+        std::string LinkString = h_CreateLinkString(CompileConf);
+        std::string DependancyString;
         for(MBPM_PacketInfo const& CurrentInfo : DependancyInfos)
         {
             std::string PacketConfig = DependancySpec.GetDependancyConfig(CurrentInfo,CompileConfName);
@@ -1393,16 +1475,38 @@ namespace MBPM
                 ExtraLibraries.push_back(InstallDirectory+ CurrentInfo.PacketName +"/MBPM_Builds/"+PacketConfig+"/"+h_GetLibraryName(SubLib.LibraryName));
             }
         }
+        uint64_t LatestDependancyUpdate = 0;
+        for(std::string const& DependantLibrary : ExtraLibraries)
+        {
+            std::filesystem::directory_entry Entry = std::filesystem::directory_entry(DependantLibrary);     
+            if(Entry.exists() == false)
+            {
+                //Exception   
+            }
+            uint64_t NewTimestamp = h_GetEntryWriteTimestamp(Entry);
+            if(NewTimestamp > LatestDependancyUpdate)
+            {
+                LatestDependancyUpdate = NewTimestamp;
+            }
+        }
         for(std::string const& TargetName : Targets)
         {
+            bool ShouldLink = false;
             Target const& CurrentTarget =InfoToCompile.Targets.at(TargetName);
-            p_Link(CompileConf, InfoToCompile,CompileConfName,InfoToCompile.Targets.at(TargetName),ExtraLibraries);
-            if(CurrentTarget.Type == TargetType::Library)
+            if(CompilationNeeded || SourceDependancies.IsTargetOutOfDate(TargetName,LatestDependancyUpdate,CurrentTarget.SourceFiles,LinkString))
             {
-                //copy
+                bool Result = p_Link(CompileConf, InfoToCompile,CompileConfName,CurrentTarget,ExtraLibraries);
+                if(!Result)
+                {
+                    //Error compilging grej, breaka?   
+                }
+                else
+                {
+                    SourceDependancies.UpdateTarget(TargetName,CurrentTarget.SourceFiles, LinkString);
+                }
             }
         } 
-        std::filesystem::current_path(PreviousWD);
+        //std::filesystem::current_path(PreviousWD);
 
         MBError UpdateDependanciesResult = SourceDependancies.UpdateUpdatedFilesDependancies(PacketPath);
         if(!UpdateDependanciesResult)
@@ -1413,6 +1517,7 @@ namespace MBPM
         MBUtility::MBFileOutputStream DependancyOutputStream(&DependancyFile);
         SourceDependancies.WriteDependancyInfo(DependancyOutputStream);
         DependancyOutputStream.Flush();
+        return(ReturnValue);
     }
     MBError MBBuild_Extension::BuildPacket(std::filesystem::path const& PacketPath,std::vector<std::string> Configs,std::vector<std::string> Targets)
     {
@@ -1472,7 +1577,7 @@ namespace MBPM
     MBError MBBuild_Extension::ExportPacket(std::filesystem::path const& PacketPath)
     {
         MBError ReturnValue = true;
-
+         
         return(ReturnValue);    
     }
     MBError MBBuild_Extension::RetractPacket(std::filesystem::path const& PacketPath)
