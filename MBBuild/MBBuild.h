@@ -238,8 +238,8 @@ namespace MBPM
         //Updated interface
         bool IsSourceOutOfDate(std::filesystem::path const& SourceDirectory,std::string const& SourceToCheck,std::string const& CompileString,MBError& OutError);
         void UpdateSource(std::string const& FileToUpdate,std::string const& CompileString); 
-        bool IsTargetOutOfDate(std::string const& TargetName,uint32_t LatestDependancyTimestamp,std::vector<std::string> const&,std::string const& LinkString);
-        void UpdateTarget(std::string const& TargetToUpdate,std::vector<std::string> const&,std::string const& LinkString); 
+        bool IsTargetOutOfDate(std::string const& TargetName,uint32_t LatestDependancyTimestamp,Target const& TargetInfo,std::string const& LinkString);
+        void UpdateTarget(std::string const& TargetToUpdate,Target const& TargetInfo,std::string const& LinkString); 
 
         MBError UpdateUpdatedFilesDependancies(std::filesystem::path const& SourceDirectory);
         //Old interface

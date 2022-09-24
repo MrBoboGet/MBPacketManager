@@ -23,7 +23,7 @@ namespace MBPM
 {
     std::string h_ReplaceExtension(std::string OriginalString,std::string const& NewExtension)
     {
-        size_t LastDot = OriginalString.find_last_of(LastDot);    
+        size_t LastDot = OriginalString.find_last_of('.');    
         if(LastDot == OriginalString.npos)
         {
             LastDot = OriginalString.size();   
@@ -44,6 +44,13 @@ namespace MBPM
         std::string ReturnValue;
         
         return(ReturnValue);   
+    }
+    uint64_t h_GetCurrentTime()
+    {
+        uint64_t ReturnValue = 0;
+        const auto p1 = std::chrono::system_clock::now();
+        ReturnValue = p1.time_since_epoch().count();
+        return(ReturnValue);
     }
     //MBPM Build
     CompileConfiguration ParseCompileConfiguration(MBParsing::JSONObject const& ObjectToParse)
@@ -597,7 +604,7 @@ namespace MBPM
         {
             SourceDependancyInfo NewInfo;
             NewInfo.Path = OriginalSources[i];
-            NewInfo.LastCompileTime = h_GetEntryWriteTimestamp(std::filesystem::directory_entry(SourceRoot/NewInfo.Path));
+            NewInfo.LastCompileTime = h_GetEntryWriteTimestamp(std::filesystem::directory_entry(SourceRoot/ OriginalSources[i]));
 
             for(std::string const& Dependancy : SourceFile.Dependancies)
             {
@@ -925,7 +932,7 @@ namespace MBPM
     {
         bool ReturnValue = false;
         //dependancy not existing can't be considred an exception, it simply means that the file has to be compiled to determine wheter or not it works
-        auto const& It = m_Sources.find(SourceToCheck);
+        auto const& It = m_Sources.find(SourceToCheck.substr(1));
         if(It == m_Sources.end())
         {
             m_AddedSources.push_back(SourceToCheck);
@@ -939,6 +946,70 @@ namespace MBPM
         //dependancy not existing can't be considred an exception, it simply means that the file has to be compiled to determine wheter or not it works
         ReturnValue = p_FileIsUpdated(SourceDirectory,It->second);
         return(ReturnValue);
+    }
+    void DependancyInfo::UpdateSource(std::string const& FileToUpdate,std::string const& CompileString)
+    {
+        SourceDependancyInfo& DependancyInfo = m_Sources[FileToUpdate.substr(1)];  
+        DependancyInfo.Path = FileToUpdate.substr(1);
+        DependancyInfo.Updated = true;
+        DependancyInfo.CompileString = CompileString;
+        DependancyInfo.LastCompileTime = h_GetCurrentTime();
+        //dependancies are determined later
+    }
+    bool DependancyInfo::IsTargetOutOfDate(std::string const& TargetName,uint32_t LatestDependancyTimestamp,Target const& TargetInfo,std::string const& LinkString)
+    {
+        bool ReturnValue = false;
+        auto It = m_LinkedTargetsInfo.find(TargetName);
+        if(It != m_LinkedTargetsInfo.end())
+        {
+            LinkedTargetInfo const& StoredInfo = It->second;
+            if(StoredInfo.LastLinkTime < LatestDependancyTimestamp)
+            {
+                return(true);
+            }
+            if(StoredInfo.LinkOptionsString != LinkString)
+            {
+                return(true);   
+            }
+            if(StoredInfo.NeededSources != TargetInfo.SourceFiles)
+            {
+                return(true);     
+            }
+            if(StoredInfo.OutputName != TargetInfo.OutputName)
+            {
+                return(true);   
+            }
+            if(StoredInfo.TargetType != uint16_t(TargetInfo.Type))
+            {
+                return(true);   
+            }
+            //check if the sources are present. Compiliation of sources are always done before linkage
+            //so only last compilation time need to be checked
+            for(auto const& Source : TargetInfo.SourceFiles)
+            {
+                auto const& SourceIt = m_Sources.find(Source.substr(1)); 
+                if(SourceIt == m_Sources.end() || SourceIt->second.LastCompileTime > StoredInfo.LastLinkTime) 
+                {
+                    return(true);
+                }
+            }
+        }
+        else
+        {
+            ReturnValue = true;   
+        }
+        return(ReturnValue);
+    }
+    void DependancyInfo::UpdateTarget(std::string const& TargetToUpdate,Target const& TargetInfo,std::string const& LinkString)
+    {
+        LinkedTargetInfo& StoredTargetInfo = m_LinkedTargetsInfo[TargetToUpdate]; 
+        //Could check for equivalence before assigning
+        StoredTargetInfo.OutputName = TargetInfo.OutputName;
+        StoredTargetInfo.TargetName = TargetToUpdate;
+        StoredTargetInfo.NeededSources = TargetInfo.SourceFiles;
+        StoredTargetInfo.LinkOptionsString = LinkString;
+        StoredTargetInfo.TargetType = uint16_t(TargetInfo.Type);
+        StoredTargetInfo.LastLinkTime = h_GetCurrentTime();
     }
     MBError DependancyInfo::GetUpdatedFiles(std::filesystem::path const& SourceDirectory,std::string const& CompileString,std::vector<std::string> const& InputFiles,std::vector<std::string>* OutFilesToCompile) 
     {
@@ -1084,30 +1155,12 @@ namespace MBPM
         return(ToolchainSupported);
     }
 
-    std::vector<std::string> h_SourcesToObjectFiles(std::vector<std::string> const& Sources,std::string const& Extension)
+    std::vector<std::string> h_SourcesToObjectFiles(std::string const& ConfigName, std::vector<std::string> const& Sources, std::string const& Extension)
     {
         std::vector<std::string> ReturnValue;
         for(std::string const& Source : Sources)
         {
-            std::string ObjectFile = Source.substr(1);
-            size_t LastDotPosition = ObjectFile.find_last_of('.');
-            if(LastDotPosition == ObjectFile.npos)
-            {
-                LastDotPosition = ObjectFile.size();
-            }
-            ObjectFile.replace(LastDotPosition,Extension.size(),Extension.c_str());
-            ObjectFile.resize(LastDotPosition + Extension.size());
-            size_t LastSlash = ObjectFile.find_last_of('/');
-            if (LastSlash == ObjectFile.npos)
-            {
-                LastSlash = 0;
-            }
-            else
-            {
-                LastSlash = LastSlash + 1;
-            }
-            ObjectFile = ObjectFile.substr(LastSlash);
-            ReturnValue.push_back(std::move(ObjectFile));
+            ReturnValue.push_back("MBPM_BuildFiles/"+ConfigName+"/"+h_ReplaceExtension(Source.substr(1), Extension));
         }
         return(ReturnValue);    
     }
@@ -1142,7 +1195,7 @@ namespace MBPM
             CompileCommand += "/I \""+ExtraInclude+"\"";
             CompileCommand += ' ';
         }
-        CompileCommand += SourceToCompile+' ';
+        CompileCommand += SourceToCompile.substr(1)+' ';
         //output path
         CompileCommand += "/Fo\"";
         CompileCommand += OutDir;
@@ -1156,8 +1209,8 @@ namespace MBPM
     bool MBBuild_Extension::p_Link_MSVC(CompileConfiguration const& CompileConfig,SourceInfo const& SInfo, std::string const& ConfigName, Target const& TargetToLink, std::vector<std::string> ExtraLibraries)
     {
         bool ReturnValue = true;
-        std::vector<std::string> ObjectFiles = h_SourcesToObjectFiles(TargetToLink.SourceFiles,".obj");
-        std::string OutputDirectory = "../../MBPM_Builds/"+ConfigName+"/";
+        std::vector<std::string> ObjectFiles = h_SourcesToObjectFiles(ConfigName,TargetToLink.SourceFiles,"obj");
+        std::string OutputDirectory = "MBPM_Builds/"+ConfigName+"/";
         if(!std::filesystem::exists(OutputDirectory))
         {
             std::filesystem::create_directories(OutputDirectory);
@@ -1236,7 +1289,7 @@ namespace MBPM
             CompileCommand += "-I"+ExtraInclude;
             CompileCommand += ' ';
         }
-        CompileCommand += SourceToCompile+' ';
+        CompileCommand += SourceToCompile.substr(1)+' ';
         CompileCommand += "-o "+OutDir+"/"+h_ReplaceExtension(SourceToCompile,"o");
         int Result = std::system(CompileCommand.c_str());
         ReturnValue = Result == 0;
@@ -1246,8 +1299,8 @@ namespace MBPM
     bool MBBuild_Extension::p_Link_GCC(std::string const& CompilerName,CompileConfiguration const& CompileConfig,SourceInfo const& SInfo,std::string const& ConfigName,Target const& TargetToLink,std::vector<std::string> ExtraLibraries)
     {
         bool ReturnValue = true;
-        std::vector<std::string> ObjectFiles = h_SourcesToObjectFiles(TargetToLink.SourceFiles,".o");
-        std::string OutputDirectory = "../../MBPM_Builds/"+ConfigName+"/";
+        std::vector<std::string> ObjectFiles = h_SourcesToObjectFiles(ConfigName,TargetToLink.SourceFiles,"o");
+        std::string OutputDirectory = "MBPM_Builds/"+ConfigName+"/";
         if(!std::filesystem::exists(OutputDirectory))
         {
             std::filesystem::create_directories(OutputDirectory);    
@@ -1385,134 +1438,137 @@ namespace MBPM
         DependancyInfo SourceDependancies; 
         std::vector<std::string> TotalSources = h_GetAllSources(InfoToCompile);
         std::filesystem::path BuildFilesDirectory = PacketPath/("MBPM_BuildFiles/"+CompileConfName);
+        std::filesystem::path PreviousWD = std::filesystem::current_path();
+        std::filesystem::current_path(PacketPath);
         if(!std::filesystem::exists(BuildFilesDirectory))
         {
             std::filesystem::create_directories(BuildFilesDirectory);
         }
         std::filesystem::path DependancyInfoPath = BuildFilesDirectory/"MBBuildDependancyInfo";
-        MBError DependancyInfoResult = true;
-        if(!std::filesystem::exists(DependancyInfoPath))
+        try
         {
-            DependancyInfoResult = DependancyInfo::CreateDependancyInfo(InfoToCompile,CompileConf,PacketPath,&SourceDependancies);
-        }
-        else
-        {
-            std::ifstream FileInput = std::ifstream(DependancyInfoPath,std::ios::in|std::ios::binary);
-            MBUtility::MBFileInputStream  InputStream(&FileInput);
-            DependancyInfoResult = DependancyInfo::ParseDependancyInfo(InputStream,&SourceDependancies);
-            //DependancyInfoResult = DependancyInfo::UpdateDependancyInfo(InfoToCompile,PacketPath,&SourceDependancies);
-        }
-        if (!DependancyInfoResult)
-        {
-            throw std::runtime_error("Error creating dependancy info when compiling packet for configuration \"" + CompileConfName + "\": " + DependancyInfoResult.ErrorMessage);
-        }
-        //std::filesystem::path PreviousWD = std::filesystem::current_path();
-        //std::filesystem::current_path(BuildFilesDirectory);
-        //for(std::string& Source : UpdatedSources)
-        //{
-        //    Source = "../../"+Source;   
-        //}
-        //Dependacies
-        std::string InstallDirectory = GetSystemPacketsDirectory();
-        std::vector<std::string> ExtraIncludes = {InstallDirectory};
-        for(std::string const& Include : PacketInfo.ExtraIncludeDirectories)
-        {
-            ExtraIncludes.push_back(Include);   
-        }
-        PacketIdentifier LocalPacket;
-        LocalPacket.PacketName = PacketInfo.PacketName;
-        LocalPacket.PacketURI = "../../";
-        LocalPacket.PacketLocation = PacketLocationType::Local;
-        //TODO use the source info instead of the MBPM_PacketInfo
-        std::vector<PacketIdentifier> TotalDependancies = m_AssociatedRetriever->GetPacketDependancies(LocalPacket);
-        std::vector<MBPM_PacketInfo> DependancyInfos;
-        for(PacketIdentifier const& Packet : TotalDependancies)
-        {
-            MBPM_PacketInfo DependancyInfo = m_AssociatedRetriever->GetPacketInfo(Packet);
-            for(std::string const& IncludePath : DependancyInfo.ExtraIncludeDirectories)
+            MBError DependancyInfoResult = true;
+            if(!std::filesystem::exists(DependancyInfoPath))
             {
-                ExtraIncludes.push_back(InstallDirectory+IncludePath);
+                DependancyInfoResult = DependancyInfo::CreateDependancyInfo(InfoToCompile,CompileConf,PacketPath,&SourceDependancies);
             }
-            DependancyInfos.push_back(std::move(DependancyInfo));
-        }
-        //TODO fix
-        std::string CompileString;
-        std::string OutDir = MBUnicode::PathToUTF8(PacketPath/"MBPM_Builds"/CompileConfName)+"/";
-        bool CompilationResult = true;
-        bool CompilationNeeded = false;
-        for (std::string const& Source : TotalSources)
-        {
-            if(!SourceDependancies.IsSourceOutOfDate(PacketPath,Source,CompileString,DependancyInfoResult))
+            else
             {
-                continue;    
+                std::ifstream FileInput = std::ifstream(DependancyInfoPath,std::ios::in|std::ios::binary);
+                MBUtility::MBFileInputStream  InputStream(&FileInput);
+                DependancyInfoResult = DependancyInfo::ParseDependancyInfo(InputStream,&SourceDependancies);
+                //DependancyInfoResult = DependancyInfo::UpdateDependancyInfo(InfoToCompile,PacketPath,&SourceDependancies);
             }
-            CompilationNeeded = true;
-            CompilationResult = p_Compile(CompileConf,InfoToCompile,Source,OutDir,ExtraIncludes);
+            if (!DependancyInfoResult)
+            {
+                throw std::runtime_error("Error creating dependancy info when compiling packet for configuration \"" + CompileConfName + "\": " + DependancyInfoResult.ErrorMessage);
+            }
+            std::string InstallDirectory = GetSystemPacketsDirectory();
+            std::vector<std::string> ExtraIncludes = {InstallDirectory};
+            for(std::string const& Include : PacketInfo.ExtraIncludeDirectories)
+            {
+                ExtraIncludes.push_back(Include);   
+            }
+            PacketIdentifier LocalPacket;
+            LocalPacket.PacketName = PacketInfo.PacketName;
+            LocalPacket.PacketURI = "./";
+            LocalPacket.PacketLocation = PacketLocationType::Local;
+            //TODO use the source info instead of the MBPM_PacketInfo
+            std::vector<PacketIdentifier> TotalDependancies = m_AssociatedRetriever->GetPacketDependancies(LocalPacket);
+            std::vector<MBPM_PacketInfo> DependancyInfos;
+            for(PacketIdentifier const& Packet : TotalDependancies)
+            {
+                MBPM_PacketInfo DependancyInfo = m_AssociatedRetriever->GetPacketInfo(Packet);
+                for(std::string const& IncludePath : DependancyInfo.ExtraIncludeDirectories)
+                {
+                    ExtraIncludes.push_back(InstallDirectory+IncludePath);
+                }
+                DependancyInfos.push_back(std::move(DependancyInfo));
+            }
+            //TODO fix
+            std::string CompileString;
+            std::string OutDir = MBUnicode::PathToUTF8(PacketPath/"MBPM_Builds"/CompileConfName)+"/";
+            bool CompilationResult = true;
+            bool CompilationNeeded = false;
+            for (std::string const& Source : TotalSources)
+            {
+                if(!SourceDependancies.IsSourceOutOfDate(PacketPath,Source,CompileString,DependancyInfoResult))
+                {
+                    continue;    
+                }
+                CompilationNeeded = true;
+                CompilationResult = p_Compile(CompileConf,InfoToCompile,Source,OutDir,ExtraIncludes);
+                if(!CompilationResult)
+                {
+                    break;   
+                }
+                SourceDependancies.UpdateSource(Source,CompileString);
+            }
             if(!CompilationResult)
             {
-                break;   
+                //kinda ugly
+                throw std::runtime_error("Error compiling sources");
             }
-            SourceDependancies.UpdateSource(Source,CompileString);
-        }
-        if(!CompilationResult)
-        {
-            //Do stuff   
-        }
-        //Link step
-        std::vector<std::string> ExtraLibraries = {};
-        std::reverse(DependancyInfos.begin(),DependancyInfos.end());
-        std::string LinkString = h_CreateLinkString(CompileConf);
-        std::string DependancyString;
-        for(MBPM_PacketInfo const& CurrentInfo : DependancyInfos)
-        {
-            std::string PacketConfig = DependancySpec.GetDependancyConfig(CurrentInfo,CompileConfName);
-            //if(CurrentInfo.Attributes.find(MBPM_PacketAttribute::SubOnly) == CurrentInfo.Attributes.end())
-            //{
+            //Link step
+            std::vector<std::string> ExtraLibraries = {};
+            std::reverse(DependancyInfos.begin(),DependancyInfos.end());
+            std::string LinkString = h_CreateLinkString(CompileConf);
+            std::string DependancyString;
+            for(MBPM_PacketInfo const& CurrentInfo : DependancyInfos)
+            {
+                std::string PacketConfig = DependancySpec.GetDependancyConfig(CurrentInfo,CompileConfName);
+                //if(CurrentInfo.Attributes.find(MBPM_PacketAttribute::SubOnly) == CurrentInfo.Attributes.end())
+                //{
                 ExtraLibraries.push_back(InstallDirectory+ CurrentInfo.PacketName+"/MBPM_Builds/"+PacketConfig+"/"+h_GetLibraryName(CurrentInfo.PacketName));
-            //} 
-            for(auto const& SubLib : CurrentInfo.SubLibraries)
-            {
-                ExtraLibraries.push_back(InstallDirectory+ CurrentInfo.PacketName +"/MBPM_Builds/"+PacketConfig+"/"+h_GetLibraryName(SubLib.LibraryName));
-            }
-        }
-        uint64_t LatestDependancyUpdate = 0;
-        for(std::string const& DependantLibrary : ExtraLibraries)
-        {
-            std::filesystem::directory_entry Entry = std::filesystem::directory_entry(DependantLibrary);     
-            if(Entry.exists() == false)
-            {
-                //Exception   
-            }
-            uint64_t NewTimestamp = h_GetEntryWriteTimestamp(Entry);
-            if(NewTimestamp > LatestDependancyUpdate)
-            {
-                LatestDependancyUpdate = NewTimestamp;
-            }
-        }
-        for(std::string const& TargetName : Targets)
-        {
-            bool ShouldLink = false;
-            Target const& CurrentTarget =InfoToCompile.Targets.at(TargetName);
-            if(CompilationNeeded || SourceDependancies.IsTargetOutOfDate(TargetName,LatestDependancyUpdate,CurrentTarget.SourceFiles,LinkString))
-            {
-                bool Result = p_Link(CompileConf, InfoToCompile,CompileConfName,CurrentTarget,ExtraLibraries);
-                if(!Result)
+                //} 
+                for(auto const& SubLib : CurrentInfo.SubLibraries)
                 {
-                    //Error compilging grej, breaka?   
-                }
-                else
-                {
-                    SourceDependancies.UpdateTarget(TargetName,CurrentTarget.SourceFiles, LinkString);
+                    ExtraLibraries.push_back(InstallDirectory+ CurrentInfo.PacketName +"/MBPM_Builds/"+PacketConfig+"/"+h_GetLibraryName(SubLib.LibraryName));
                 }
             }
-        } 
-        //std::filesystem::current_path(PreviousWD);
-
-        MBError UpdateDependanciesResult = SourceDependancies.UpdateUpdatedFilesDependancies(PacketPath);
-        if(!UpdateDependanciesResult)
-        {
-            throw std::runtime_error("Error updating dependancy info after compilation: "+UpdateDependanciesResult.ErrorMessage); 
+            uint64_t LatestDependancyUpdate = 0;
+            for(std::string const& DependantLibrary : ExtraLibraries)
+            {
+                std::filesystem::directory_entry Entry = std::filesystem::directory_entry(DependantLibrary);     
+                if(Entry.exists() == false)
+                {
+                    throw std::runtime_error("Error finding library dependancy: "+std::string(DependantLibrary));
+                }
+                uint64_t NewTimestamp = h_GetEntryWriteTimestamp(Entry);
+                if(NewTimestamp > LatestDependancyUpdate)
+                {
+                    LatestDependancyUpdate = NewTimestamp;
+                }
+            }
+            for(std::string const& TargetName : Targets)
+            {
+                bool ShouldLink = false;
+                Target const& CurrentTarget =InfoToCompile.Targets.at(TargetName);
+                if(CompilationNeeded || SourceDependancies.IsTargetOutOfDate(TargetName,LatestDependancyUpdate,CurrentTarget,LinkString))
+                {
+                    bool Result = p_Link(CompileConf, InfoToCompile,CompileConfName,CurrentTarget,ExtraLibraries);
+                    if(!Result)
+                    {
+                        throw std::runtime_error("Error linking library");
+                    }
+                    else
+                    {
+                        SourceDependancies.UpdateTarget(TargetName,CurrentTarget, LinkString);
+                    }
+                }
+            } 
+            MBError UpdateDependanciesResult = SourceDependancies.UpdateUpdatedFilesDependancies(PacketPath);
+            if(!UpdateDependanciesResult)
+            {
+                throw std::runtime_error("Error updating dependancy info after compilation: "+UpdateDependanciesResult.ErrorMessage); 
+            }
         }
+        catch(std::exception const& e)
+        {
+            ReturnValue = false;
+            ReturnValue.ErrorMessage = "Error compiling packet: "+std::string(e.what());        
+        }
+        std::filesystem::current_path(PreviousWD);
         std::ofstream DependancyFile = std::ofstream(DependancyInfoPath,std::ios::out|std::ios::binary);
         MBUtility::MBFileOutputStream DependancyOutputStream(&DependancyFile);
         SourceDependancies.WriteDependancyInfo(DependancyOutputStream);

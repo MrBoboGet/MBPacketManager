@@ -62,3 +62,4 @@ Thumbs.db
 /_*
 /compile_com*
 /CMakeLists*
+/CppProperties.json

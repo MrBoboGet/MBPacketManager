@@ -88,8 +88,8 @@ int main(int argc,const char** argv)
 	//debug för compile av locala packets
 	//std::cout << "Current path: " << std::filesystem::current_path()<<std::endl;
 	//std::filesystem::current_path("../../");
-	//const char* NewArgv[] = { "mbpm","create","cmake","./"};
-	//argc = sizeof(NewArgv) / sizeof(const char*);
-	//argv = NewArgv;
+	const char* NewArgv[] = { "mbpm","compile","MBUtility","-c:GNU_Debug"};
+	argc = sizeof(NewArgv) / sizeof(const char*);
+	argv = NewArgv;
 	return(MBPM::MBCLI_Main(argc, argv));
 }
