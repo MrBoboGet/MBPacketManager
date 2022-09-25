@@ -1900,7 +1900,12 @@ namespace MBPM
             else
             {
                 CLI_Extension& ExtensionToUse = *(HandlingExtension.first);
-                ExtensionToUse.HandleCommand(HandlingExtension.second,Packet,m_PacketRetriever,*AssociatedTerminal);
+                MBError Result = ExtensionToUse.HandleCommand(HandlingExtension.second,Packet,m_PacketRetriever,*AssociatedTerminal);
+                if (!Result)
+                {
+                    AssociatedTerminal->PrintLine("Error executing command for packet \""+Packet.PacketName+"\": "+Result.ErrorMessage);
+                    std::exit(1);
+                }
             }
         }        
     }

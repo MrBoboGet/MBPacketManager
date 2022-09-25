@@ -37,7 +37,6 @@ för att compila/updatera alla ett packets dependancys/ dem som skiljer sig frå
 
 
 
-
 Fix the updated InstallPacket and Compile packet, without supported packet configuration
 
 Probably something that should be a part of an eventual MBBuild project
@@ -57,3 +56,7 @@ packet structure entails that only packets of depth 1 need to be updated.
 
 override for creating source info, moving more to that only requires that
 the file is not arbitrarily overriden
+
+Bad allocation när man parsar dålig data i MBBuild: Yikes, borde aldrig allocata för mycket minne
+
+TODO: lägg till lite printous när man compilerar grejer, just nu är det svårt att se vad som faktiskt görs. typ "Linking target","compiling source"

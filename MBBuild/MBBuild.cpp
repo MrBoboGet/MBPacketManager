@@ -3,6 +3,7 @@
 #include "../MB_PacketProtocol.h"
 
 #include <assert.h>
+#include <chrono>
 #include <filesystem>
 #include <ios>
 #include <stdexcept>
@@ -36,20 +37,45 @@ namespace MBPM
     std::string h_CreateCompileString(CompileConfiguration const& CompileInfo)
     {
         std::string ReturnValue;
-
+        //we cant assume that compile options are commutative
+        ReturnValue += CompileInfo.Toolchain;
+        ReturnValue += ' ';
+        for(std::string const& Source : CompileInfo.CompileFlags)
+        {
+            ReturnValue += Source;
+            ReturnValue += ' ';
+        }
         return(ReturnValue);   
     }
     std::string h_CreateLinkString(CompileConfiguration const& CompileInfo)
     {
         std::string ReturnValue;
-        
+        for(std::string const& Flag : CompileInfo.CompileFlags)
+        {
+            ReturnValue += Flag;
+            ReturnValue += ' ';
+        } 
         return(ReturnValue);   
+    }
+    template<typename ClockType>
+    std::chrono::time_point<std::chrono::system_clock> h_ClockToSystemClock(ClockType tp)
+    {
+        std::chrono::time_point<std::chrono::system_clock> ReturnValue;
+        ReturnValue = std::chrono::time_point_cast<std::chrono::system_clock::duration>(tp - ClockType::clock::now() + 
+                std::chrono::system_clock::now());
+        return(ReturnValue);
     }
     uint64_t h_GetCurrentTime()
     {
         uint64_t ReturnValue = 0;
         const auto p1 = std::chrono::system_clock::now();
         ReturnValue = p1.time_since_epoch().count();
+        return(ReturnValue);
+    }
+    uint64_t h_GetEntryWriteTimestamp(std::filesystem::directory_entry const& Entry)
+    {
+        uint64_t ReturnValue = 0;
+        ReturnValue = h_ClockToSystemClock(Entry.last_write_time()).time_since_epoch().count();
         return(ReturnValue);
     }
     //MBPM Build
@@ -447,12 +473,6 @@ namespace MBPM
 
 
     
-    uint64_t h_GetEntryWriteTimestamp(std::filesystem::directory_entry const& Entry)
-    {
-        uint64_t ReturnValue = 0;
-        ReturnValue = Entry.last_write_time().time_since_epoch().count();
-        return(ReturnValue);
-    }
 
     //BEGIN DependancyInfo
     bool DependancyInfo::p_DependancyIsUpdated(uint64_t LastCompileTime,FileID Index)
@@ -604,7 +624,8 @@ namespace MBPM
         {
             SourceDependancyInfo NewInfo;
             NewInfo.Path = OriginalSources[i];
-            NewInfo.LastCompileTime = h_GetEntryWriteTimestamp(std::filesystem::directory_entry(SourceRoot/ OriginalSources[i]));
+            //NewInfo.LastCompileTime = h_GetEntryWriteTimestamp(std::filesystem::directory_entry(SourceRoot/ OriginalSources[i]));
+            NewInfo.LastCompileTime = 0;
 
             for(std::string const& Dependancy : SourceFile.Dependancies)
             {
@@ -879,8 +900,6 @@ namespace MBPM
     MBError DependancyInfo::UpdateUpdatedFilesDependancies(std::filesystem::path const& SourceDirectory)
     {
         MBError ReturnValue = true;
-        std::vector<std::string> AddedFiles = std::move(m_AddedSources);
-        m_AddedSources.clear();
         std::vector<std::string> UpdatedFiles;
         for(auto const& Source : m_Sources)
         {
@@ -889,25 +908,15 @@ namespace MBPM
                 UpdatedFiles.push_back(Source.second.Path);
             }
         }
-        std::vector<std::string> FilesToUpdate;
-        for(auto const& Path : AddedFiles)
-        {
-            FilesToUpdate.push_back(MBUnicode::PathToUTF8(Path));   
-        }
-        for(auto const& Path : UpdatedFiles)
-        {
-            FilesToUpdate.push_back(MBUnicode::PathToUTF8(Path));   
-        }
-
-        if (FilesToUpdate.size() == 0)
+        if (UpdatedFiles.size() == 0)
         {
             return ReturnValue;
         }
-        std::string GCCComand = GetGCCDependancyCommand(SourceDirectory,FilesToUpdate,{});
+        std::string GCCComand = GetGCCDependancyCommand(SourceDirectory, UpdatedFiles,{});
         MBSystem::UniDirectionalSubProcess GCCProccess(GCCComand,true); 
        
         size_t CurrentDepCount = m_Dependancies.size(); 
-        std::vector<SourceDependancyInfo> UpdatedInfo = p_NormalizeDependancies(p_ParseMakeDependancyInfo(GCCProccess),SourceDirectory,m_PathToDependancyIndex,m_Dependancies,FilesToUpdate);
+        std::vector<SourceDependancyInfo> UpdatedInfo = p_NormalizeDependancies(p_ParseMakeDependancyInfo(GCCProccess),SourceDirectory,m_PathToDependancyIndex,m_Dependancies, UpdatedFiles);
         //for(size_t i = 0; i < AddedFiles.size();i++)
         //{
         //    //m_PathToSourceIndex[AddedFiles[i]] = m_Sources.size();
@@ -920,7 +929,7 @@ namespace MBPM
         //}
         for(SourceDependancyInfo const& Source : UpdatedInfo)
         {
-            m_Sources[Source.Path] = Source;   
+            m_Sources[Source.Path].Dependancies = Source.Dependancies;   
         }
         for(size_t i = CurrentDepCount; i < m_Dependancies.size();i++)
         {
@@ -932,19 +941,13 @@ namespace MBPM
     {
         bool ReturnValue = false;
         //dependancy not existing can't be considred an exception, it simply means that the file has to be compiled to determine wheter or not it works
-        auto const& It = m_Sources.find(SourceToCheck.substr(1));
-        if(It == m_Sources.end())
-        {
-            m_AddedSources.push_back(SourceToCheck);
-            return(true);
-        }
-        SourceDependancyInfo const& DepInfo = It->second;
+        SourceDependancyInfo& DepInfo = m_Sources[SourceToCheck.substr(1)];
         if(DepInfo.CompileString != CompileString)
         {
-            return(false);       
+            return(true);       
         }
         //dependancy not existing can't be considred an exception, it simply means that the file has to be compiled to determine wheter or not it works
-        ReturnValue = p_FileIsUpdated(SourceDirectory,It->second);
+        ReturnValue = p_FileIsUpdated(SourceDirectory, DepInfo);
         return(ReturnValue);
     }
     void DependancyInfo::UpdateSource(std::string const& FileToUpdate,std::string const& CompileString)
@@ -956,7 +959,7 @@ namespace MBPM
         DependancyInfo.LastCompileTime = h_GetCurrentTime();
         //dependancies are determined later
     }
-    bool DependancyInfo::IsTargetOutOfDate(std::string const& TargetName,uint32_t LatestDependancyTimestamp,Target const& TargetInfo,std::string const& LinkString)
+    bool DependancyInfo::IsTargetOutOfDate(std::string const& TargetName, uint64_t LatestDependancyTimestamp,Target const& TargetInfo,std::string const& LinkString)
     {
         bool ReturnValue = false;
         auto It = m_LinkedTargetsInfo.find(TargetName);
@@ -1238,10 +1241,7 @@ namespace MBPM
             LinkCommand += "/OUT:"+ OutputDirectory+ TargetToLink.OutputName + ".exe";
             //LinkCommand += "/OUT:"+TargetToLink.OutputName + ".exe & move "+TargetToLink.OutputName + ".exe "+OutputDirectory+TargetToLink.OutputName+".exe";
             int Result = std::system(LinkCommand.c_str());     
-            if(Result != 0)
-            {
-                throw std::runtime_error("Failed linking executable");   
-            }
+            ReturnValue = Result == 0;
         }
         else if(TargetToLink.Type == TargetType::Library)
         {
@@ -1249,10 +1249,7 @@ namespace MBPM
             LinkCommand += ObjectFilesList;
             LinkCommand += "/OUT:"+OutputDirectory+TargetToLink.OutputName+".lib";
             int Result = std::system(LinkCommand.c_str());
-            if(Result != 0)
-            {
-                throw std::runtime_error("Failed creating library");   
-            }
+            ReturnValue = Result == 0;
         }
         else 
         {
@@ -1431,7 +1428,7 @@ namespace MBPM
         return(ReturnValue);
     }
 
-    MBError MBBuild_Extension::p_BuildLanguageConfig(std::filesystem::path const& PacketPath,MBPM_PacketInfo const& PacketInfo,DependancyConfigSpecification const& DependancySpec,CompileConfiguration const& CompileConf,std::string const& CompileConfName, SourceInfo const& InfoToCompile,std::vector<std::string> const& Targets)
+    MBError MBBuild_Extension::p_BuildLanguageConfig(std::filesystem::path const& PacketPath,MBPM_PacketInfo const& PacketInfo,DependancyConfigSpecification const& DependancySpec,CompileConfiguration const& CompileConf,std::string const& CompileConfName, SourceInfo const& InfoToCompile,std::vector<std::string> const& Targets,CommandInfo const& Command)
     {
         MBError ReturnValue = true;
         //Create build info   
@@ -1440,6 +1437,7 @@ namespace MBPM
         std::filesystem::path BuildFilesDirectory = PacketPath/("MBPM_BuildFiles/"+CompileConfName);
         std::filesystem::path PreviousWD = std::filesystem::current_path();
         std::filesystem::current_path(PacketPath);
+        bool RebuildAll = Command.Flags.find("rebuild") != Command.Flags.end();
         if(!std::filesystem::exists(BuildFilesDirectory))
         {
             std::filesystem::create_directories(BuildFilesDirectory);
@@ -1448,7 +1446,7 @@ namespace MBPM
         try
         {
             MBError DependancyInfoResult = true;
-            if(!std::filesystem::exists(DependancyInfoPath))
+            if(!std::filesystem::exists(DependancyInfoPath) || RebuildAll)
             {
                 DependancyInfoResult = DependancyInfo::CreateDependancyInfo(InfoToCompile,CompileConf,PacketPath,&SourceDependancies);
             }
@@ -1486,13 +1484,13 @@ namespace MBPM
                 DependancyInfos.push_back(std::move(DependancyInfo));
             }
             //TODO fix
-            std::string CompileString;
+            std::string CompileString = h_CreateCompileString(CompileConf);
             std::string OutDir = MBUnicode::PathToUTF8(PacketPath/"MBPM_Builds"/CompileConfName)+"/";
             bool CompilationResult = true;
             bool CompilationNeeded = false;
             for (std::string const& Source : TotalSources)
             {
-                if(!SourceDependancies.IsSourceOutOfDate(PacketPath,Source,CompileString,DependancyInfoResult))
+                if(!SourceDependancies.IsSourceOutOfDate(PacketPath,Source,CompileString,DependancyInfoResult) && !RebuildAll)
                 {
                     continue;    
                 }
@@ -1516,6 +1514,8 @@ namespace MBPM
             std::string DependancyString;
             for(MBPM_PacketInfo const& CurrentInfo : DependancyInfos)
             {
+                DependancyString += CurrentInfo.PacketName;
+                DependancyString += ' ';
                 std::string PacketConfig = DependancySpec.GetDependancyConfig(CurrentInfo,CompileConfName);
                 //if(CurrentInfo.Attributes.find(MBPM_PacketAttribute::SubOnly) == CurrentInfo.Attributes.end())
                 //{
@@ -1544,7 +1544,7 @@ namespace MBPM
             {
                 bool ShouldLink = false;
                 Target const& CurrentTarget =InfoToCompile.Targets.at(TargetName);
-                if(CompilationNeeded || SourceDependancies.IsTargetOutOfDate(TargetName,LatestDependancyUpdate,CurrentTarget,LinkString))
+                if(CompilationNeeded || SourceDependancies.IsTargetOutOfDate(TargetName,LatestDependancyUpdate,CurrentTarget,LinkString) || RebuildAll)
                 {
                     bool Result = p_Link(CompileConf, InfoToCompile,CompileConfName,CurrentTarget,ExtraLibraries);
                     if(!Result)
@@ -1575,7 +1575,7 @@ namespace MBPM
         DependancyOutputStream.Flush();
         return(ReturnValue);
     }
-    MBError MBBuild_Extension::BuildPacket(std::filesystem::path const& PacketPath,std::vector<std::string> Configs,std::vector<std::string> Targets)
+    MBError MBBuild_Extension::BuildPacket(std::filesystem::path const& PacketPath,std::vector<std::string> Configs,std::vector<std::string> Targets,CommandInfo const& Command)
     {
         MBError ReturnValue = true;
         try
@@ -1620,7 +1620,11 @@ namespace MBPM
             }
             for(std::string const& Config : Configs)
             {
-                p_BuildLanguageConfig(PacketPath,PacketInfo,DepConf,LanguageInfo.Configurations.at(Config),Config,BuildInfo,Targets);
+                ReturnValue = p_BuildLanguageConfig(PacketPath,PacketInfo,DepConf,LanguageInfo.Configurations.at(Config),Config,BuildInfo,Targets,Command);
+                if (!ReturnValue)
+                {
+                    return(ReturnValue);
+                }
             }
         }
         catch(std::exception const& e)
@@ -1721,7 +1725,7 @@ namespace MBPM
                 Configurations.push_back(Configuration);   
             } 
         }
-        ReturnValue =  BuildPacket(PacketToHandle.PacketURI,Configurations,Targets);
+        ReturnValue =  BuildPacket(PacketToHandle.PacketURI,Configurations,Targets,CommandToHandle);
         return(ReturnValue);    
     }
     MBError MBBuild_Extension::p_Handle_Export(CommandInfo const& CommandToHandle,PacketIdentifier const& PacketToHandle,PacketRetriever& RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal)

@@ -63,3 +63,4 @@ Thumbs.db
 /compile_com*
 /CMakeLists*
 /CppProperties.json
+!/.gitignore

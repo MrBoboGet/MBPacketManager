@@ -199,7 +199,6 @@ namespace MBPM
         static std::vector<SourceDependancyInfo> p_NormalizeDependancies(std::vector<MakeDependancyInfo>  const& InfoToConvert,
             std::filesystem::path const& SourceRoot,std::unordered_map<std::string,FileID>& IDMap,std::vector<DependancyStruct>& OutDeps,std::vector<std::string> const& OriginalSources);
         //Convenience part 
-        std::vector<std::string> m_AddedSources = {};
         std::unordered_map<std::string,FileID> m_PathToDependancyIndex;
         //std::unordered_map<std::string,size_t> m_PathToSourceIndex;
         
@@ -238,7 +237,7 @@ namespace MBPM
         //Updated interface
         bool IsSourceOutOfDate(std::filesystem::path const& SourceDirectory,std::string const& SourceToCheck,std::string const& CompileString,MBError& OutError);
         void UpdateSource(std::string const& FileToUpdate,std::string const& CompileString); 
-        bool IsTargetOutOfDate(std::string const& TargetName,uint32_t LatestDependancyTimestamp,Target const& TargetInfo,std::string const& LinkString);
+        bool IsTargetOutOfDate(std::string const& TargetName,uint64_t LatestDependancyTimestamp,Target const& TargetInfo,std::string const& LinkString);
         void UpdateTarget(std::string const& TargetToUpdate,Target const& TargetInfo,std::string const& LinkString); 
 
         MBError UpdateUpdatedFilesDependancies(std::filesystem::path const& SourceDirectory);
@@ -274,7 +273,7 @@ namespace MBPM
         bool p_Compile_GCC(std::string const& CompilerName,CompileConfiguration const& CompileConf,SourceInfo const& SInfo,std::string const& SourceToCompile,std::string const& OutTopDirectory,std::vector<std::string> const& ExtraIncludeDirectories);
         bool p_Link_GCC( std::string const& CompilerName,CompileConfiguration const& CompileConfig, SourceInfo const& SInfo,std::string const& ConfigName, Target const& TargetToLink, std::vector<std::string> ExtraLibraries);
         
-        MBError p_BuildLanguageConfig(std::filesystem::path const& PacketPath,MBPM_PacketInfo const& PacketInfo,DependancyConfigSpecification const& Dependancies,CompileConfiguration const& CompileConf,std::string const& CompileConfName, SourceInfo const& InfoToCompile,std::vector<std::string> const& Targets);
+        MBError p_BuildLanguageConfig(std::filesystem::path const& PacketPath,MBPM_PacketInfo const& PacketInfo,DependancyConfigSpecification const& Dependancies,CompileConfiguration const& CompileConf,std::string const& CompileConfName, SourceInfo const& InfoToCompile,std::vector<std::string> const& Targets,CommandInfo const& CommandInfo);
 
 
         MBError p_Handle_Compile(CommandInfo const& CommandToHandle,PacketIdentifier const& PacketToHandle,PacketRetriever & RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal);
@@ -288,7 +287,7 @@ namespace MBPM
         virtual MBError HandleCommand(CommandInfo const& CommandToHandle,PacketIdentifier const& PacketToHandle,PacketRetriever& RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal) override;
         virtual void HandleHelp(CommandInfo const& CommandToHandle,MBCLI::MBTerminal& AssociatedTerminal) override;
 
-        MBError BuildPacket(std::filesystem::path const& PacketPath,std::vector<std::string> Configs,std::vector<std::string> Targets);
+        MBError BuildPacket(std::filesystem::path const& PacketPath,std::vector<std::string> Configs,std::vector<std::string> Targets,CommandInfo const& Command);
         MBError ExportPacket(std::filesystem::path const& PacketPath);
         MBError RetractPacket(std::filesystem::path const& PacketPath);
     };
