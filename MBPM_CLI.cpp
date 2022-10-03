@@ -1157,33 +1157,48 @@ namespace MBPM
         }
         return(ReturnValue);
     }
+    std::vector<MBCLI::ProcessedCLInput> h_SplitCommand(MBCLI::ProcessedCLInput const& CommandToSplit)
+    {
+        std::vector<MBCLI::ProcessedCLInput> ReturnValue; 
+        size_t PreviousDelimPos = 0;
+        size_t ParseOffset = 0;
+        std::vector<const char*> CommandTokens;
+        for(auto const& String : CommandToSplit.TotalCommandTokens)
+        {
+            CommandTokens.push_back(String.data());   
+        }
+        while(ParseOffset < CommandToSplit.TotalCommandTokens.size())
+        {
+            if(CommandToSplit.TotalCommandTokens[ParseOffset] == "--")
+            {
+                ReturnValue.push_back(MBCLI::ProcessedCLInput(ParseOffset-PreviousDelimPos,CommandTokens.data()+PreviousDelimPos));
+                PreviousDelimPos = ParseOffset;
+            }    
+            ParseOffset++;
+        }
+        ReturnValue.push_back(MBCLI::ProcessedCLInput(ParseOffset-PreviousDelimPos,CommandTokens.data()+PreviousDelimPos));
+        return(ReturnValue);
+    }
     int MBPM_ClI::p_HandleExec(MBCLI::ProcessedCLInput const& CommandInput,MBCLI::MBTerminal& AssociatedTerminal)
     {
         int ReturnValue = 0;
         MBError PacketListError = true;
-        std::vector<PacketIdentifier> PacketList = p_GetCommandPackets(CommandInput,PacketLocationType::Installed,PacketListError);
+        std::string CommandToExecute = "";
+        std::vector<MBCLI::ProcessedCLInput> Commands = h_SplitCommand(CommandInput);
+        if(Commands.size() < 2)
+        {
+            AssociatedTerminal.PrintLine("exec command needs -- to delimi arguments to exec and command to execute");   
+            return 1;
+        }
+        for(size_t i = 1; i < Commands[1].TotalCommandTokens.size();i++)
+        {
+            CommandToExecute += Commands[1].TotalCommandTokens[i] + " ";
+        }
+        std::vector<PacketIdentifier> PacketList = p_GetCommandPackets(Commands[0],PacketLocationType::Installed,PacketListError);
         if(!PacketListError)
         {
             AssociatedTerminal.PrintLine("Error constructing packet list: "+PacketListError.ErrorMessage);
             return(1);
-        }
-        std::string CommandToExecute = "";
-        bool DelimiterFound = false;
-        for(size_t i = 1; i < CommandInput.TotalCommandTokens[i].size(); i++)
-        {
-            if(CommandInput.TotalCommandTokens[i] == "--")
-            {
-                DelimiterFound = true;
-            } 
-            else if(DelimiterFound)
-            {
-                CommandToExecute += CommandInput.TotalCommandTokens[i]+" ";
-            }
-        }
-        if(!DelimiterFound)
-        {
-            AssociatedTerminal.PrintLine("exec command needs -- to delimi arguments to exec and command to execute");   
-            return 1;
         }
         bool QuitOnError = CommandInput.CommandOptions.find("continue-error") == CommandInput.CommandOptions.end();
         std::filesystem::path OriginalDir = std::filesystem::current_path();
@@ -2849,6 +2864,10 @@ namespace MBPM
         else if (CommandInput.TopCommand == "update")
         {
             ReturnValue = p_HandleUpdate(CommandInput, AssociatedTerminal);
+        }
+        else if(CommandInput.TopCommand == "exec")
+        {
+            ReturnValue = p_HandleExec(CommandInput,*AssociatedTerminal);   
         }
         else if (CommandInput.TopCommand == "upload")
         {
