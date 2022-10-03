@@ -5,19 +5,6 @@
     "Standard":"C++17",
     "Targets":
     {
-        "mbbuild":
-        {
-            "OutputName":"mbbuild2",
-            "TargetType":"Executable",
-            "Sources":
-            [
-                "/MBPacketManager.cpp",
-                "/MBPM_CLI.cpp",
-                "/MB_PacketProtocol.cpp",
-                "/MBBuild/MBBuild.cpp",
-                "/MBBuild/MBBuildMain.cpp"
-            ]
-        },
         "Lib":
         {
             "OutputName":"MBPacketManager",

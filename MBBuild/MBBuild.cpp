@@ -522,7 +522,7 @@ namespace MBPM
         {
             throw std::runtime_error("Failed retrieving status for: \""+MBUnicode::PathToUTF8(CurrentStruct.Path)+"\". Missing source file");
         }
-        uint32_t CurrentTimestamp = h_GetEntryWriteTimestamp(FileStatus);  
+        uint64_t CurrentTimestamp = h_GetEntryWriteTimestamp(FileStatus);  
         if(CurrentTimestamp > CurrentStruct.LastCompileTime)
         {
             CurrentStruct.LastCompileTime = CurrentTimestamp;
@@ -632,6 +632,9 @@ namespace MBPM
             SourceDependancyInfo NewInfo;
             NewInfo.Path = OriginalSources[i];
             //NewInfo.LastCompileTime = h_GetEntryWriteTimestamp(std::filesystem::directory_entry(SourceRoot/ OriginalSources[i]));
+            //
+            //
+            //
             NewInfo.LastCompileTime = 0;
 
             for(std::string const& Dependancy : SourceFile.Dependancies)
@@ -1208,9 +1211,14 @@ namespace MBPM
         CompileCommand += SourceToCompile.substr(1)+' ';
         //output path
         CompileCommand += "/Fo\"";
-        CompileCommand += OutDir;
-        CompileCommand += "/"+h_ReplaceExtension(SourceToCompile,"o");
+        std::string OutSourcePath = OutDir+"/"+h_ReplaceExtension(SourceToCompile,"obj");
+        CompileCommand += OutSourcePath;
         CompileCommand += "\"";
+        std::filesystem::path ParentDirectory = std::filesystem::path(OutSourcePath).parent_path();
+        if(!std::filesystem::exists(ParentDirectory))
+        {
+            std::filesystem::create_directories(ParentDirectory);
+        }
          
         int Result = std::system(CompileCommand.c_str());    
         ReturnValue = Result == 0;
@@ -1294,7 +1302,13 @@ namespace MBPM
             CompileCommand += ' ';
         }
         CompileCommand += SourceToCompile.substr(1)+' ';
-        CompileCommand += "-o "+OutDir+"/"+h_ReplaceExtension(SourceToCompile,"o");
+        std::string OutSourcePath = OutDir+"/"+h_ReplaceExtension(SourceToCompile,"o");
+        std::filesystem::path ParentDirectory = std::filesystem::path(OutSourcePath).parent_path();
+        if(!std::filesystem::exists(ParentDirectory))
+        {
+            std::filesystem::create_directories(ParentDirectory);
+        }
+        CompileCommand += "-o "+OutSourcePath;
         int Result = std::system(CompileCommand.c_str());
         ReturnValue = Result == 0;
         return(ReturnValue);
@@ -1501,7 +1515,7 @@ namespace MBPM
             }
             //TODO fix
             std::string CompileString = h_CreateCompileString(CompileConf);
-            std::string OutDir = MBUnicode::PathToUTF8(PacketPath/"MBPM_Builds"/CompileConfName)+"/";
+            std::string OutDir = MBUnicode::PathToUTF8(PacketPath/"MBPM_BuildFiles"/CompileConfName)+"/";
             bool CompilationResult = true;
             bool CompilationNeeded = false;
             for (std::string const& Source : TotalSources)
@@ -1676,7 +1690,7 @@ namespace MBPM
                     OutDir = ExecutablesDirectory;
                     TargetFilename = h_GetExecutableName(Target.second.OutputName);   
                 }
-                else if(Target.second.Type == TargetType::StaticLibrary)
+                else if(Target.second.Type == TargetType::StaticLibrary || Target.second.Type == TargetType::Library)
                 {
                     OutDir = LibraryDirectory;
                     TargetFilename = h_GetLibraryName(Target.second.OutputName);        
@@ -1685,9 +1699,9 @@ namespace MBPM
                 {
                     throw std::runtime_error("Unsupported target type: DynamicLibrary");
                 }
-                std::filesystem::path PacketFile = PacketPath/LanguageConfig.DefaultExportConfig/TargetFilename;
+                std::filesystem::path PacketFile = PacketPath/"MBPM_Builds"/LanguageConfig.DefaultExportConfig/TargetFilename;
                 std::filesystem::path LinkPath = OutDir+TargetFilename;
-                if(std::filesystem::exists(LinkPath))
+                if(std::filesystem::exists(LinkPath) || std::filesystem::is_symlink(LinkPath))
                 {
                     std::filesystem::remove(LinkPath);   
                 }
@@ -1728,8 +1742,9 @@ namespace MBPM
                     OutDir = ExecutablesDirectory;
                     TargetFilename = h_GetExecutableName(Target.second.OutputName);   
                 }
-                else if(Target.second.Type == TargetType::StaticLibrary)
+                else if(Target.second.Type == TargetType::StaticLibrary || Target.second.Type == TargetType::Library)
                 {
+
                     OutDir = LibraryDirectory;
                     TargetFilename = h_GetLibraryName(Target.second.OutputName);        
                 }
@@ -1737,9 +1752,9 @@ namespace MBPM
                 {
                     throw std::runtime_error("Unsupported target type: DynamicLibrary");
                 }
-                std::filesystem::path PacketFile = PacketPath/LanguageConfig.DefaultExportConfig/TargetFilename;
+                std::filesystem::path PacketFile = PacketPath/"MBPM_Builds"/LanguageConfig.DefaultExportConfig/TargetFilename;
                 std::filesystem::path LinkPath = OutDir+TargetFilename;
-                if(std::filesystem::exists(LinkPath))
+                if(std::filesystem::exists(LinkPath) || std::filesystem::is_symlink(LinkPath))
                 {
                     std::filesystem::remove(LinkPath);   
                 }
@@ -1892,7 +1907,7 @@ namespace MBPM
             {
                 return(ReturnValue);
             }
-            bool OverrideAll = CommandToHandle.Flags.find("override") == CommandToHandle.Flags.end();
+            bool OverrideAll = CommandToHandle.Flags.find("override") != CommandToHandle.Flags.end();
             if (!OverrideAll && FileExist)
             {
                 std::string Response;
