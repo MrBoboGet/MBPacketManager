@@ -1091,31 +1091,39 @@ namespace MBPM
         }
         AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::White);
     }
-    void MBPM_ClI::p_HandleHelp(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
+    int MBPM_ClI::p_HandleHelp(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
     {
+        int ReturnValue = 0;
 
+        return(ReturnValue);
     }
-    void MBPM_ClI::p_HandleUpdate(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
+    int MBPM_ClI::p_HandleUpdate(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
     {
+        int ReturnValue = 0;
         MBError ParseError = true;
         std::vector<PacketIdentifier> PacketsToUpdate = p_GetCommandPackets(CommandInput, PacketLocationType::Installed, ParseError);
         if (!ParseError)
         {
             AssociatedTerminal->PrintLine("Error retrieving command packets: " + ParseError.ErrorMessage);
-            return;
+            return 1;
         }
+        bool AllowUser = CommandInput.CommandOptions.find("allowuser") != CommandInput.CommandOptions.end();
         for (size_t i = 0; i < PacketsToUpdate.size(); i++)
         {
             if (PacketsToUpdate[i].PacketLocation != PacketLocationType::Installed)
             {
+                if(PacketsToUpdate[i].PacketLocation == PacketLocationType::User && AllowUser)
+                {
+                    continue;    
+                }
                 AssociatedTerminal->PrintLine("Can only update installed packets");
-                return;
+                return 1;
             }
         }
         if (PacketsToUpdate.size() == 0)
         {
             AssociatedTerminal->PrintLine("No packets given to update or no installed packets to update");
-            return;
+            return 1;
         }
         std::string InstallDirectory = p_GetPacketInstallDirectory();
         std::vector<std::string> FailedPackets = {};
@@ -1141,20 +1149,23 @@ namespace MBPM
         else
         {
             AssociatedTerminal->PrintLine("Failed updating following packets:");
+            ReturnValue = 1;
             for (size_t i = 0; i < FailedPackets.size(); i++)
             {
                 AssociatedTerminal->PrintLine(FailedPackets[i]);
             }
         }
+        return(ReturnValue);
     }
-    void MBPM_ClI::p_HandleExec(MBCLI::ProcessedCLInput const& CommandInput,MBCLI::MBTerminal& AssociatedTerminal)
+    int MBPM_ClI::p_HandleExec(MBCLI::ProcessedCLInput const& CommandInput,MBCLI::MBTerminal& AssociatedTerminal)
     {
+        int ReturnValue = 0;
         MBError PacketListError = true;
         std::vector<PacketIdentifier> PacketList = p_GetCommandPackets(CommandInput,PacketLocationType::Installed,PacketListError);
         if(!PacketListError)
         {
             AssociatedTerminal.PrintLine("Error constructing packet list: "+PacketListError.ErrorMessage);
-            std::exit(1);
+            return(1);
         }
         std::string CommandToExecute = "";
         bool DelimiterFound = false;
@@ -1172,9 +1183,11 @@ namespace MBPM
         if(!DelimiterFound)
         {
             AssociatedTerminal.PrintLine("exec command needs -- to delimi arguments to exec and command to execute");   
-            std::exit(1);
+            return 1;
         }
+        bool QuitOnError = CommandInput.CommandOptions.find("continue-error") == CommandInput.CommandOptions.end();
         std::filesystem::path OriginalDir = std::filesystem::current_path();
+        std::vector<PacketIdentifier> FailedPackets;
         for(auto const& Packet : PacketList)
         {
             std::error_code Error;
@@ -1182,19 +1195,34 @@ namespace MBPM
             if(Error)
             {
                 AssociatedTerminal.PrintLine("Error changing directory to "+MBUnicode::PathToUTF8(Packet.PacketURI));
-                std::exit(1);
+                return 1;
             }
             int Result = std::system(CommandToExecute.c_str());
             if(!Result)
             {
-                AssociatedTerminal.PrintLine("Error executing command");
-                std::exit(1);
+               if(QuitOnError)
+               {
+                   AssociatedTerminal.PrintLine("Error executing command");
+                   return 1;
+               }    
+               FailedPackets.push_back(Packet);    
             }
             std::filesystem::current_path(OriginalDir);
         }
+        if(FailedPackets.size() > 0)
+        {
+            ReturnValue = 1;   
+            AssociatedTerminal.PrintLine("Command failed for following packets:");
+            for(auto const& FailedPacket : FailedPackets)
+            {
+                AssociatedTerminal.PrintLine(FailedPacket.PacketName);
+            }
+        }
+        return(ReturnValue);
     }
-    void MBPM_ClI::p_HandleInstall(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
+    int MBPM_ClI::p_HandleInstall(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
     {
+        int ReturnValue = 0;
         std::string InstallDirectory = p_GetPacketInstallDirectory();
         std::stack<std::string> PacketsToInstall = {};
         for (size_t i = 0; i < CommandInput.TopCommandArguments.size(); i++)
@@ -1257,13 +1285,15 @@ namespace MBPM
             //}
             //p_CompilePacket(InstallDirectory + CurrentPacket + "/");
         }
+        return ReturnValue;
     }
-    void MBPM_ClI::p_HandleGet(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
+    int MBPM_ClI::p_HandleGet(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
     {
+        int ReturnValue = 0;
         if (CommandInput.TopCommandArguments.size() < 2)
         {
             AssociatedTerminal->PrintLine("Command \"get\" needs atleast a package and a filesystem object");
-            return;
+            return 1;
         }
         std::string PacketName = CommandInput.TopCommandArguments[0];
 
@@ -1275,7 +1305,7 @@ namespace MBPM
         if (RemotePacket + LocalPacket + UserPacket + InstalledPacket > 1)
         {
             AssociatedTerminal->PrintLine("Can only specify one packet type");
-            return;
+            return 1;
         }
         if (RemotePacket + LocalPacket + UserPacket + InstalledPacket == 0)
         {
@@ -1308,7 +1338,7 @@ namespace MBPM
         if (SpecifiedOutputDirectories.size() > 1)
         {
             AssociatedTerminal->PrintLine("Can only specify one output directory");
-            return;
+            return 1;
         }
         else if (SpecifiedOutputDirectories.size() == 1)
         {
@@ -1320,14 +1350,14 @@ namespace MBPM
             if (CommandInput.TopCommandArguments[i] == "" || CommandInput.TopCommandArguments[i][0] != '/')
             {
                 AssociatedTerminal->PrintLine("Filesystem objects to get has to be absolute path starting with /");
-                return;
+                return 1;
             }
             ObjectsToGet.push_back(CommandInput.TopCommandArguments[i]);
         }
         if (ObjectsToGet.size() == 0)
         {
             AssociatedTerminal->PrintLine("Didnt specify a fileystem object to get");
-            return;
+            return 1;
         }
         std::vector<std::string> GetObjectErrors = {};
         std::unique_ptr<MBPM::MBPP_FileListDownloadHandler> DownloadHandler = nullptr;
@@ -1345,19 +1375,19 @@ namespace MBPM
             if (CommandInput.CommandOptions.find("path") != CommandInput.CommandOptions.end())
             {
                 AssociatedTerminal->PrintLine("cannot get path of remote packet");
-                return;
+                return 1;
             }
             MBError NetworkError = m_ClientToUse.Connect(p_GetDefaultPacketHost()); 
             if (!NetworkError)
             {
                 AssociatedTerminal->PrintLine("Error connecting to host: " + NetworkError.ErrorMessage);
-                return;
+                return 1;
             }
             MBPP_FileInfoReader RemoteFileInfo = m_ClientToUse.GetPacketFileInfo(PacketName, &NetworkError);
             if (!NetworkError)
             {
                 AssociatedTerminal->PrintLine("Error getting packet file info: " + NetworkError.ErrorMessage);
-                return;
+                return 1;
             }
             for (size_t i = 0; i < ObjectsToGet.size(); i++)
             {
@@ -1398,7 +1428,7 @@ namespace MBPM
             if (PacketDirectory == "")
             {
                 AssociatedTerminal->PrintLine("Failed to find packet");
-                return;
+                return 1;
             }
             MBError Result = true;
             if (CommandInput.CommandOptions.find("path") != CommandInput.CommandOptions.end())
@@ -1419,6 +1449,7 @@ namespace MBPM
                 AssociatedTerminal->PrintLine("Error downloading files: " + Result.ErrorMessage);
             }
         }
+        return(ReturnValue);
     }
     std::vector<std::string> h_GetDirectoryFiles(std::string const& DirectoryPath, std::string const& DirectoryPrefix)
     {
@@ -1552,8 +1583,9 @@ namespace MBPM
             OutFilesToDelete.push_back(Files);
         }
     }
-    void MBPM_ClI::p_UploadPacketsLocal(std::vector<PacketIdentifier> const& PacketsToUpload,MBCLI::ProcessedCLInput const& Command,MBCLI::MBTerminal* AssociatedTerminal)
+    int MBPM_ClI::p_UploadPacketsLocal(std::vector<PacketIdentifier> const& PacketsToUpload,MBCLI::ProcessedCLInput const& Command,MBCLI::MBTerminal* AssociatedTerminal)
     {
+        int ReturnValue = 0;
         std::string InstalledPacketsDirectory = GetSystemPacketsDirectory();
         std::vector<std::pair<std::string, std::string>> FailedPackets = {};
         bool UseDirectPath = false;
@@ -1718,15 +1750,18 @@ namespace MBPM
         if (FailedPackets.size() > 0)
         {
             AssociatedTerminal->PrintLine("Failed uploading following packets:");
+            ReturnValue = 1;
         }
         for (size_t i = 0; i < FailedPackets.size(); i++)
         {
             AssociatedTerminal->PrintLine(FailedPackets[i].first + ": " + FailedPackets[i].second);
         }
         AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::White);
+        return(ReturnValue);
     }
-    void MBPM_ClI::p_HandleUpload(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
+    int MBPM_ClI::p_HandleUpload(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
     {
+        int ReturnValue = 0;
         //f�rst s� beh�ver vi skicka data f�r att se login typen
         MBPM::MBPP_ComputerInfo PreviousComputerInfo = m_ClientToUse.GetComputerInfo();
         MBError ParseError = true;
@@ -1734,7 +1769,7 @@ namespace MBPM
         if (!ParseError)
         {
             AssociatedTerminal->PrintLine("Error getting command packets: " + ParseError.ErrorMessage);
-            return;
+            return 1;
         }
         //kollar att alla packets har unika namn
         std::unordered_set<std::string> PacketNames = {};
@@ -1751,12 +1786,11 @@ namespace MBPM
         if (NameClashes)
         {
             AssociatedTerminal->PrintLine("Error: you are trying to upload multiple packets with the same name");
-            return;
+            return 1;
         }
         if (CommandInput.CommandOptions.find("local") != CommandInput.CommandOptions.end())
         {
-            p_UploadPacketsLocal(PacketsToUpload,CommandInput,AssociatedTerminal);
-            return;
+            return(p_UploadPacketsLocal(PacketsToUpload,CommandInput,AssociatedTerminal));
         }
 
         MBPP_UploadRequest_Response RequestResponse;
@@ -1791,7 +1825,7 @@ namespace MBPM
                 if (!UploadError)
                 {
                     AssociatedTerminal->PrintLine("Error downloading server file info for packet "+PacketName+" : " + UploadError.ErrorMessage);
-                    return;
+                    return(1);
                 }
                 h_GetUpdateToSend(CommandInput, ServerInfo, PacketToUploadDirectory, FilesToUpload, FilesToDelete, AssociatedTerminal);
             }
@@ -1860,21 +1894,23 @@ namespace MBPM
             }
         }
         m_ClientToUse.SetComputerInfo(PreviousComputerInfo);
+        return(ReturnValue);
         //else
         //{
         //    AssociatedTerminal->PrintLine("Upload packet sucessful");
         //}
     }
 
-    void MBPM_ClI::p_HandleCustomCommand(MBCLI::ProcessedCLInput const& CommandInput,MBCLI::MBTerminal* AssociatedTerminal)
+    int MBPM_ClI::p_HandleCustomCommand(MBCLI::ProcessedCLInput const& CommandInput,MBCLI::MBTerminal* AssociatedTerminal)
     {
+        int ReturnValue = 0;
         MBError PacketListError = true;
         size_t PacketOffset = 0;
         auto TypeIt = m_CustomCommandTypes.find(CommandInput.TopCommand);
         if(TypeIt == m_CustomCommandTypes.end())
         {
             AssociatedTerminal->PrintLine("Invalid command \""+CommandInput.TopCommand+"\"");   
-            std::exit(1);
+            return(1);
         }
         if(TypeIt->second == CommandType::SubCommand)
         {
@@ -1884,30 +1920,48 @@ namespace MBPM
         if(!PacketListError)
         {
             AssociatedTerminal->PrintLine("Error creating packet list: "+PacketListError.ErrorMessage);   
-            std::exit(1);
+            return(1);
         }
+        bool QuitOnFirstError = CommandInput.CommandOptions.find("continue-error") == CommandInput.CommandOptions.end();
+        bool QuitOnNoExtension = CommandInput.CommandOptions.find("quit-no-extension") != CommandInput.CommandOptions.end();
         bool CommandExecuted = false;
+        std::vector<std::pair<PacketIdentifier,std::string>> FailedPackets;
         for(auto const& Packet : PacketList)
         {
             MBPM_PacketInfo CurrentPacketInfo = m_PacketRetriever.GetPacketInfo(Packet);
             std::pair<CLI_Extension*,CommandInfo> HandlingExtension = p_GetHandlingExtension(CommandInput,CurrentPacketInfo);
             if(HandlingExtension.first == nullptr)
             {
-                AssociatedTerminal->PrintLine("Error executing command on packet at location: "+Packet.PacketURI);
-                AssociatedTerminal->PrintLine("No extension found that handles packet of type \""+CurrentPacketInfo.Type+"\"");
-                std::exit(1);
+                if(QuitOnNoExtension)
+                {
+                    AssociatedTerminal->PrintLine("Error executing command on packet at location: "+Packet.PacketURI);
+                    AssociatedTerminal->PrintLine("No extension found that handles packet of type \""+CurrentPacketInfo.Type+"\"");
+                    return(1);
+                }
+                continue; 
             }
-            else
+            CLI_Extension& ExtensionToUse = *(HandlingExtension.first);
+            MBError Result = ExtensionToUse.HandleCommand(HandlingExtension.second,Packet,m_PacketRetriever,*AssociatedTerminal);
+            if (!Result)
             {
-                CLI_Extension& ExtensionToUse = *(HandlingExtension.first);
-                MBError Result = ExtensionToUse.HandleCommand(HandlingExtension.second,Packet,m_PacketRetriever,*AssociatedTerminal);
-                if (!Result)
+                if(QuitOnFirstError)
                 {
                     AssociatedTerminal->PrintLine("Error executing command for packet \""+Packet.PacketName+"\": "+Result.ErrorMessage);
-                    std::exit(1);
+                    return(1);
                 }
+                FailedPackets.push_back({Packet,Result.ErrorMessage});
             }
         }        
+        for(auto const& FailedPacket : FailedPackets)
+        {
+            AssociatedTerminal->PrintLine("Error executing command for packet \""+FailedPacket.first.PacketName+"\": "+
+                    FailedPacket.second);
+        }
+        if(FailedPackets.size() > 0)
+        {
+            return(1);   
+        }
+        return ReturnValue;
     }
     std::unordered_set<std::string> i_ReservedFlags = {"local","user","installed","remote","allinstalled"};
     std::unordered_set<std::string> i_ReservedOptions = {"l","i","r"};
@@ -1998,20 +2052,33 @@ namespace MBPM
         m_RegisteredExtensions.push_back(std::move(ExtensionToRegister));
     }
 
-    void MBPM_ClI::p_HandlePackets(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
+    int MBPM_ClI::p_HandlePackets(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
     {
+        int ReturnValue = 0;
         MBError ParseResult = true;
         std::vector<PacketIdentifier> SpecifiedPackets = p_GetCommandPackets(CommandInput, PacketLocationType::Installed,ParseResult);
         if (!ParseResult)
         {
             AssociatedTerminal->PrintLine("Error parsing command packets: " + ParseResult.ErrorMessage);
-            return;
+            return 1;
+        }
+        bool PrintName = CommandInput.CommandOptions.find("name") != CommandInput.CommandOptions.end();
+        bool PrintLocation = CommandInput.CommandOptions.find("location") != CommandInput.CommandOptions.end(); 
+        bool PrintPath = CommandInput.CommandOptions.find("path") != CommandInput.CommandOptions.end();
+        if(!PrintName && !PrintLocation && !PrintPath)
+        {
+            PrintName = true;   
+            PrintLocation = true;   
+            PrintPath = true;   
         }
         for (auto const& Packet : SpecifiedPackets)
         {
-            if (CommandInput.CommandOptions.find("path") == CommandInput.CommandOptions.end())
+            if(PrintName)
             {
-                AssociatedTerminal->Print(Packet.PacketName + " ");
+                AssociatedTerminal->Print(Packet.PacketName+ " ");   
+            }
+            if(PrintLocation)
+            {
                 if (Packet.PacketLocation == PacketLocationType::Remote)
                 {
                     AssociatedTerminal->Print("Remote ");
@@ -2029,22 +2096,28 @@ namespace MBPM
                     AssociatedTerminal->Print("Local ");
                 }
             }
-            AssociatedTerminal->PrintLine(Packet.PacketURI);
+            if (PrintPath)
+            {
+                AssociatedTerminal->PrintLine(Packet.PacketURI);
+            }
         }
+        return(ReturnValue);
     }
-    void MBPM_ClI::p_HandleIndex(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
+    int MBPM_ClI::p_HandleIndex(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
     {
+        int ReturnValue = 0;
         if (CommandInput.TopCommandArguments.size() < 1)
         {
             AssociatedTerminal->PrintLine("Command \"info\" requires atleast 1 arguments");
-            return;
+            return 1;
         }
+        bool QuitOnError = CommandInput.CommandOptions.find("continue-error") == CommandInput.CommandOptions.end();
         if (CommandInput.TopCommandArguments[0] == "create")
         {
             if (CommandInput.TopCommandArguments.size() < 2 && CommandInput.CommandOptions.find("alluser") == CommandInput.CommandOptions.end() && CommandInput.CommandOptions.find("allinstalled") == CommandInput.CommandOptions.end())
             {
                 AssociatedTerminal->PrintLine("no directory path provided");
-                return;
+                return 1;
             }
             std::vector<std::string> DirectoriesToProcess = {};
             if (CommandInput.TopCommandArguments.size() >= 2)
@@ -2085,13 +2158,15 @@ namespace MBPM
             if (!GetPacketsError)
             {
                 AssociatedTerminal->PrintLine("Error retrieving command packets: " + GetPacketsError.ErrorMessage);
-                return;
+                return 1;
             }
+            std::vector<PacketIdentifier> FailedPackets;
             for (PacketIdentifier const& Packet : Packets)
             {
                 if (Packet.PacketLocation == PacketLocationType::Remote)
                 {
                     AssociatedTerminal->PrintLine("Can't update packets for remote index, skipping packet " + Packet.PacketName);
+                    ReturnValue = 1;
                     continue;
                 }
                 UpdateFileInfo(Packet.PacketURI);
@@ -2103,7 +2178,7 @@ namespace MBPM
             if (CommandInput.TopCommandArguments.size() < 2)
             {
                 AssociatedTerminal->PrintLine("No packet directory given");
-                return;
+                return 1;
             }
             if (CommandInput.CommandOptions.find("remote") != CommandInput.CommandOptions.end())
             {
@@ -2125,7 +2200,7 @@ namespace MBPM
                 if (PacketDirectory == "")
                 {
                     AssociatedTerminal->PrintLine("packet \"" + CommandInput.TopCommandArguments[1] + "\" not installed");
-                    return;
+                    return 1;
                 }
                 else
                 {
@@ -2137,7 +2212,7 @@ namespace MBPM
                     else
                     {
                         AssociatedTerminal->PrintLine("Couldn't find installed packet MBPM_FileInfo");//borde den implicit skapa den kanske?
-                        return;
+                        return 1;
                     }
                 }
             }
@@ -2151,7 +2226,7 @@ namespace MBPM
                 else
                 {
                     AssociatedTerminal->PrintLine("Couldn't find User packet");
-                    return;
+                    return 1;
                 }
             }
             else
@@ -2176,7 +2251,7 @@ namespace MBPM
                     else
                     {
                         AssociatedTerminal->PrintLine("Couldn't find local MBPM_FileInfo file");
-                        return;
+                        return 1;
                     }
                 }
             }
@@ -2199,12 +2274,12 @@ namespace MBPM
             if (TotalPacketsSpecifiers > 2)
             {
                 AssociatedTerminal->PrintLine("To many files supplied");
-                return;
+                return 1;
             }
             else if (TotalPacketsSpecifiers < 2)
             {
                 AssociatedTerminal->PrintLine("Command requires exactly 2 packets");
-                return;
+                return 1;
             }
             for (size_t i = 0; i < LocalPacketsSpecifiers.size(); i++)
             {
@@ -2212,7 +2287,7 @@ namespace MBPM
                 if (NewPacket.PacketName == "")
                 {
                     AssociatedTerminal->PrintLine("Couldn't find local packet at path \"" + LocalPacketsSpecifiers[i].first + "\"");
-                    return;
+                    return 1;
                 }
                 PacketsToDiff.push_back({ NewPacket,LocalPacketsSpecifiers[i].second });
             }
@@ -2222,7 +2297,7 @@ namespace MBPM
                 if (NewPacket.PacketName == "")
                 {
                     AssociatedTerminal->PrintLine("Couldn't find installed packet \"" + InstalledPacketsSpecifiers[i].first + "\"");
-                    return;
+                    return 1;
                 }
                 PacketsToDiff.push_back({ NewPacket,InstalledPacketsSpecifiers[i].second });
             }
@@ -2232,7 +2307,7 @@ namespace MBPM
                 if (NewPacket.PacketName == "")
                 {
                     AssociatedTerminal->PrintLine("Couldn't find user packet \"" + UserPacketsSpecifiers[i].first + "\"");
-                    return;
+                    return 1;
                 }
                 PacketsToDiff.push_back({ NewPacket,UserPacketsSpecifiers[i].second });
             }
@@ -2250,17 +2325,18 @@ namespace MBPM
             if (!GetFileInfoError)
             {
                 AssociatedTerminal->PrintLine("Error retrieving FileInfo: "+GetFileInfoError.ErrorMessage);
-                return;
+                return 1;
             }
             MBPM::MBPP_FileInfoReader ServerFileInfo = p_GetPacketFileInfo(PacketsToDiff[1].first,&GetFileInfoError);
             if (!GetFileInfoError)
             {
                 AssociatedTerminal->PrintLine("Error retrieving FileInfo: " + GetFileInfoError.ErrorMessage);
-                return;
+                return 1;
             }
             MBPM::MBPP_FileInfoDiff InfoDiff = MBPM::GetFileInfoDifference(ClientFileInfo, ServerFileInfo);
             PrintFileInfoDiff(InfoDiff,AssociatedTerminal);
         }
+        return(ReturnValue);
     }
     std::string h_ReadMBPMStaticData(std::string const& Filepath)
     {
@@ -2288,14 +2364,16 @@ namespace MBPM
         }
         return(ReturnValue);
     }
-    void MBPM_ClI::p_HandleCompile(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
+    //Unused
+    int MBPM_ClI::p_HandleCompile(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
     {
+        int ReturnValue = 0;
         MBError ParseError = true;
         std::vector<PacketIdentifier> PacketDirectories = p_GetCommandPackets(CommandInput, PacketLocationType::Installed, ParseError);
         if (!ParseError)
         {
             AssociatedTerminal->PrintLine("Error retrieving command packets: " + ParseError.ErrorMessage);
-            return;
+            return 1;
         }
         if (CommandInput.CommandOptions.find("cmake") != CommandInput.CommandOptions.end())
         {
@@ -2430,7 +2508,7 @@ namespace MBPM
             if (AggregateOutput.is_open() == false)
             {
                 AssociatedTerminal->PrintLine("Error opening output for aggregate compile info");
-                return;
+                return 1;
             }
             MBParsing::JSONObject TotalInfo = std::move(AggregatedInfo);
             AggregateOutput << TotalInfo.ToString();
@@ -2514,9 +2592,12 @@ namespace MBPM
                 AssociatedTerminal->PrintLine("All builds successful!");
             }
         }
+        return(ReturnValue);
     }
-    void MBPM_ClI::p_HandleCreate(MBCLI::ProcessedCLInput const& CommandInput,MBCLI::MBTerminal* AssociatedTerminal)
+    //unused
+    int MBPM_ClI::p_HandleCreate(MBCLI::ProcessedCLInput const& CommandInput,MBCLI::MBTerminal* AssociatedTerminal)
     {
+        int ReturnValue = 0;
         MBError PacketListError = true;
         std::vector<PacketIdentifier> PacketList = p_GetCommandPackets(CommandInput, PacketLocationType::Installed, PacketListError,1);
         if (!PacketListError)
@@ -2544,7 +2625,7 @@ namespace MBPM
             //Creates empty pakcet info, convenience    
              
         }
-        
+        return ReturnValue;
     }
     //MBError MBPM_ClI::p_CompilePacket(PacketIdentifier const& Identifier,MBCLI::MBTerminal* AssoicatedTerminal,MBCLI::ProcessedCLInput const& Command)
     //{
@@ -2733,8 +2814,9 @@ namespace MBPM
     {
         delete (T*)PointerToDelete;
     }
-    void MBPM_ClI::HandleCommand(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
+    int MBPM_ClI::HandleCommand(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
     {
+        int ReturnValue = 0;
         //denna �r en global inst�llning
         //Extensions
         std::unique_ptr<CLI_Extension, void (*)(void*)> BuildExtension = std::unique_ptr<CLI_Extension, void (*)(void*)>(new MBBuild::MBBuild_Extension(),
@@ -2751,42 +2833,40 @@ namespace MBPM
             m_ClientToUse.SetComputerInfo(MBPM::MBPP_ComputerInfo());
         }
         m_ClientToUse.SetLogTerminal(AssociatedTerminal);
+        //Builtins
         if (CommandInput.CommandOptions.find("help") != CommandInput.CommandOptions.end())
         {
-            p_HandleHelp(CommandInput,AssociatedTerminal);
+            ReturnValue = p_HandleHelp(CommandInput,AssociatedTerminal);
         }
         else if (CommandInput.TopCommand == "install")
         {
-            p_HandleInstall(CommandInput,AssociatedTerminal);
+            ReturnValue = p_HandleInstall(CommandInput,AssociatedTerminal);
         }
         else if(CommandInput.TopCommand == "get")
         {
-            p_HandleGet(CommandInput, AssociatedTerminal);
+            ReturnValue = p_HandleGet(CommandInput, AssociatedTerminal);
         }
         else if (CommandInput.TopCommand == "update")
         {
-            p_HandleUpdate(CommandInput, AssociatedTerminal);
+            ReturnValue = p_HandleUpdate(CommandInput, AssociatedTerminal);
         }
         else if (CommandInput.TopCommand == "upload")
         {
-            p_HandleUpload(CommandInput, AssociatedTerminal);
+            ReturnValue = p_HandleUpload(CommandInput, AssociatedTerminal);
         }
         else if (CommandInput.TopCommand == "index")
         {
-            p_HandleIndex(CommandInput, AssociatedTerminal);
+            ReturnValue = p_HandleIndex(CommandInput, AssociatedTerminal);
         }
-        //else if(CommandInput.TopCommand == "compile")
-        //{
-        //    p_HandleCompile(CommandInput, AssociatedTerminal);
-        //}
         else if (CommandInput.TopCommand == "packets")
         {
-            p_HandlePackets(CommandInput, AssociatedTerminal);
+            ReturnValue = p_HandlePackets(CommandInput, AssociatedTerminal);
         }
         else
         {
-            p_HandleCustomCommand(CommandInput,AssociatedTerminal);
+            ReturnValue = p_HandleCustomCommand(CommandInput,AssociatedTerminal);
         }
+        return(ReturnValue);
     }
     //END MBPM_CLI
     int MBCLI_Main(int argc,const char** argv)

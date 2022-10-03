@@ -1,0 +1,20 @@
+%title Computer Info
+
+Computer Info is the abstraction for the differences between computers
+and should provide all information needed to determine in what way a packet
+should differ.
+
+The computer info is mostly used when interacting with @[remotes](Remotes.mbd),
+as it provides a way to creates a way to distribute packets with precompiled
+binaries.
+
+This document describes exactly what a "Computer Info" consist, aswell as how
+the local computer info is determined.
+
+# Computer Info
+
+    Lorem ipsum 
+
+# Determining local computer info
+
+    Lorem ipsum

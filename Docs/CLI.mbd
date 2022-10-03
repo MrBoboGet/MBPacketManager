@@ -4,7 +4,7 @@ generic invocation
 [[Usage]]
 mbpm <top command> [<sub command>] <PacketSpecification> [<options>\*]
 
-Here the command line interace for MBPacketManager is descrbied, and conventions
+Here the command line interace for MBPacketManager is described, and conventions
 used.
 
 # Invocation structure
@@ -29,48 +29,99 @@ mbpm create compilecommands --alluser
     @[argument](/{MBCLI}/TopCommandSyntax.mbd#Arguments) appearing after the top
     command.
 
-#_ Commands
-   
-    # install
-        
-        [[Usage]]
-        mbpm install PacketName\* [<install flags>\*]
-
-        The command tasked with downloading a packet from a remote, along with
-        all of it's required dependancies. The directory where the downloads are
-        stored may depend on the @[packet type](Packets.mbd#Packet type). For
-        example vim packets are stored under "~/.vim/". However, for most
-        regular programming languages so is the directory usally under 
-        the directory specified by MBPM_PACKETS_INSTALL_DIRECTORY environment
-        variable.
+# Option classes
     
-        #_ Options 
+    Multiple commands share a common set of options, the most prominent being
+    the @[packet specification](PacketSpecification.mbd), but there are also
+    common options that apply to other parts of the program, which are listed
+    here. A command supporting this kind of option has "<OptionCategory>" in
+    it's command syntax.
 
-            Install only has one flag that modifies it's behaviour.
+    #_ IterationOptions
+       
+        These options deal with the vetorisation of commands.
+
+        #_Flags 
+
+            # continue-error
+
+            Specifies wheter or not a command should continue to try to process
+            other packets when the command failed for an earlier packet. The
+            default behaviour is to exit with a result > 0 if a command fails
+            for a packet, but supplying this option makes the program process
+            the other packets aswell, displaying what packets failed at the end.
+            A single packet failing results in an exit > 0.
+
+        /_
+    
+    /_
+
+    #_ RemotePolicy
+        
+        These flags/options determine the way the program interacts with the
+        remote's. The most important/commonly used option is with which
+        @[computer info](ComputerInfo.mbs) the packet indexes are accessed. The
+        default value for the computer info is different for the different
+        builtin commands, for example install uses the local computer info,
+        while remote uses the blank computer info as default.
+
+        #_ Flags
 
             # nocomputerdiff
                 
-                This flags specifies that the @["computer diff"](ComputerDiff.mbd) 
-                used when downloading should be the empty, meaning that the
-                files downloaded should not depend on a specific operating
-                system, cpu, or other configuration.
+                Specifies that remote packtets are accessed through a blank 
+                @[computer info](ComputerInfo.mbd), meaning that it's content is the
+                same for every computer.
 
-                This option can for example be used to skip downloading
-                precompiled versions of a packet.
+                While no restrictions can be enforced for the different packet
+                types, so is it assumed that every file that isn't a part of the
+                computerdiff can be generated from the generic files, and packets
+                should provide all functionality in their generic form, which is for
+                example the case for C++ packets follwing the @[MBBuild]({MBBuild}) 
+                system.
+
+            # computerdiff
+               
+               Specifies that remote packets should be accesed with the local
+               computers specification, exactly what this consist of and how they
+               are determined can be read about at 
+               @[computer diff](ComputerDiff.mbd).
+
+               This means that the contents of the index can vary from computer to
+               computer, and can for example be used to provide prebuilt binaries.
+
         /_
+    /_
 
+#_ Commands
+       
+    # install
+        
+        [[Usage]]
+        mbpm install PacketName\* <RemoteOptions>
 
+        The command tasked with downloading a packet from a remote, along with
+        all of it's required dependancies, and stores them under the
+        "MBPM_PACKETS_INSTALL_DIRECTORY" environment variable.
+        
+        The default @[computer diff](ComputerDiff.mbd) for this command is the
+        local machines computer diff.
+        
     # update
         
         [[Usage]]
-        mbpm update <PacketSpecification> [<UpdateOptions>\*]
+        mbpm update <PacketSpecification> <IterationOptions> [<UpdateOptions>\*]
 
         The default @[location type](Packets.mbd#Location type) for the 
         @[packet specification](PacketsSpecification.mbd) is installed.
 
+
         This command updates a packet to match the file structure on a
         remote, and updates the @[file index](FileIndex.mbd) in the directory to
         match the new file structure.
+
+        The default @[computer diff](ComputerDiff.mbd) for this command is the
+        local machines computer diff.
 
         [[Note]]
         If no fileindex file named MBPM_FileInfo is present in the packet
@@ -85,17 +136,6 @@ mbpm create compilecommands --alluser
         
         #_ Flags
             
-            # nocomputerdiff
-                
-                This flags specifies that the @["computer diff"](ComputerDiff.mbd) 
-                used when downloading should be the empty, meaning that the
-                files downloaded should not depend on a specific operating
-                system, cpu, or other configuration.
-
-                This option can for example be used to skip downloading
-                precompiled versions of a packet, or prevent local compilations
-                from being overwritten.
-
             # allowuser
                 
                 This flag make's it so that update can modify user packets. 
@@ -106,7 +146,7 @@ mbpm create compilecommands --alluser
     # upload
 
         [[Usage]]
-        mbpm update <PacketsSpecification> [<UpdateOptions>\*]
+        mbpm update <PacketsSpecification> <IterationOptions> [<UpdateOptions>\*]
 
         The command that upload packets on the machine to a remote, or to the
         local installation directory. The default  
@@ -121,16 +161,16 @@ mbpm create compilecommands --alluser
         file index is present. Only new files and files that differ from the
         ones on the remote is uploaded.
 
-        The default is to upload the packet with an empty
-        @[computer diff](ComputerDiff.mbd), meaning files present on all
-        configurations are modified.
-        
+        The default @[computer diff](ComputerDiff.mbd) for this command is the
+        local machines computer diff.
+
         [[Note]]
         Uploading multiple packets with the same name is treated as a fatal
         error, and terminates the program right after resolving the 
         @[packet specification](PacketsSpecification.mbd). This is because
         uploading packets with the same name is in almost all cases an error,
-        as these uploads would overwrite each other.
+        as these uploads would overwrite each other. Remote packets appearing in
+        the packet list are also treated as a fatal error.
 
         #_ Flags
             
@@ -139,17 +179,8 @@ mbpm create compilecommands --alluser
                 This option makes it so that the command instead of uploading
                 the packet  to the remote installs it on the local system. This
                 follow the exact same semantics as downloading this packet
-                through a remote with "mbpm install".
-
-            # computerdiff
-                
-                The local index is checked against the remote's computerdiff
-                index for the local computeres configuration, and uploads the
-                files to the packets computerdiff index for the local
-                configuration. 
-
-                This means that this upload is only visible for downloads also
-                utilising the same computer diff.
+                through a remote with "mbpm install", except the source of the
+                files/index are on the local machine.
 
         /_  
 
@@ -192,7 +223,7 @@ mbpm create compilecommands --alluser
         mbpm packets <PacketSpecification> [<PacketsOptions>\*]
 
         Command used for visualising the result of a packet specification, and
-        provides a way to access this list from for example bash scripts.
+        to provides a way to access this list from for example bash scripts.
 
         The command prints the packet name, packet location type, and packet URI
         for each packet in the @[packet specification](PacketsSpecification.mbd)
@@ -200,6 +231,9 @@ mbpm create compilecommands --alluser
 
         #_ Flags
             
+            Specifying no flags prints all of the parts, otherwise it prints 
+            only parts specified bellow.
+
             # path  
 
                 For each packet, only print the path to the packet. Remote
@@ -215,23 +249,11 @@ mbpm create compilecommands --alluser
 
         /_
 
-    # compile
-
-        [[Usage]]
-        mbpm compile <PacketsSpecification> [<CompileOptions>\*]
-
-        This command is works as a bridge between MBPacketManager and it's child
-        project, @[MBBuild]({MBBuild}). It is responsible for compiling packets,
-        but the nature of compilation means that exact semantics varies between
-        different langauges. The only part of the command line that is specified
-        by MBPacketManager is the one dealing with the packets specification,
-        and all other options are documented by MBBuild. Documentation for
-        MBBuild can be found @[here]({MBBuild).
-
     #_ index
 
         [[Usage]]
         mbpm index (create | diff | list | update) ...
+        <IterationOptions>
 
         All commands under the index top command deals with the manipulation and
         visualisation of @[file indexes](FileIndex.mbd). 
@@ -239,7 +261,7 @@ mbpm create compilecommands --alluser
         # create
             
             [[Usage]]
-            mbpm index create <PacketsSpecification>
+            mbpm index create <PacketsSpecification> <IterationOptions> 
 
             Creates or overwrites MBPM_FileInfo with a index file describing the
             file's in the packet directory. 
@@ -248,6 +270,7 @@ mbpm create compilecommands --alluser
 
             [[Usage]]
             mbpm index update <PacketsSpecification>
+            <IterationOptions>
 
             Updates and existing MBPM_FileInfo index or creates on if it doesn't
             already exist in the packet directories. 
@@ -256,13 +279,14 @@ mbpm create compilecommands --alluser
         # list 
             
             [[Usage]]]
-            mbpm index list <SinglePacketSpecification> ObjectToList="/"
+            mbpm index list <SinglePacketSpecification> ObjectToList="/" 
 
             Displays the content of MBPM_FileInfo index at the packet
             specification.
 
             ObjectToList can be a file or directory, directories are displayed
-            recursivly, and it defaults to displaying the whole index.
+            recursivly, and it defaults to displaying the whole index, that is
+            to say the directory "/".
         
         # diff 
 
@@ -270,7 +294,7 @@ mbpm create compilecommands --alluser
             mbpm index diff <SinglePacketSpecification> <SinglePacketSpecification>
 
             Display the difference between the MBPM_FileInfo indexes. The first
-            packet is interpeted to be the "local" packet and the second is the
+            packet is interpreted to be the "local" packet and the second is the
             "server" packet. The semantics for differences between file indexes
             can be found @[here](FileIndex.mbd#Index diff).
     /_   
@@ -278,7 +302,7 @@ mbpm create compilecommands --alluser
     # get
         
         [[Usage]]
-        mbpm get <SinglePacketSpecification> <AbsolutePacketPath> [<GetOptions>\*]
+        mbpm get  <SinglePacketSpecification> <AbsolutePacketPath> <RemoteOptions>
         
         Downloads the given filesystem object specified by the
         AbsolutePacketPath, a file or a whole directory, from the provided
@@ -291,15 +315,37 @@ mbpm create compilecommands --alluser
         When downloading from a remote so is the empty computer diff used by
         default.
 
-        #_ Flags
-            
-            # computerdiff
+    # CustomCommand
 
-                Makes it so the downloaded files from a remote uses the computer
-                diff index for the local machines configuration.
-
-        /_
-
-
+        [[Usage]]
+        mbpm CommandName [SubCommand] <PacketsSpecification> <IterationOptions>
+        [CommandOptions]
         
+        The custom commands are the extension mechanism of mbpm. The
+        compilation of C++ packets are for example done by a builtin 
+        extension @[MBBuild]({MBBuild}). 
+
+        More about how extension work can be found @[here](Extensions.mbd).
+        In short: Extensions can hook in the name of the command, and the type
+        of packet being processed. This means that for example the "compile"
+        command can be implemented by multiple extensions for different kind of
+        packetes.
+
+        _# Flags
+            
+            _# quit-no-extension
+                
+                The default behaviour when executing a command on a packet with
+                no extension implementing the behaviour is to continue. This
+                means commands like "compile" do their work on packets that
+                define their behaviour, while also allowing packet
+                specifications that add packets where the command should be
+                ignored.
+
+                Specifying this flag means that the program instead emits a
+                fatal error when encountering a packet with no appropriate
+                extension.
+
+            /#
+        /#    
 /_

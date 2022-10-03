@@ -6,6 +6,7 @@
 #include <chrono>
 #include <filesystem>
 #include <ios>
+#include <limits>
 #include <stdexcept>
 #include <unordered_map>
 #include <stdint.h>
@@ -18,6 +19,7 @@
 #include <MBUtility/MBStrings.h>
 #include <MBUtility/MBErrorHandling.h>
 #include <MBUtility/MBInterfaces.h>
+#include <limits>
 namespace MBPM
 {
     namespace MBBuild
@@ -485,10 +487,15 @@ namespace MBPM
             std::filesystem::directory_entry FileStatus = std::filesystem::directory_entry(CurrentStruct.Path);
             if(!FileStatus.exists())
             {
-                throw std::runtime_error("Failed retrieving status for: \""+MBUnicode::PathToUTF8(CurrentStruct.Path)+"\". Update dependancies?");
+                //throw std::runtime_error("Failed retrieving status for: \""+MBUnicode::PathToUTF8(CurrentStruct.Path)+"\". Update dependancies?");
+                ReturnValue = true; 
+                CurrentStruct.LastWriteTime = std::numeric_limits<uint64_t>::max();
             }
-            uint32_t CurrentTimestamp = h_GetEntryWriteTimestamp(FileStatus);  
-            CurrentStruct.LastWriteTime = CurrentTimestamp;
+            else
+            {
+                uint64_t CurrentTimestamp = h_GetEntryWriteTimestamp(FileStatus);  
+                CurrentStruct.LastWriteTime = CurrentTimestamp;
+            }
         }
         if(CurrentStruct.LastWriteTime > LastCompileTime)
         {
@@ -513,7 +520,7 @@ namespace MBPM
         std::filesystem::directory_entry FileStatus = std::filesystem::directory_entry(SourceDirectory/CurrentStruct.Path);
         if(!FileStatus.exists())
         {
-            throw std::runtime_error("Failed retrieving status for: \""+MBUnicode::PathToUTF8(CurrentStruct.Path)+"\". Update dependancies?");
+            throw std::runtime_error("Failed retrieving status for: \""+MBUnicode::PathToUTF8(CurrentStruct.Path)+"\". Missing source file");
         }
         uint32_t CurrentTimestamp = h_GetEntryWriteTimestamp(FileStatus);  
         if(CurrentTimestamp > CurrentStruct.LastCompileTime)
@@ -1373,6 +1380,15 @@ namespace MBPM
             return("lib"+TargetName+".a");       
         }
     }
+    std::string h_GetExecutableName(std::string const& TargetName)
+    {
+        std::string ReturnValue = TargetName;    
+        if constexpr(MBUtility::IsWindows())
+        {
+            ReturnValue += ".exe";   
+        }
+        return(ReturnValue);
+    }
     bool MBBuild_Extension::p_Compile(CompileConfiguration const& CompileConf,SourceInfo const& SInfo,std::string const& SourceToCompile,std::string const& OutDir,std::vector<std::string> const& ExtraIncludeDirectories)
     {
         bool ReturnValue = false;
@@ -1637,14 +1653,104 @@ namespace MBPM
     MBError MBBuild_Extension::ExportPacket(std::filesystem::path const& PacketPath)
     {
         MBError ReturnValue = true;
-         
+        try
+        {
+            SourceInfo BuildInfo = p_GetPacketSourceInfo(PacketPath);
+            UserConfigurationsInfo CompileConfigurations = p_GetGlobalCompileConfigurations();
+            std::string ExecutablesDirectory = MBPM::GetSystemPacketsDirectory()+"/MBPM_ExportedExecutables/";
+            std::string LibraryDirectory = MBPM::GetSystemPacketsDirectory()+"/MBPM_CompiledLibraries/";
+            auto const& ConfigIt = CompileConfigurations.Configurations.find(BuildInfo.Language);
+            if(ConfigIt == CompileConfigurations.Configurations.end())
+            {
+                ReturnValue = false;
+                ReturnValue.ErrorMessage = "Language not supported in compile config: "+BuildInfo.Language;
+                return(ReturnValue);
+            }
+            LanguageConfiguration const& LanguageConfig = ConfigIt->second;
+            for(auto const& Target : BuildInfo.Targets)
+            {
+                std::string TargetFilename;
+                std::string OutDir;
+                if(Target.second.Type == TargetType::Executable)
+                {
+                    OutDir = ExecutablesDirectory;
+                    TargetFilename = h_GetExecutableName(Target.second.OutputName);   
+                }
+                else if(Target.second.Type == TargetType::StaticLibrary)
+                {
+                    OutDir = LibraryDirectory;
+                    TargetFilename = h_GetLibraryName(Target.second.OutputName);        
+                }
+                else
+                {
+                    throw std::runtime_error("Unsupported target type: DynamicLibrary");
+                }
+                std::filesystem::path PacketFile = PacketPath/LanguageConfig.DefaultExportConfig/TargetFilename;
+                std::filesystem::path LinkPath = OutDir+TargetFilename;
+                if(std::filesystem::exists(LinkPath))
+                {
+                    std::filesystem::remove(LinkPath);   
+                }
+                std::filesystem::create_symlink(PacketFile,LinkPath);
+            }
+        }
+        catch(std::exception const& e)
+        {
+            ReturnValue = false;
+            ReturnValue.ErrorMessage = e.what(); 
+        } 
         return(ReturnValue);    
     }
+    //ugly as it is more or less a carbon copy of the function above
     MBError MBBuild_Extension::RetractPacket(std::filesystem::path const& PacketPath)
     {
         MBError ReturnValue = true;
-
-        return(ReturnValue);
+        try
+        {
+            SourceInfo BuildInfo = p_GetPacketSourceInfo(PacketPath);
+            UserConfigurationsInfo CompileConfigurations = p_GetGlobalCompileConfigurations();
+            std::string ExecutablesDirectory = MBPM::GetSystemPacketsDirectory()+"/MBPM_ExportedExecutables/";
+            std::string LibraryDirectory = MBPM::GetSystemPacketsDirectory()+"/MBPM_CompiledLibraries/";
+            auto const& ConfigIt = CompileConfigurations.Configurations.find(BuildInfo.Language);
+            if(ConfigIt == CompileConfigurations.Configurations.end())
+            {
+                ReturnValue = false;
+                ReturnValue.ErrorMessage = "Language not supported in compile config: "+BuildInfo.Language;
+                return(ReturnValue);
+            }
+            LanguageConfiguration const& LanguageConfig = ConfigIt->second;
+            for(auto const& Target : BuildInfo.Targets)
+            {
+                std::string TargetFilename;
+                std::string OutDir;
+                if(Target.second.Type == TargetType::Executable)
+                {
+                    OutDir = ExecutablesDirectory;
+                    TargetFilename = h_GetExecutableName(Target.second.OutputName);   
+                }
+                else if(Target.second.Type == TargetType::StaticLibrary)
+                {
+                    OutDir = LibraryDirectory;
+                    TargetFilename = h_GetLibraryName(Target.second.OutputName);        
+                }
+                else
+                {
+                    throw std::runtime_error("Unsupported target type: DynamicLibrary");
+                }
+                std::filesystem::path PacketFile = PacketPath/LanguageConfig.DefaultExportConfig/TargetFilename;
+                std::filesystem::path LinkPath = OutDir+TargetFilename;
+                if(std::filesystem::exists(LinkPath))
+                {
+                    std::filesystem::remove(LinkPath);   
+                }
+            }
+        }
+        catch(std::exception const& e)
+        {
+            ReturnValue = false;
+            ReturnValue.ErrorMessage = e.what(); 
+        } 
+        return(ReturnValue);    
     }
     const char* MBBuild_Extension::GetName()
     {
