@@ -1213,7 +1213,7 @@ namespace MBPM
                 return 1;
             }
             int Result = std::system(CommandToExecute.c_str());
-            if(!Result)
+            if(Result != 0)
             {
                if(QuitOnError)
                {

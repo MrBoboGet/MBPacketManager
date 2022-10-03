@@ -60,3 +60,4 @@ Bad allocation när man parsar dålig data i MBBuild: Yikes, borde aldrig alloca
 
 TODO: lägg till lite printous när man compilerar grejer, just nu är det svårt att se vad som faktiskt görs. typ "Linking target","compiling source"
 
+Var kommer vc140.pdb ifrån?
