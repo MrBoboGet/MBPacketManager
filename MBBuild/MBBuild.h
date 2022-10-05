@@ -2,6 +2,7 @@
 #include "../MBPacketManager.h"
 #include <MBUtility/MBInterfaces.h>
 #include <stdint.h>
+#include <unordered_set>
 #include <vector>
 #include <string>
 #include <unordered_map>
@@ -94,6 +95,16 @@ namespace MBPM
     MBError ParseSourceInfo(const void* Data,size_t DataSize,SourceInfo& OutInfo);
     MBError ParseSourceInfo(std::filesystem::path const& FilePath,SourceInfo& OutInfo);
 
+    struct MBBuildPacketInfo
+    {
+        std::unordered_set<std::string> Attributes;
+        std::vector<std::string> ExtraIncludeDirectories;
+        //empty means that the linked targets defaults to the packet name, which is transparantly handled by the parser
+        std::vector<std::string> DefaultLinkTargets;
+    };
+
+    MBError ParseMBBuildPacketInfo(MBParsing::JSONObject const& ObjectToParse,MBBuildPacketInfo& OutInfo);
+    
     enum class MBBuildCompileFlags
     {
         CompleteRecompile, 
@@ -224,7 +235,7 @@ namespace MBPM
     public:
         //uint32_t 
         //MBError CreateDependancyInfo('
-        static MBError CreateDependancyInfo(SourceInfo const& CurrentBuild,CompileConfiguration const& CompileConfig,std::filesystem::path const& BuildRoot,DependancyInfo* OutInfo);
+        static MBError CreateDependancyInfo(SourceInfo const& CurrentBuild,CompileConfiguration const& CompileConfig,std::filesystem::path const& BuildRoot, std::vector<std::string> const& ExtraIncludes,DependancyInfo* OutInfo);
         static MBError ParseDependancyInfo(MBUtility::MBOctetInputStream& InputStream,DependancyInfo* OutInfo);
         void WriteDependancyInfo(MBUtility::MBOctetOutputStream& OutStream) const;
     
@@ -240,10 +251,7 @@ namespace MBPM
         bool IsTargetOutOfDate(std::string const& TargetName,uint64_t LatestDependancyTimestamp,Target const& TargetInfo,std::string const& LinkString);
         void UpdateTarget(std::string const& TargetToUpdate,Target const& TargetInfo,std::string const& LinkString); 
 
-        MBError UpdateUpdatedFilesDependancies(std::filesystem::path const& SourceDirectory);
-        //Old interface
-        MBError GetUpdatedFiles(std::filesystem::path const& SourceDirectory,std::string const& CompileString,std::vector<std::string> const& FilesToCheck,std::vector<std::string>* OutFilesToCompile) ;
-
+        MBError UpdateUpdatedFilesDependancies(std::filesystem::path const& SourceDirectory,std::vector<std::string> const& ExtraIncludes);
     };
 
     class MBBuild_Extension : public CLI_Extension

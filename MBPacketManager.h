@@ -11,7 +11,6 @@
 #include <MBParsing/MBParsing.h>
 #include <unordered_map>
 
-#include "MBPacketManager.h"
 #include "MB_PacketProtocol.h"
 namespace MBPM
 {
@@ -30,14 +29,10 @@ namespace MBPM
 	struct MBPM_PacketInfo
 	{
 		std::string PacketName = "";
-        std::string Type = "C++";
 		std::unordered_set<std::string> Attributes = {};
-		//std::vector<MBPM_CompileOutputConfiguration> SupportedOutputConfigurations = {};
-		std::vector<std::string> AdditionalSystemLibraryDependancies = {};
 		std::vector<std::string> PacketDependancies = {};
-		std::vector<std::string> ExportedTargets = {}; 
-		std::vector<std::string> ExtraIncludeDirectories = {};
-		std::vector<MBPM_SubLibrary> SubLibraries = {};
+        std::string Type = "C++";
+        MBParsing::JSONObject TypeInfo;
 	};
 	MBPM_PacketInfo ParseMBPM_PacketInfo(std::string const& PacketPath);
 	MBError WriteMBPM_PacketInfo(MBPM_PacketInfo const& PacketToWrite);
@@ -108,7 +103,7 @@ namespace MBPM
     public:
         PacketIdentifier GetInstalledPacket(std::string const& PacketName);
         PacketIdentifier GetUserPacket(std::string const& PacketName);
-        std::vector<PacketIdentifier> GetPacketDependancies(PacketIdentifier const& PacketToInspect);
+        std::vector<PacketIdentifier> GetPacketDependancies(PacketIdentifier const& PacketToInspect,MBError& OutError);
         std::vector<PacketIdentifier> GetTotalDependancies(std::vector<std::string> const& DependancyNames,MBError& OutError);
         std::vector<PacketIdentifier> GetPacketDependees(std::string const& PacketName);
         MBPM_PacketInfo GetPacketInfo(PacketIdentifier const& PacketToRetrieve);

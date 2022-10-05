@@ -1,5 +1,5 @@
 #include "MB_PacketProtocol.h"
-#include "MBUnicode/MBUnicode.h"
+#include <MBUnicode/MBUnicode.h>
 #include <MBParsing/MBParsing.h>
 #include <set>
 #include <MBCrypto/MBCrypto.h>
@@ -1538,7 +1538,7 @@ namespace MBPM
 		}
 		catch (const std::exception& e)
 		{
-			std::cout << e.what() << std::endl;
+			//std::cout << e.what() << std::endl;
 			m_TopNode = MBPP_DirectoryInfoNode();
 		}
 	}
@@ -3291,7 +3291,7 @@ namespace MBPM
 					}
 					catch (const std::exception& e)
 					{
-						std::cout << e.what() << std::endl;
+						//std::cout << e.what() << std::endl;
 					}
 				}
 			}

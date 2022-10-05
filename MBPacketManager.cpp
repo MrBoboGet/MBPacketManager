@@ -1,7 +1,7 @@
 #include "MBPacketManager.h"
-#include "MBParsing/MBParsing.h"
-#include "MBUnicode/MBUnicode.h"
-#include "MBUtility/MBErrorHandling.h"
+#include <MBParsing/MBParsing.h>
+#include <MBUnicode/MBUnicode.h>
+#include <MBUtility/MBErrorHandling.h>
 #include <assert.h>
 #include <exception>
 #include <fstream>
@@ -178,34 +178,19 @@ namespace MBPM
 		PacketFile.read(JsonData.data(), JsonData.size());
 		MBError ParseError = true;
 		MBParsing::JSONObject ParsedJson = MBParsing::ParseJSONObject(JsonData,0,nullptr,&ParseError);
-		MBPM_PacketInfo ReturnValue;
+		MBPM_PacketInfo ReturnValue = MBPM_PacketInfo();
 		try
 		{
-			//if (!ParseError)
-//{
-//	return(ReturnValue);
-//}
+			if (!ParseError)
+            {
+                return(ReturnValue);
+            }
 			ReturnValue.PacketName = ParsedJson.GetAttribute("PacketName").GetStringData();
 			for (auto const& Attribute : ParsedJson.GetAttribute("Attributes").GetArrayData())
 			{
                 ReturnValue.Attributes.insert(Attribute.GetStringData());
 			}
 			//ExportedExecutableTargets
-			if (ParsedJson.HasAttribute("ExportedExecutableTargets"))
-			{
-				MBParsing::JSONObject& ExecutableTargets = ParsedJson.GetAttribute("ExportedExecutableTargets");
-				if (ExecutableTargets.GetType() == MBParsing::JSONObjectType::Array)
-				{
-					std::vector<MBParsing::JSONObject>& Targets = ExecutableTargets.GetArrayData();
-					for (size_t i = 0; i < Targets.size(); i++)
-					{
-						if (Targets[i].GetType() == MBParsing::JSONObjectType::String)
-						{
-							ReturnValue.ExportedTargets.push_back(Targets[i].GetStringData());
-						}
-					}
-				}
-			}
 			if (ParsedJson.HasAttribute("PacketType"))
 			{
                 ReturnValue.Type = ParsedJson["PacketType"].GetStringData();
@@ -214,44 +199,20 @@ namespace MBPM
 			{
                 ReturnValue.Type = "C++";
 			}
-			//F�r include
-			if (ParsedJson.HasAttribute("ExtraIncludeDirectories"))
-			{
-				MBParsing::JSONObject const& IncludeDirectoryObjects = ParsedJson.GetAttribute("ExtraIncludeDirectories");
-				if (IncludeDirectoryObjects.GetType() != MBParsing::JSONObjectType::Array)
-				{
-					//throw std::runtime_error("ErrorIncludeDirectories not of array type!");
-					ReturnValue = MBPM_PacketInfo();
-					return(ReturnValue);
-				}
-				std::vector<MBParsing::JSONObject> const& IncludeDirectories = IncludeDirectoryObjects.GetArrayData();
-				for (size_t i = 0; i < IncludeDirectories.size(); i++)
-				{
-					if (IncludeDirectories[i].GetType() != MBParsing::JSONObjectType::String)
-					{
-						ReturnValue = MBPM_PacketInfo();
-						return(ReturnValue);
-					}
-					ReturnValue.ExtraIncludeDirectories.push_back(IncludeDirectories[i].GetStringData());
-				}
-			}
-			//F�r sub libraries
-			if (ParsedJson.HasAttribute("SubLibraries"))
-			{
-				std::vector<MBParsing::JSONObject> const& SubLibraries = ParsedJson.GetAttribute("SubLibraries").GetArrayData();
-				for (size_t i = 0; i < SubLibraries.size(); i++)
-				{
-					MBPM_SubLibrary NewSubLibrary;
-					NewSubLibrary.LibraryName = SubLibraries[i].GetAttribute("LibraryName").GetStringData();
-					ReturnValue.SubLibraries.push_back(NewSubLibrary);
-				}
-			}
-			
 			//ReturnValue.PacketDependancies = ParsedAttributes["Dependancies"];
 			for (auto const& Dependancie : ParsedJson.GetAttribute("Dependancies").GetArrayData())
 			{
 				ReturnValue.PacketDependancies.push_back(Dependancie.GetStringData());
 			}
+            if(ParsedJson.HasAttribute("TypeInfo"))
+            {
+                ReturnValue.TypeInfo = std::move(ParsedJson["TypeInfo"]);
+                //std::cout<<"Type info !"<<std::endl<<ReturnValue.TypeInfo.ToPrettyString()<<std::endl;
+            }
+            else
+            {
+                ReturnValue.TypeInfo = MBParsing::JSONObject(MBParsing::JSONObjectType::Aggregate);   
+            }
 		}
 		catch(std::exception const& e)
 		{
@@ -350,83 +311,83 @@ namespace MBPM
 		}
 		return(ReturnValue);
 	}
-	void h_WriteMBPMCmakeValues(std::vector<std::string> const& Dependancies, std::ofstream& OutputFile, std::string const& StaticMBPMData)
-	{
-		OutputFile << "##BEGIN MBPM_VARIABLES\n";
-		OutputFile << "set(MBPM_DEPENDENCIES \n";
+	//void h_WriteMBPMCmakeValues(std::vector<std::string> const& Dependancies, std::ofstream& OutputFile, std::string const& StaticMBPMData)
+	//{
+	//	OutputFile << "##BEGIN MBPM_VARIABLES\n";
+	//	OutputFile << "set(MBPM_DEPENDENCIES \n";
 
-		std::vector<MBPM_PacketInfo> TargetDependancies = h_GetDependanciesInfo(Dependancies);
+	//	std::vector<MBPM_PacketInfo> TargetDependancies = h_GetDependanciesInfo(Dependancies);
 
-		for (auto const& Packet : TargetDependancies)
-		{
-			///if(Packet.Attributes.find(MBPM_PacketAttribute::SubOnly) == Packet.Attributes.end())
-			///{
-			///	OutputFile << "\t" <<"\""<< Packet.PacketName<<"\"" << "\n";
-			///}
-			for (size_t i = 0; i < Packet.SubLibraries.size(); i++)
-			{
-				OutputFile << "\t"<<"\""<<Packet.PacketName<<"#" << Packet.SubLibraries[i].LibraryName<<"\""<<"\n";
-			}
-		}
-		OutputFile << ")\n";
-		
-		//System libraries
-		OutputFile << "set(MBPM_SystemLibraries\n";
-		if constexpr(MBUtility::IsWindows())
-		{
-			OutputFile <<	"Ws2_32.lib\n"
-							"Secur32.lib\n"
-							"Bcrypt.lib\n"
-							"Mfplat.lib\n"
-							"opengl32\n"
-							"Mfuuid.lib\n	"
-							"Strmiids.lib\n)\n";
-		}
-		else//ska egentligen kolla om det �r unix...
-		{
-			OutputFile <<	"pthread\n"
-							"dl\n"
-							"stdc++fs\n"
-							"m\n)\n";
-		}
-		//
+	//	for (auto const& Packet : TargetDependancies)
+	//	{
+	//		///if(Packet.Attributes.find(MBPM_PacketAttribute::SubOnly) == Packet.Attributes.end())
+	//		///{
+	//		///	OutputFile << "\t" <<"\""<< Packet.PacketName<<"\"" << "\n";
+	//		///}
+	//		for (size_t i = 0; i < Packet.SubLibraries.size(); i++)
+	//		{
+	//			OutputFile << "\t"<<"\""<<Packet.PacketName<<"#" << Packet.SubLibraries[i].LibraryName<<"\""<<"\n";
+	//		}
+	//	}
+	//	OutputFile << ")\n";
+	//	
+	//	//System libraries
+	//	OutputFile << "set(MBPM_SystemLibraries\n";
+	//	if constexpr(MBUtility::IsWindows())
+	//	{
+	//		OutputFile <<	"Ws2_32.lib\n"
+	//						"Secur32.lib\n"
+	//						"Bcrypt.lib\n"
+	//						"Mfplat.lib\n"
+	//						"opengl32\n"
+	//						"Mfuuid.lib\n	"
+	//						"Strmiids.lib\n)\n";
+	//	}
+	//	else//ska egentligen kolla om det �r unix...
+	//	{
+	//		OutputFile <<	"pthread\n"
+	//						"dl\n"
+	//						"stdc++fs\n"
+	//						"m\n)\n";
+	//	}
+	//	//
 
-		//Include directories
-		OutputFile << "set(MBPM_DependanciesIncludeDirectories\n";
-		for (size_t i = 0; i < TargetDependancies.size(); i++)
-		{
-			for (size_t j = 0; j < TargetDependancies[i].ExtraIncludeDirectories.size(); j++)
-			{
-				//Verifiera pathen...
-				OutputFile << "$ENV{MBPM_PACKETS_INSTALL_DIRECTORY}/" << TargetDependancies[i].PacketName << "/" << TargetDependancies[i].ExtraIncludeDirectories[j]<<"\n";
-			}
-		}
-		OutputFile << ")\n";
-		//
+	//	//Include directories
+	//	OutputFile << "set(MBPM_DependanciesIncludeDirectories\n";
+	//	for (size_t i = 0; i < TargetDependancies.size(); i++)
+	//	{
+	//		for (size_t j = 0; j < TargetDependancies[i].ExtraIncludeDirectories.size(); j++)
+	//		{
+	//			//Verifiera pathen...
+	//			OutputFile << "$ENV{MBPM_PACKETS_INSTALL_DIRECTORY}/" << TargetDependancies[i].PacketName << "/" << TargetDependancies[i].ExtraIncludeDirectories[j]<<"\n";
+	//		}
+	//	}
+	//	OutputFile << ")\n";
+	//	//
 
 
-		OutputFile << "set(MBPM_TARGET_EXTPACKET_LIBRARIES )\n";
-		OutputFile << "set(MBPM_TARGET_COMPILE_OPTIONS )\n";
-		OutputFile << "set(MBPM_TARGET_LINK_OPTIONS )\n";
-		//Output f�r att overrida CMAKE_CXX_FLAGS
-		//OutputFile << "set(MBPM_CXX_FLAGS ${CMAKE_CXX_FLAGS})\n";
-		//OutputFile << "set(MBPM_CXX_FLAGS_DEBUG ${CMAKE_CXX_FLAGS_DEBUG})\n";
-		//OutputFile << "set(MBPM_CXX_FLAGS_RELEASE ${CMAKE_CXX_FLAGS_RELEASE})\n";
-		//
-		if (StaticMBPMData == "")
-		{
-			OutputFile << "#MBPM_Functions";
-			OutputFile << GetMBPMCmakeFunctions() << '\n';
-			OutputFile << "##END MBPM_VARIABLES\n";
-		}
-		else
-		{
-			OutputFile << "#MBPM_Functions";
-			OutputFile << StaticMBPMData<<'\n';
-			OutputFile << "##END MBPM_VARIABLES\n";
-		}
+	//	OutputFile << "set(MBPM_TARGET_EXTPACKET_LIBRARIES )\n";
+	//	OutputFile << "set(MBPM_TARGET_COMPILE_OPTIONS )\n";
+	//	OutputFile << "set(MBPM_TARGET_LINK_OPTIONS )\n";
+	//	//Output f�r att overrida CMAKE_CXX_FLAGS
+	//	//OutputFile << "set(MBPM_CXX_FLAGS ${CMAKE_CXX_FLAGS})\n";
+	//	//OutputFile << "set(MBPM_CXX_FLAGS_DEBUG ${CMAKE_CXX_FLAGS_DEBUG})\n";
+	//	//OutputFile << "set(MBPM_CXX_FLAGS_RELEASE ${CMAKE_CXX_FLAGS_RELEASE})\n";
+	//	//
+	//	if (StaticMBPMData == "")
+	//	{
+	//		OutputFile << "#MBPM_Functions";
+	//		OutputFile << GetMBPMCmakeFunctions() << '\n';
+	//		OutputFile << "##END MBPM_VARIABLES\n";
+	//	}
+	//	else
+	//	{
+	//		OutputFile << "#MBPM_Functions";
+	//		OutputFile << StaticMBPMData<<'\n';
+	//		OutputFile << "##END MBPM_VARIABLES\n";
+	//	}
 
-	}
+	//}
 	//MBError WriteCMakeProjectToFile(MBPM_CmakeProject const& ProjectToWrite, std::string const& OutputFilePath)
 	//{
 	//	MBError ReturnValue = true;
@@ -478,72 +439,72 @@ namespace MBPM
 
 	//	return(ReturnValue);
 	//}
-	MBError UpdateCmakeMBPMVariables(std::string const& PacketPath, std::vector<std::string> const& TotalPacketDependancies, std::string const& StaticMBPMData)
-	{
-		MBError ReturnValue = true;
-		if (!std::filesystem::exists(PacketPath + "/MBPM_PacketInfo") || !std::filesystem::exists(PacketPath+"/CMakeLists.txt"))
-		{
-			ReturnValue = false;
-			ReturnValue.ErrorMessage = "MBPM_PacketInfo or CMakeLists.txt doesn't exist";
-			return(ReturnValue);
-		}
-		std::ifstream InputFile = std::ifstream(PacketPath + "/CMakeLists.txt",std::ios::in);
-		std::string CurrentLine = "";
-		std::vector<std::string> FileLines = {};
-		while (std::getline(InputFile,CurrentLine))
-		{
-			if (CurrentLine != "" && CurrentLine.back() == '\r')
-			{
-				CurrentLine.resize(CurrentLine.size() - 1);
-			}
-			FileLines.push_back(CurrentLine);
-		}
-		InputFile.close();
-		bool ContainsBegin = false;
-		bool ContainsEnd = false;
-		for (size_t i = 0; i < FileLines.size(); i++)
-		{
-			if (FileLines[i] == "##BEGIN MBPM_VARIABLES")
-			{
-				ContainsBegin = true;
-			}
-			if (ContainsBegin == true && FileLines[i] == "##END MBPM_VARIABLES")
-			{
-				ContainsEnd = true;
-			}
-		}
-		if (!(ContainsBegin && ContainsEnd))
-		{
-			ReturnValue = false;
-			ReturnValue.ErrorMessage = "File doesn't contain valid MBPM_Variables";
-			return(ReturnValue);
-		}
-		//MBPM_PacketInfo PacketInfo = ParseMBPM_PacketInfo(PacketPath + "/MBPM_PacketInfo");
-		//std::vector<std::string> TotalPacketDependancies = h_GetTotalPacketDependancies(PacketInfo,&ReturnValue);
-		if (!ReturnValue)
-		{
-			return(ReturnValue);
-		}
-		std::ofstream OutputFile = std::ofstream(PacketPath + "/CMakeLists.txt", std::ios::out);
-		bool InMBPMVariables = false;
-		for (size_t i = 0; i < FileLines.size(); i++)
-		{
-			if (FileLines[i] == "##BEGIN MBPM_VARIABLES")
-			{
-				InMBPMVariables = true;
-				h_WriteMBPMCmakeValues(TotalPacketDependancies, OutputFile,StaticMBPMData);
-			}
-			if (!InMBPMVariables)
-			{
-				OutputFile << FileLines[i] << std::endl;
-			}
-			if (InMBPMVariables && FileLines[i] == "##END MBPM_VARIABLES")
-			{
-				InMBPMVariables = false;
-			}
-		}
-		return(ReturnValue);
-	}
+	//MBError UpdateCmakeMBPMVariables(std::string const& PacketPath, std::vector<std::string> const& TotalPacketDependancies, std::string const& StaticMBPMData)
+	//{
+	//	MBError ReturnValue = true;
+	//	if (!std::filesystem::exists(PacketPath + "/MBPM_PacketInfo") || !std::filesystem::exists(PacketPath+"/CMakeLists.txt"))
+	//	{
+	//		ReturnValue = false;
+	//		ReturnValue.ErrorMessage = "MBPM_PacketInfo or CMakeLists.txt doesn't exist";
+	//		return(ReturnValue);
+	//	}
+	//	std::ifstream InputFile = std::ifstream(PacketPath + "/CMakeLists.txt",std::ios::in);
+	//	std::string CurrentLine = "";
+	//	std::vector<std::string> FileLines = {};
+	//	while (std::getline(InputFile,CurrentLine))
+	//	{
+	//		if (CurrentLine != "" && CurrentLine.back() == '\r')
+	//		{
+	//			CurrentLine.resize(CurrentLine.size() - 1);
+	//		}
+	//		FileLines.push_back(CurrentLine);
+	//	}
+	//	InputFile.close();
+	//	bool ContainsBegin = false;
+	//	bool ContainsEnd = false;
+	//	for (size_t i = 0; i < FileLines.size(); i++)
+	//	{
+	//		if (FileLines[i] == "##BEGIN MBPM_VARIABLES")
+	//		{
+	//			ContainsBegin = true;
+	//		}
+	//		if (ContainsBegin == true && FileLines[i] == "##END MBPM_VARIABLES")
+	//		{
+	//			ContainsEnd = true;
+	//		}
+	//	}
+	//	if (!(ContainsBegin && ContainsEnd))
+	//	{
+	//		ReturnValue = false;
+	//		ReturnValue.ErrorMessage = "File doesn't contain valid MBPM_Variables";
+	//		return(ReturnValue);
+	//	}
+	//	//MBPM_PacketInfo PacketInfo = ParseMBPM_PacketInfo(PacketPath + "/MBPM_PacketInfo");
+	//	//std::vector<std::string> TotalPacketDependancies = h_GetTotalPacketDependancies(PacketInfo,&ReturnValue);
+	//	if (!ReturnValue)
+	//	{
+	//		return(ReturnValue);
+	//	}
+	//	std::ofstream OutputFile = std::ofstream(PacketPath + "/CMakeLists.txt", std::ios::out);
+	//	bool InMBPMVariables = false;
+	//	for (size_t i = 0; i < FileLines.size(); i++)
+	//	{
+	//		if (FileLines[i] == "##BEGIN MBPM_VARIABLES")
+	//		{
+	//			InMBPMVariables = true;
+	//			h_WriteMBPMCmakeValues(TotalPacketDependancies, OutputFile,StaticMBPMData);
+	//		}
+	//		if (!InMBPMVariables)
+	//		{
+	//			OutputFile << FileLines[i] << std::endl;
+	//		}
+	//		if (InMBPMVariables && FileLines[i] == "##END MBPM_VARIABLES")
+	//		{
+	//			InMBPMVariables = false;
+	//		}
+	//	}
+	//	return(ReturnValue);
+	//}
 
 	//MBError GenerateCmakeFile(MBPM_PacketInfo const& PacketToConvert, std::string const& PacketDirectory, MBPM_MakefileGenerationOptions const& CompileConfiguration,std::string const& OutputName)
 	//{
@@ -938,48 +899,48 @@ namespace MBPM
 	//	}
 	//	return(ReturnValue);
 	//}
-	MBError InstallCompiledPacket(std::string const& PacketDirectory)
-	{
-		MBError ReturnValue = true;
-		MBPM_PacketInfo PacketInfo = ParseMBPM_PacketInfo(PacketDirectory + "/MBPM_PacketInfo");
-		if (PacketInfo.PacketName != "")
-		{
-			std::string PacketInstallDirectory = GetSystemPacketsDirectory();
-			for (auto const& ExportedExecutables : PacketInfo.ExportedTargets)
-			{
-				std::string NewExecutableName = ExportedExecutables;
-				if (MBUtility::IsWindows())
-				{
-					NewExecutableName += ".exe";
-				}
-				if (!std::filesystem::exists(PacketInstallDirectory + "/MBPM_ExportedExecutables"))
-				{
-					std::filesystem::create_directories(PacketInstallDirectory + "/MBPM_ExportedExecutables");
-				}
-				try
-				{
-					std::string SymlinkName = PacketInstallDirectory + "/MBPM_ExportedExecutables/" + NewExecutableName;
-					std::string TargetName = PacketDirectory + "/MBPM_Builds/" + NewExecutableName;
-					if (std::filesystem::is_symlink(SymlinkName))
-					{
-						std::filesystem::remove(SymlinkName);
-					}
-					std::filesystem::create_symlink(TargetName, SymlinkName);
-				}
-				catch (const std::exception& e)
-				{
-					std::cout << e.what() << std::endl;
-				}
+	//MBError InstallCompiledPacket(std::string const& PacketDirectory)
+	//{
+	//	MBError ReturnValue = true;
+	//	MBPM_PacketInfo PacketInfo = ParseMBPM_PacketInfo(PacketDirectory + "/MBPM_PacketInfo");
+	//	if (PacketInfo.PacketName != "")
+	//	{
+	//		std::string PacketInstallDirectory = GetSystemPacketsDirectory();
+	//		for (auto const& ExportedExecutables : PacketInfo.ExportedTargets)
+	//		{
+	//			std::string NewExecutableName = ExportedExecutables;
+	//			if (MBUtility::IsWindows())
+	//			{
+	//				NewExecutableName += ".exe";
+	//			}
+	//			if (!std::filesystem::exists(PacketInstallDirectory + "/MBPM_ExportedExecutables"))
+	//			{
+	//				std::filesystem::create_directories(PacketInstallDirectory + "/MBPM_ExportedExecutables");
+	//			}
+	//			try
+	//			{
+	//				std::string SymlinkName = PacketInstallDirectory + "/MBPM_ExportedExecutables/" + NewExecutableName;
+	//				std::string TargetName = PacketDirectory + "/MBPM_Builds/" + NewExecutableName;
+	//				if (std::filesystem::is_symlink(SymlinkName))
+	//				{
+	//					std::filesystem::remove(SymlinkName);
+	//				}
+	//				std::filesystem::create_symlink(TargetName, SymlinkName);
+	//			}
+	//			catch (const std::exception& e)
+	//			{
+	//				std::cout << e.what() << std::endl;
+	//			}
 
-			}
-		}
-		else
-		{
-			ReturnValue = false;
-			ReturnValue.ErrorMessage = "No packet in packet directory";
-		}
-		return(ReturnValue);
-	}
+	//		}
+	//	}
+	//	else
+	//	{
+	//		ReturnValue = false;
+	//		ReturnValue.ErrorMessage = "No packet in packet directory";
+	//	}
+	//	return(ReturnValue);
+	//}
 	MBError CompileMBCmake(std::string const& PacketDirectory, std::string const& Configuration, std::vector<std::string> const& Targets)
 	{
 		MBError ReturnValue = false;
@@ -1025,53 +986,53 @@ namespace MBPM
 		//return(ReturnValue);
         return(false);
 	}
-	bool PacketIsPrecompiled(std::string const& PacketDirectoryToCheck, MBError* OutError)
-	{
-		bool ReturnValue = false;
-		return(ReturnValue);
-		try
-		{
-			MBPM_PacketInfo PacketInfo = ParseMBPM_PacketInfo(PacketDirectoryToCheck + "/MBPM_PacketInfo");
-			if (PacketInfo.PacketName == "")
-			{
-				*OutError = false;
-				OutError->ErrorMessage = "No packet in packet directory";
-				return(false);
-			}
-			for (size_t i = 0; i < PacketInfo.ExportedTargets.size(); i++)
-			{
-				std::string TargetPath = PacketDirectoryToCheck+"/MBPM_Builds/" + PacketInfo.ExportedTargets[i];
-				if constexpr (MBUtility::IsWindows())
-				{
-					TargetPath += ".exe";
-				}
-				if (!std::filesystem::exists(TargetPath))
-				{
-					ReturnValue = false;
-					return(ReturnValue);
-				}
-				if (!std::filesystem::is_regular_file(TargetPath))
-				{
-					ReturnValue = false;
-					return(ReturnValue);
-				}
-			}
-			for (size_t i = 0; i < PacketInfo.SubLibraries.size(); i++)
-			{
-				
-			}
-		}
-		catch (std::exception const& e)
-		{
-			if (OutError != nullptr)
-			{
-				*OutError = false;
-				OutError->ErrorMessage = e.what();
-			}
-			ReturnValue = false;
-		}
-		return(ReturnValue);
-	}
+	//bool PacketIsPrecompiled(std::string const& PacketDirectoryToCheck, MBError* OutError)
+	//{
+	//	bool ReturnValue = false;
+	//	return(ReturnValue);
+	//	try
+	//	{
+	//		MBPM_PacketInfo PacketInfo = ParseMBPM_PacketInfo(PacketDirectoryToCheck + "/MBPM_PacketInfo");
+	//		if (PacketInfo.PacketName == "")
+	//		{
+	//			*OutError = false;
+	//			OutError->ErrorMessage = "No packet in packet directory";
+	//			return(false);
+	//		}
+	//		for (size_t i = 0; i < PacketInfo.ExportedTargets.size(); i++)
+	//		{
+	//			std::string TargetPath = PacketDirectoryToCheck+"/MBPM_Builds/" + PacketInfo.ExportedTargets[i];
+	//			if constexpr (MBUtility::IsWindows())
+	//			{
+	//				TargetPath += ".exe";
+	//			}
+	//			if (!std::filesystem::exists(TargetPath))
+	//			{
+	//				ReturnValue = false;
+	//				return(ReturnValue);
+	//			}
+	//			if (!std::filesystem::is_regular_file(TargetPath))
+	//			{
+	//				ReturnValue = false;
+	//				return(ReturnValue);
+	//			}
+	//		}
+	//		for (size_t i = 0; i < PacketInfo.SubLibraries.size(); i++)
+	//		{
+	//			
+	//		}
+	//	}
+	//	catch (std::exception const& e)
+	//	{
+	//		if (OutError != nullptr)
+	//		{
+	//			*OutError = false;
+	//			OutError->ErrorMessage = e.what();
+	//		}
+	//		ReturnValue = false;
+	//	}
+	//	return(ReturnValue);
+	//}
 
     //BEGIN PacketRetriever
     PacketIdentifier PacketRetriever::p_GetInstalledPacket(std::string const& PacketName)
@@ -1186,10 +1147,19 @@ namespace MBPM
 				Error.ErrorMessage = "Can't find user packet";
 			}
 		}
-		if (!Error && OutError != nullptr)
+        if(ReturnValue.PacketName == "")
+        {
+            Error = false;
+            Error.ErrorMessage = "Failed parsing packet "+PacketToInspect.PacketName;
+        }
+        if (!Error && OutError != nullptr)
 		{
 			*OutError = std::move(Error);
 		}
+        if(!Error)
+        {
+            ReturnValue = MBPM::MBPM_PacketInfo();   
+        }
 		return(ReturnValue);
 	}
     uint32_t h_GetPacketDepth2(std::map<std::string, MBPM_PacketDependancyRankInfo>& PacketInfoToUpdate, std::string const& PacketName, std::vector<std::string>* OutDependancies)
@@ -1245,7 +1215,7 @@ namespace MBPM
                 continue;
             }
             MBPM_PacketInfo PacketInfo = p_GetPacketInfo(NewPacket, &OutError);
-            assert(PacketInfo.PacketName != "");//contract by p_GetPacketInfo
+            //assert(PacketInfo.PacketName != "");//contract by p_GetPacketInfo
             if (!OutError)
             {
                 return(ReturnValue);
@@ -1281,7 +1251,11 @@ namespace MBPM
         if (OutMissing->size() > 0)
         {
             OutError = false;
-            OutError.ErrorMessage = "Missing dependancies";
+            OutError.ErrorMessage = "Missing dependancies: ";
+			for (auto const& String : *OutMissing)
+			{
+				OutError.ErrorMessage += String + " ";
+			}
         }
         return(ReturnValue);
     }
@@ -1290,6 +1264,10 @@ namespace MBPM
         std::vector<PacketIdentifier> ReturnValue;
 
         std::map<std::string, MBPM_PacketDependancyRankInfo> PacketDependancyInfo = p_GetPacketDependancieInfo(InPacketsToCheck, OutError, MissingPackets);
+        if(!OutError)
+        {
+            return(ReturnValue);   
+        }
         std::set<MBPM_PacketDependancyRankInfo> OrderedPackets;
         for (auto const& Packet : PacketDependancyInfo)
         {
@@ -1359,12 +1337,12 @@ namespace MBPM
     {
         return(p_GetUserPacket(PacketName)); 
     }
-    std::vector<PacketIdentifier> PacketRetriever::GetPacketDependancies(PacketIdentifier const& Packet)
+    std::vector<PacketIdentifier> PacketRetriever::GetPacketDependancies(PacketIdentifier const& Packet,MBError& OutError)
     {
         MBError Result = true;
         std::vector<std::string> MissingPackets;
         
-        std::vector<PacketIdentifier> ReturnValue = p_GetPacketDependancies_DependancyOrder({Packet},Result,&MissingPackets);
+        std::vector<PacketIdentifier> ReturnValue = p_GetPacketDependancies_DependancyOrder({Packet},OutError,&MissingPackets);
         return(ReturnValue);
     }
     std::vector<PacketIdentifier> PacketRetriever::GetTotalDependancies(std::vector<std::string> const& Dependancies,MBError& OutError)

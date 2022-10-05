@@ -1,6 +1,6 @@
 #include "MBPM_CLI.h"
 #include "MBPacketManager.h"
-#include "MBParsing/MBParsing.h"
+#include <MBParsing/MBParsing.h>
 #include "MB_PacketProtocol.h"
 #include <filesystem>
 #include <map>
@@ -228,7 +228,7 @@ namespace MBPM
                 continue;
             }
             MBPM_PacketInfo PacketInfo = p_GetPacketInfo(NewPacket, &OutError);
-            assert(PacketInfo.PacketName != "");//contract by p_GetPacketInfo
+            //assert(PacketInfo.PacketName != "");//contract by p_GetPacketInfo
             if (!OutError)
             {
                 return(ReturnValue);
@@ -264,7 +264,11 @@ namespace MBPM
         if (OutMissing->size() > 0)
         {
             OutError = false;
-            OutError.ErrorMessage = "Missing dependancies";
+            OutError.ErrorMessage = "Missing dependancies: ";
+            for (auto const& String : *OutMissing)
+            {
+                OutError.ErrorMessage += String + " ";
+            }
         }
         return(ReturnValue);
     }
@@ -582,7 +586,11 @@ namespace MBPM
             if (MissingPackets.size() > 0)
             {
                 OutError = false;
-                OutError.ErrorMessage = "Missing dependancies";
+                OutError.ErrorMessage = "Missing dependancies: ";
+                for (auto const& String : MissingPackets)
+                {
+                    OutError.ErrorMessage += String + " ";
+                }
                 return(ReturnValue);
             }
             for (size_t i = 0; i < InstalledPackets.size(); i++)
@@ -911,6 +919,11 @@ namespace MBPM
                 Error = false;
                 Error.ErrorMessage = "Can't find user packet";
             }
+        }
+        if(ReturnValue.PacketName == "")
+        {
+            Error = false;
+            Error.ErrorMessage = "Failed parsing MBPM_PacketInfo for packet "+PacketToInspect.PacketName;   
         }
         if (!Error && OutError != nullptr)
         {
@@ -2896,8 +2909,7 @@ namespace MBPM
             MBCLI::ProcessedCLInput CommandInput(argc, argv);
             MBCLI::MBTerminal ProgramTerminal;
             MBPM_ClI CLIHandler;
-            CLIHandler.HandleCommand(CommandInput, &ProgramTerminal);
-            return(0);
+            return(CLIHandler.HandleCommand(CommandInput, &ProgramTerminal));
         }
         catch(std::exception const& e)
         {

@@ -1,5 +1,4 @@
 Excludes:
-/MBCLI/
 /out/
 /TestDirectory/
 /TestOutputDirectory/
