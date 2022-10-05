@@ -97,13 +97,14 @@ namespace MBPM
 
     struct MBBuildPacketInfo
     {
+        std::string Name;
         std::unordered_set<std::string> Attributes;
         std::vector<std::string> ExtraIncludeDirectories;
         //empty means that the linked targets defaults to the packet name, which is transparantly handled by the parser
         std::vector<std::string> DefaultLinkTargets;
     };
 
-    MBError ParseMBBuildPacketInfo(MBParsing::JSONObject const& ObjectToParse,MBBuildPacketInfo& OutInfo);
+    MBError ParseMBBuildPacketInfo(MBPM_PacketInfo const& PacketInfo,MBBuildPacketInfo& OutInfo);
     
     enum class MBBuildCompileFlags
     {

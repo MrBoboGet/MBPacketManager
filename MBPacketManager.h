@@ -95,7 +95,7 @@ namespace MBPM
 			std::vector<PacketIdentifier> const& InPacketsToCheck,
 			MBError& OutError,
 			std::vector<std::string>* OutMissing);
-        std::vector<PacketIdentifier> p_GetPacketDependancies_DependancyOrder(std::vector<PacketIdentifier> const& InPacketsToCheck,MBError& OutError, std::vector<std::string>* MissingPackets);
+        std::vector<PacketIdentifier> p_GetPacketDependancies_DependancyOrder(std::vector<PacketIdentifier> const& InPacketsToCheck,MBError& OutError, std::vector<std::string>* MissingPackets,bool IncludeInitial = false);
         PacketIdentifier p_GetUserPacket(std::string const& PacketName);
         PacketIdentifier p_GetInstalledPacket(std::string const& PacketName);
         PacketIdentifier p_GetLocalPacket(std::string const& PacketName);

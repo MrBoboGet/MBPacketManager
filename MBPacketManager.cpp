@@ -1259,14 +1259,15 @@ namespace MBPM
         }
         return(ReturnValue);
     }
-    std::vector<PacketIdentifier> PacketRetriever::p_GetPacketDependancies_DependancyOrder(std::vector<PacketIdentifier> const& InPacketsToCheck,MBError& OutError, std::vector<std::string>* MissingPackets)
+
+    std::vector<PacketIdentifier> PacketRetriever::p_GetPacketDependancies_DependancyOrder(std::vector<PacketIdentifier> const& InPacketsToCheck,MBError& OutError, std::vector<std::string>* MissingPackets,bool IncludeInitial)
     {
         std::vector<PacketIdentifier> ReturnValue;
 
         std::map<std::string, MBPM_PacketDependancyRankInfo> PacketDependancyInfo = p_GetPacketDependancieInfo(InPacketsToCheck, OutError, MissingPackets);
         if(!OutError)
         {
-            return(ReturnValue);   
+            return(ReturnValue);
         }
         std::set<MBPM_PacketDependancyRankInfo> OrderedPackets;
         for (auto const& Packet : PacketDependancyInfo)
@@ -1277,17 +1278,20 @@ namespace MBPM
         {
             bool Continue = false;
             PacketIdentifier NewIdentifier = p_GetInstalledPacket(Packet.PacketName);
-            for (size_t i = 0; i < InPacketsToCheck.size(); i++)
+            if(!IncludeInitial)
             {
-                if (Packet.PacketName == InPacketsToCheck[i].PacketName)
+                for (size_t i = 0; i < InPacketsToCheck.size(); i++)
                 {
-                    Continue = true;
-                    break;
+                    if (Packet.PacketName == InPacketsToCheck[i].PacketName)
+                    {
+                        Continue = true;
+                        break;
+                    }
                 }
-            }
-            if (Continue)
-            {
-                continue;
+                if (Continue)
+                {
+                    continue;
+                }
             }
             ReturnValue.push_back(NewIdentifier);
         }
@@ -1348,7 +1352,18 @@ namespace MBPM
     std::vector<PacketIdentifier> PacketRetriever::GetTotalDependancies(std::vector<std::string> const& Dependancies,MBError& OutError)
     {
         std::vector<PacketIdentifier> ReturnValue;
-        //ReturnValue = p_GetPacketDependancies_DependancyOrder(
+        for(auto const& PacketName : Dependancies)
+        {
+            ReturnValue.push_back(p_GetInstalledPacket(PacketName)); 
+            if(ReturnValue.back().PacketName == "")
+            {
+                OutError = false;
+                OutError.ErrorMessage = "Failed finding installed packet: "+PacketName;   
+                return(ReturnValue);
+            }
+        }
+        std::vector<std::string> MissingPacketes;
+        ReturnValue = p_GetPacketDependancies_DependancyOrder(ReturnValue,OutError,&MissingPacketes,true);
         return(ReturnValue);        
     }
     MBPM_PacketInfo PacketRetriever::GetPacketInfo(PacketIdentifier const& PacketToRetrieve)

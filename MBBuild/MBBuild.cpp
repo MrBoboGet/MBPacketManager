@@ -241,6 +241,7 @@ namespace MBPM
     {
         MBError ReturnValue = true;    
         MBBuildPacketInfo Result;
+        Result.Name = TotalPacketInfo.PacketName;
         if(TotalPacketInfo.TypeInfo.HasAttribute("Attributes"))
         {
             MBParsing::JSONObject const& AttributeObject = TotalPacketInfo.TypeInfo["Attributes"];
@@ -2038,18 +2039,40 @@ namespace MBPM
                     }
                 }
             }
-            std::vector<PacketIdentifier> Dependancies = RetrieverToUse.GetPacketDependancies(Packet,ReturnValue);
+            std::vector<PacketIdentifier> TotalDependancies = RetrieverToUse.GetPacketDependancies(Packet,ReturnValue);
             if(!ReturnValue) return(ReturnValue);
-            std::reverse(Dependancies.begin(),Dependancies.end());
+            std::vector<MBBuildPacketInfo> DependancyBuildInfo;
+            std::string MBPM_IMPORTED_INCLUDE_DIRS = "set(MBPM_IMPORTED_INCLUDE_DIRS\n";
+            for(auto const& Dependancy : TotalDependancies)
+            {
+                MBPM_PacketInfo DependancyInfo = RetrieverToUse.GetPacketInfo(Dependancy);
+                MBBuildPacketInfo DependancyBuild;
+                ReturnValue = ParseMBBuildPacketInfo(DependancyInfo,DependancyBuild);
+                if(!ReturnValue)
+                {
+                    return(ReturnValue);   
+                }
+                for(auto const& LinkDir : DependancyBuild.ExtraIncludeDirectories)
+                {
+                     MBPM_IMPORTED_INCLUDE_DIRS += "    $ENV{MBPM_PACKETS_INSTALL_DIRECTORY}/"+DependancyInfo.PacketName+"/"+LinkDir+"\n";
+                }
+                DependancyBuildInfo.push_back(std::move(DependancyBuild));
+            }
+            MBPM_IMPORTED_INCLUDE_DIRS += ")\n";
+            std::reverse(DependancyBuildInfo.begin(),DependancyBuildInfo.end());
             std::string TotalCmakeData = "";
             TotalCmakeData += "project("+CurrentPacketInfo.PacketName+")\n";
             TotalCmakeData += "set(TOTAL_MBPM_PACKET_LIBRARIES\n";
-            for(PacketIdentifier const& Dependancie : Dependancies)
+            for(MBBuildPacketInfo const& BuildInfo : DependancyBuildInfo)
             {
                 //4 spaces
-                TotalCmakeData += "    $ENV{MBPM_PACKETS_INSTALL_DIRECTORY}/"+Dependancie.PacketName+"/MBPM_Builds/"+DependanciesConfig+"/"+h_GetLibraryName(Dependancie.PacketName)+"\n";
+                for(std::string const& LinkTarget : BuildInfo.DefaultLinkTargets)
+                {
+                    TotalCmakeData += "    $ENV{MBPM_PACKETS_INSTALL_DIRECTORY}/"+BuildInfo.Name+"/MBPM_Builds/"+DependanciesConfig+"/"+h_GetLibraryName(LinkTarget)+"\n";
+                }
             }
             TotalCmakeData += ")\n";
+            TotalCmakeData += MBPM_IMPORTED_INCLUDE_DIRS;
             TotalCmakeData += "set(SYSTEM_LIBRARIES\n";
             if constexpr(MBUtility::IsWindows())
             {
@@ -2121,7 +2144,7 @@ namespace MBPM
                 }
                 TotalCmakeData += ")\n";
                 //TODO add "extra include directories" for packets
-                TotalCmakeData += "target_include_directories("+Target.first+" PRIVATE $ENV{MBPM_PACKETS_INSTALL_DIRECTORY})\n";
+                TotalCmakeData += "target_include_directories("+Target.first+" PRIVATE $ENV{MBPM_PACKETS_INSTALL_DIRECTORY} ${MBPM_IMPORTED_INCLUDE_DIRS})\n";
                 TotalCmakeData += "target_link_libraries("+Target.first+" PRIVATE ${TOTAL_MBPM_PACKET_LIBRARIES} ${SYSTEM_LIBRARIES})\n";
                 TotalCmakeData += "set_target_properties(" + Target.first + " PROPERTIES \n";
                 TotalCmakeData += "ARCHIVE_OUTPUT_DIRECTORY $<1:${CMAKE_CURRENT_SOURCE_DIR}/MBPM_Builds/${CMAKE_BUILD_TYPE}/>\n";
@@ -2158,7 +2181,19 @@ namespace MBPM
             std::vector<std::string> ExtraIncludeDirectories = { MBPM::GetSystemPacketsDirectory() };
             ReturnValue = ParseSourceInfo(SourceInfoPath,LocalSourceInfo);
             if(!ReturnValue) return(ReturnValue);
-
+            std::vector<PacketIdentifier> TotalDependancies = RetrieverToUse.GetTotalDependancies(LocalSourceInfo.ExternalDependancies, ReturnValue);
+            if(!ReturnValue) return(ReturnValue);
+            for(auto const& Dependancy : TotalDependancies)
+            {
+                MBPM_PacketInfo DependancyInfo = RetrieverToUse.GetPacketInfo(Dependancy);
+                MBBuildPacketInfo DependancyBuildInfo;
+                ReturnValue = ParseMBBuildPacketInfo(DependancyInfo,DependancyBuildInfo);
+                if(!ReturnValue) return(ReturnValue);
+                for(std::string const& IncludeDir : DependancyBuildInfo.ExtraIncludeDirectories)
+                {
+                    ExtraIncludeDirectories.push_back(MBPM::GetSystemPacketsDirectory()+Dependancy.PacketName+"/"+IncludeDir);
+                }
+            }
             std::filesystem::path NewFilePath = Packet.PacketURI+"/compile_commands.json";
             if(std::filesystem::exists(NewFilePath))
             {
@@ -2201,7 +2236,7 @@ namespace MBPM
                 //Arguments.push_back("--include-directory="+MBPM::GetSystemPacketsDirectory());
                 for (std::string const& IncludeDirectory : ExtraIncludeDirectories)
                 {
-                    Arguments.push_back("--incldue-directory=" + IncludeDirectory);
+                    Arguments.push_back("--include-directory=" + IncludeDirectory);
                 }
                 NewSource["arguments"] = Arguments;
                 ObjectsToWrite.push_back(std::move(NewSource));
