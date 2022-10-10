@@ -122,7 +122,6 @@ namespace MBPM
         std::string ReturnValue = Data;
         if(ReturnValue == "")
         {
-            
             throw std::runtime_error("invalid value for MBPM_PACKETS_INSTALL_DIRECTORY, empty string");
         }
         if (ReturnValue.back() != '/')
@@ -131,238 +130,7 @@ namespace MBPM
         }
         return(ReturnValue);
     }
-    uint32_t h_GetPacketDepth(std::map<std::string, MBPM_PacketDependancyRankInfo>& PacketInfoToUpdate, std::string const& PacketName, std::vector<std::string>* OutDependancies)
-    {
-        if (PacketInfoToUpdate.find(PacketName) == PacketInfoToUpdate.end())
-        {
-            OutDependancies->push_back(PacketName);
-            return(0);
-        }
-        MBPM_PacketDependancyRankInfo& PacketToEvaluate = PacketInfoToUpdate[PacketName];
-        if (PacketToEvaluate.DependancyDepth != -1)
-        {
-            return(PacketToEvaluate.DependancyDepth);
-        }
-        else
-        {
-            std::vector<std::string>& PacketDependancies = PacketToEvaluate.PacketDependancies;
-            if (PacketDependancies.size() == 0)
-            {
-                PacketToEvaluate.DependancyDepth = 0;
-                return(0);
-            }
-            else
-            {
-                uint32_t DeepestDepth = 0;
-                for (size_t i = 0; i < PacketDependancies.size(); i++)
-                {
-                    uint32_t NewDepth = h_GetPacketDepth(PacketInfoToUpdate, PacketDependancies[i], OutDependancies) + 1;
-                    if (NewDepth > DeepestDepth)
-                    {
-                        DeepestDepth = NewDepth;
-                    }
-                }
-                PacketToEvaluate.DependancyDepth = DeepestDepth;
-                return(DeepestDepth);
-            }
-        }
-    }
-    std::vector<PacketIdentifier> MBPM_ClI::p_GetInstalledPacketsDependancyOrder(std::vector<std::string>* OutDependancies)
-    {
-        std::map<std::string, MBPM_PacketDependancyRankInfo> Packets = {};
-        std::vector<std::string> InstalledPackets = {};
-        std::filesystem::directory_iterator PacketDirectoryIterator = std::filesystem::directory_iterator(p_GetPacketInstallDirectory());
-        for (auto const& Entries : PacketDirectoryIterator)
-        {
-            if (Entries.is_directory())
-            {
-                std::string InfoPath = MBUnicode::PathToUTF8(Entries.path()) + "/MBPM_PacketInfo";
-                if (std::filesystem::exists(InfoPath))
-                {
-                    MBPM::MBPM_PacketInfo PacketInfo = MBPM::ParseMBPM_PacketInfo(InfoPath);
-                    if (PacketInfo.PacketName == "") //kanske ocks� borde asserta att packetens folder �r samma som dess namn
-                    {
-                        continue;
-                    }
-                    MBPM_PacketDependancyRankInfo InfoToAdd;
-                    InfoToAdd.PacketName = PacketInfo.PacketName;
-                    InfoToAdd.PacketDependancies = PacketInfo.PacketDependancies;
-                    InstalledPackets.push_back(InfoToAdd.PacketName);
-                    Packets[PacketInfo.PacketName] = InfoToAdd;
-                }
-            }
-        }
-        std::set<MBPM_PacketDependancyRankInfo> OrderedPackets = {};
-        for (auto const& Packet : InstalledPackets)
-        {
-            Packets[Packet].DependancyDepth = h_GetPacketDepth(Packets, Packet, OutDependancies);
-            OrderedPackets.insert(Packets[Packet]);
-        }
-        std::vector<PacketIdentifier> ReturnValue = {};
-        for (auto const& Packet : OrderedPackets)
-        {
-            PacketIdentifier NewPacket;
-            NewPacket.PacketName = Packet.PacketName;
-            NewPacket.PacketURI = p_GetPacketInstallDirectory() + "/" + Packet.PacketName + "/";
-            NewPacket.PacketLocation = PacketLocationType::Installed;
-            ReturnValue.push_back(std::move(NewPacket));
-        }
-        return(ReturnValue);
-    }
 
-
-    std::map<std::string, MBPM_PacketDependancyRankInfo> MBPM_ClI::p_GetPacketDependancieInfo(
-        std::vector<PacketIdentifier> const& InPacketsToCheck,
-        MBError& OutError,
-        std::vector<std::string>* OutMissing)
-    {
-        std::map<std::string, MBPM_PacketDependancyRankInfo> ReturnValue;
-        std::vector<PacketIdentifier> PacketsToCheck = InPacketsToCheck;
-        std::set<std::string> TotalPacketNames;
-        while (PacketsToCheck.size() > 0)
-        {
-            PacketIdentifier NewPacket = PacketsToCheck.back();
-            PacketsToCheck.pop_back();
-            if (ReturnValue.find(NewPacket.PacketName) != ReturnValue.end())
-            {
-                continue;
-            }
-            MBPM_PacketInfo PacketInfo = p_GetPacketInfo(NewPacket, &OutError);
-            //assert(PacketInfo.PacketName != "");//contract by p_GetPacketInfo
-            if (!OutError)
-            {
-                return(ReturnValue);
-            }
-            //TotalPacketNames.push_back(PacketInfo.PacketName);
-            TotalPacketNames.insert(PacketInfo.PacketName);
-            MBPM_PacketDependancyRankInfo NewDependancyInfo;
-            NewDependancyInfo.PacketName = PacketInfo.PacketName;
-            NewDependancyInfo.PacketDependancies = PacketInfo.PacketDependancies;
-            for (auto const& Dependancy : NewDependancyInfo.PacketDependancies)
-            {
-                if (TotalPacketNames.find(Dependancy) == TotalPacketNames.end())
-                {
-                    PacketIdentifier NewPacketToCheck;
-                    NewPacketToCheck = p_GetInstalledPacket(Dependancy);
-                    if (NewPacketToCheck.PacketName == "")
-                    {
-                        OutMissing->push_back(Dependancy);
-                    }
-                    else
-                    {
-                        TotalPacketNames.insert(Dependancy);
-                        PacketsToCheck.push_back(std::move(NewPacketToCheck));
-                    }
-                }
-            }
-            ReturnValue[NewDependancyInfo.PacketName] = std::move(NewDependancyInfo);
-        }
-        for (auto const& Name : TotalPacketNames)
-        {
-            h_GetPacketDepth(ReturnValue, Name, OutMissing);
-        }
-        if (OutMissing->size() > 0)
-        {
-            OutError = false;
-            OutError.ErrorMessage = "Missing dependancies: ";
-            for (auto const& String : *OutMissing)
-            {
-                OutError.ErrorMessage += String + " ";
-            }
-        }
-        return(ReturnValue);
-    }
-
-    std::vector<PacketIdentifier> MBPM_ClI::p_GetPacketDependants_DependancyOrder(std::vector<PacketIdentifier> const& InPacketsToCheck, MBError& OutError, std::vector<std::string>* MissingPackets)
-    {
-        std::vector<PacketIdentifier> ReturnValue;
-
-        std::vector<PacketIdentifier> TotalDependants = {};
-
-        std::vector<PacketIdentifier> InstalledPackets = p_GetInstalledPackets();
-        std::set<std::string> Dependants;
-        for (size_t i = 0; i < InPacketsToCheck.size(); i++)
-        {
-            Dependants.insert(InPacketsToCheck[i].PacketName);
-        }
-        for (auto const& Packet : InstalledPackets)
-        {
-            MBPM_PacketInfo CurrentPacketInfo = p_GetPacketInfo(Packet, &OutError);
-            if (!OutError)
-            {
-                return(ReturnValue);
-            }
-            for (auto const& Dependancy : CurrentPacketInfo.PacketDependancies)
-            {
-                if (Dependants.find(Dependancy) != Dependants.end())
-                {
-                    TotalDependants.push_back(Packet);
-                    Dependants.insert(Packet.PacketName);
-                    break;
-                }
-            }
-        }
-        std::map<std::string, MBPM_PacketDependancyRankInfo> PacketDependancyInfo = p_GetPacketDependancieInfo(TotalDependants, OutError, MissingPackets);
-        if (!OutError)
-        {
-            return(ReturnValue);
-        }
-        //TODO ineffiecient
-        std::set<MBPM_PacketDependancyRankInfo> DependantsOrder;
-        for (auto const& Packet : TotalDependants)
-        {
-            DependantsOrder.insert(PacketDependancyInfo[Packet.PacketName]);
-        }
-        for (auto const& Packet : DependantsOrder)
-        {
-            ReturnValue.push_back(p_GetInstalledPacket(Packet.PacketName));
-        }
-        return(ReturnValue);
-    }
-    std::vector<PacketIdentifier> MBPM_ClI::p_GetPacketDependancies_DependancyOrder(std::vector<PacketIdentifier> const& InPacketsToCheck,MBError& OutError, std::vector<std::string>* MissingPackets)
-    {
-        std::vector<PacketIdentifier> ReturnValue;
-
-        std::map<std::string, MBPM_PacketDependancyRankInfo> PacketDependancyInfo = p_GetPacketDependancieInfo(InPacketsToCheck, OutError, MissingPackets);
-        std::set<MBPM_PacketDependancyRankInfo> OrderedPackets;
-        for (auto const& Packet : PacketDependancyInfo)
-        {
-            OrderedPackets.insert(Packet.second);
-        }
-        for (auto const& Packet : OrderedPackets)
-        {
-            bool Continue = false;
-            PacketIdentifier NewIdentifier = p_GetInstalledPacket(Packet.PacketName);
-            for (size_t i = 0; i < InPacketsToCheck.size(); i++)
-            {
-                if (Packet.PacketName == InPacketsToCheck[i].PacketName)
-                {
-                    Continue = true;
-                    break;
-                }
-            }
-            if (Continue)
-            {
-                continue;
-            }
-            ReturnValue.push_back(NewIdentifier);
-        }
-        return(ReturnValue);
-    }
-    std::vector<PacketIdentifier> MBPM_ClI::p_UnrollPacketDependancyInfo(std::map<std::string, MBPM_PacketDependancyRankInfo> const& InPackets)
-    {
-        std::vector<PacketIdentifier> ReturnValue;
-        std::set<MBPM_PacketDependancyRankInfo> OrderedPackets;
-        for (auto const& Packet : InPackets)
-        {
-            OrderedPackets.insert(Packet.second);
-        }
-        for (auto const& Packet : OrderedPackets)
-        {
-            ReturnValue.push_back(p_GetInstalledPacket(Packet.PacketName));
-        }
-        return(ReturnValue);
-    }
     std::vector<PacketIdentifier> MBPM_ClI::p_GetInstalledPackets()
     {
         std::vector<PacketIdentifier> ReturnValue = {};
@@ -393,6 +161,7 @@ namespace MBPM
 
         return(ReturnValue);
     }
+
     std::vector<PacketIdentifier> MBPM_ClI::p_GetUserPackets()
     {
         std::vector<PacketIdentifier> ReturnValue = {};
@@ -432,63 +201,6 @@ namespace MBPM
             }
         }
 
-        return(ReturnValue);
-    }
-    PacketIdentifier MBPM_ClI::p_GetInstalledPacket(std::string const& PacketName)
-    {
-        PacketIdentifier ReturnValue;
-        ReturnValue.PacketName = PacketName;
-        ReturnValue.PacketLocation = PacketLocationType::Installed;
-        ReturnValue.PacketURI = p_GetPacketInstallDirectory();
-        if (ReturnValue.PacketURI.back() != '/')
-        {
-            ReturnValue.PacketURI += "/";
-        }
-        if (std::filesystem::exists(ReturnValue.PacketURI + PacketName) && std::filesystem::exists(ReturnValue.PacketURI + PacketName + "/MBPM_PacketInfo"))
-        {
-            ReturnValue.PacketURI = ReturnValue.PacketURI + PacketName + "/";
-        }
-        else
-        {
-            ReturnValue = PacketIdentifier();
-        }
-        return(ReturnValue);
-    }
-    PacketIdentifier MBPM_ClI::p_GetUserPacket(std::string const& PacketName)
-    {
-        //aningn l�ngsamt men walla, har man inte m�nga packets �r det v�l inga problem
-        PacketIdentifier ReturnValue;
-        std::vector<PacketIdentifier> AllUserPackets = p_GetUserPackets();
-        for (size_t i = 0; i < AllUserPackets.size(); i++)
-        {
-            if (AllUserPackets[i].PacketName == PacketName)
-            {
-                ReturnValue = AllUserPackets[i];
-            }
-        }
-        return(ReturnValue);
-    }
-    PacketIdentifier MBPM_ClI::p_GetLocalPacket(std::string const& PacketPath)
-    {
-        PacketIdentifier ReturnValue;
-        if (std::filesystem::exists(PacketPath + "/MBPM_PacketInfo"))
-        {
-            MBPM::MBPM_PacketInfo PacketInfo = MBPM::ParseMBPM_PacketInfo(PacketPath+"/MBPM_PacketInfo");
-            if (PacketInfo.PacketName != "")
-            {
-                ReturnValue.PacketName = PacketInfo.PacketName;
-                ReturnValue.PacketURI = PacketPath;
-                ReturnValue.PacketLocation = PacketLocationType::Local;
-            }
-        }
-        return(ReturnValue);
-    }
-    PacketIdentifier MBPM_ClI::p_GetRemotePacketIdentifier(std::string const& PacketName)
-    {
-        PacketIdentifier ReturnValue;
-        ReturnValue.PacketLocation = PacketLocationType::Remote;
-        ReturnValue.PacketName = PacketName;
-        ReturnValue.PacketURI = "default";
         return(ReturnValue);
     }
     MBPP_PacketHost MBPM_ClI::p_GetDefaultPacketHost()
@@ -581,16 +293,9 @@ namespace MBPM
         //total packet specifiers
         if (CLIInput.CommandOptions.find("allinstalled") != CLIInput.CommandOptions.end())
         {
-            std::vector<std::string> MissingPackets;
-            std::vector<PacketIdentifier> InstalledPackets = p_GetInstalledPacketsDependancyOrder(&MissingPackets);
-            if (MissingPackets.size() > 0)
+            std::vector<PacketIdentifier> InstalledPackets = m_PacketRetriever.GetInstalledPackets(OutError);
+            if(!OutError)
             {
-                OutError = false;
-                OutError.ErrorMessage = "Missing dependancies: ";
-                for (auto const& String : MissingPackets)
-                {
-                    OutError.ErrorMessage += String + " ";
-                }
                 return(ReturnValue);
             }
             for (size_t i = 0; i < InstalledPackets.size(); i++)
@@ -612,32 +317,20 @@ namespace MBPM
         {
             PacketModifiers += 1;
             std::vector<std::string> MissingPackets;
-            ReturnValue = p_GetPacketDependants_DependancyOrder(ReturnValue,OutError, &MissingPackets);
-            if (MissingPackets.size() != 0)
+            ReturnValue = m_PacketRetriever.GetPacketsDependancies(ReturnValue,OutError);
+            if(!OutError)
             {
-                OutError = false;
-                OutError.ErrorMessage = "Missing packet dependancies: ";
-                for (auto const& Packet : MissingPackets)
-                {
-                    OutError.ErrorMessage += Packet + " ";
-                }
-                return(ReturnValue);
+                return(ReturnValue);   
             }
         }
         if (CLIInput.CommandOptions.find("dependancies") != CLIInput.CommandOptions.end())
         {
             PacketModifiers += 1;
             std::vector<std::string> MissingPackets;
-            ReturnValue = p_GetPacketDependancies_DependancyOrder(ReturnValue,OutError,&MissingPackets);
-            if (MissingPackets.size() != 0)
+            ReturnValue = m_PacketRetriever.GetPacketsDependees(ReturnValue,OutError);
+            if(!OutError)
             {
-                OutError = false;
-                OutError.ErrorMessage = "Missing packet dependancies: ";
-                for (auto const& Packet : MissingPackets)
-                {
-                    OutError.ErrorMessage += Packet+ " ";
-                }
-                return(ReturnValue);
+                return(ReturnValue);   
             }
         }
         if (PacketModifiers > 1)
@@ -667,7 +360,7 @@ namespace MBPM
             {
                 bool PacketHasPositiveAttribute = PositiveAttributeFilters.size() > 0 ? false : true; 
                 bool PacketHasNegativeAttribute = false;
-                MBPM_PacketInfo CurrentPacketInfo = p_GetPacketInfo(Packet,&OutError);
+                MBPM_PacketInfo CurrentPacketInfo = m_PacketRetriever.GetPacketInfo(Packet);
                 if(!OutError)
                 {
                     return(ReturnValue);
@@ -755,53 +448,25 @@ namespace MBPM
         }
         if (Type == PacketLocationType::Local || IsLocalPath)
         {
-            ReturnValue = p_GetLocalPacket(PacketName);
-            if (ReturnValue.PacketName == "")
-            {
-                OutError = false;
-                OutError.ErrorMessage = "Couldn't find local packet: " + PacketName;
-                return ReturnValue;
-            }
+            ReturnValue = m_PacketRetriever.GetLocalpacket(PacketName,OutError);
         }
         else if (Type == PacketLocationType::User)
         {
-            ReturnValue = p_GetUserPacket(PacketName);
-            if (ReturnValue.PacketName == "")
-            {
-                OutError = false;
-                OutError.ErrorMessage = "Couldn't find user packet: " + PacketName;
-                return ReturnValue;
-            }
+            ReturnValue = m_PacketRetriever.GetUserPacket(PacketName,OutError);
         }
         else if (Type == PacketLocationType::Installed)
         {
-            ReturnValue = p_GetInstalledPacket(PacketName);
-            if (ReturnValue.PacketName == "")
-            {
-                OutError = false;
-                OutError.ErrorMessage = "Couldn't find installed packet: " + PacketName;
-                return ReturnValue;
-            }
+            ReturnValue = m_PacketRetriever.GetInstalledPacket(PacketName,OutError);
         }
         else if (Type == PacketLocationType::Remote)
         {
-            ReturnValue = p_GetRemotePacketIdentifier(PacketName);
-            if (ReturnValue.PacketName == "")
-            {
-                OutError = false;
-                OutError.ErrorMessage = "Couldn't find remote packet: " + PacketName;
-                return ReturnValue;
-            }
+            ReturnValue.PacketLocation = PacketLocationType::Remote;
+            ReturnValue.PacketName = PacketName;
+            ReturnValue.PacketURI = "default";
         }
         else if (Type == PacketLocationType::Local)
         {
-            ReturnValue = p_GetLocalPacket(PacketName);
-            if (ReturnValue.PacketName == "")
-            {
-                OutError = false;
-                OutError.ErrorMessage = "Couldn't find local packet: " + PacketName;
-                return ReturnValue;
-            }
+            ReturnValue = m_PacketRetriever.GetLocalpacket(PacketName,OutError);
         }
         else
         {
@@ -819,7 +484,11 @@ namespace MBPM
     MBPM::MBPP_FileInfoReader MBPM_ClI::i_GetInstalledFileInfo(std::string const& InstalledPacket,MBError* OutError)
     {
         MBPM::MBPP_FileInfoReader ReturnValue;
-        std::string PacketDirectory = p_GetInstalledPacket(InstalledPacket).PacketURI;
+        std::string PacketDirectory = m_PacketRetriever.GetInstalledPacket(InstalledPacket,*OutError).PacketURI;
+        if(!*OutError)
+        {
+            return(ReturnValue);
+        }
         if (PacketDirectory == "" || !std::filesystem::exists(PacketDirectory + "/MBPM_FileInfo"))
         {
             *OutError = false;
@@ -868,72 +537,6 @@ namespace MBPM
             OutError->ErrorMessage = "Couldn't find user packet";
         }
         return(ReturnValue);
-    }
-    MBPM::MBPM_PacketInfo MBPM_ClI::p_GetPacketInfo(PacketIdentifier const& PacketToInspect, MBError* OutError)
-    {
-        MBPM::MBPM_PacketInfo ReturnValue;
-        MBError Error = true;
-        if (PacketToInspect.PacketLocation == PacketLocationType::Installed)
-        {
-            std::string CurrentURI = PacketToInspect.PacketURI;
-            if (CurrentURI == "")
-            {
-                CurrentURI = p_GetPacketInstallDirectory() + "/" + PacketToInspect.PacketName+"/";
-            }
-            if (std::filesystem::exists(CurrentURI + "/MBPM_PacketInfo") && std::filesystem::is_regular_file(CurrentURI + "/MBPM_PacketInfo"))
-            {
-                ReturnValue = MBPM::ParseMBPM_PacketInfo(CurrentURI + "/MBPM_PacketInfo");
-            }
-            else
-            {
-                Error = false;
-                Error.ErrorMessage = "Can't find user packet";
-            }
-        }
-        else if (PacketToInspect.PacketLocation == PacketLocationType::Remote)
-        {
-            Error = false;
-            //TODO att implementera
-            Error.ErrorMessage = "Packet info of remote packet not implemented yet xd";
-        }
-        else if (PacketToInspect.PacketLocation == PacketLocationType::Local)
-        {
-            if (std::filesystem::exists(PacketToInspect.PacketURI + "/MBPM_PacketInfo") && std::filesystem::is_regular_file(PacketToInspect.PacketURI + "/MBPM_PacketInfo"))
-            {
-                ReturnValue = MBPM::ParseMBPM_PacketInfo(PacketToInspect.PacketURI + "/MBPM_PacketInfo");
-            }
-            else
-            {
-                Error = false;
-                Error.ErrorMessage = "Can't find user packet";
-            }
-        }
-        else if (PacketToInspect.PacketLocation == PacketLocationType::User)
-        {
-            if (std::filesystem::exists(PacketToInspect.PacketURI + "/MBPM_PacketInfo") && std::filesystem::is_regular_file(PacketToInspect.PacketURI + "/MBPM_PacketInfo"))
-            {
-                ReturnValue = MBPM::ParseMBPM_PacketInfo(PacketToInspect.PacketURI + "/MBPM_PacketInfo");
-            }
-            else
-            {
-                Error = false;
-                Error.ErrorMessage = "Can't find user packet";
-            }
-        }
-        if(ReturnValue.PacketName == "")
-        {
-            Error = false;
-            Error.ErrorMessage = "Failed parsing MBPM_PacketInfo for packet "+PacketToInspect.PacketName;   
-        }
-        if (!Error && OutError != nullptr)
-        {
-            *OutError = std::move(Error);
-        }
-        return(ReturnValue);
-    }
-    bool MBPM_ClI::p_PacketExists(PacketIdentifier const& PacketToCheck)
-    {
-        return(p_GetPacketInfo(PacketToCheck, nullptr).PacketName != "");
     }
     MBPM::MBPP_FileInfoReader MBPM_ClI::p_GetPacketFileInfo(PacketIdentifier const& PacketToInspect, MBError* OutError)
     {
@@ -1302,17 +905,6 @@ namespace MBPM
             }
             AlreadyInstalledPackets.insert(CurrentPacket);
         }
-        while (NewPacketsToCompile.size() > 0)
-        {
-            //std::string CurrentPacket = NewPacketsToCompile.top();
-            //NewPacketsToCompile.pop();
-            //MBError IsPrecompiledError = true;
-            //if (MBPM::PacketIsPrecompiled(InstallDirectory + CurrentPacket + "/",&IsPrecompiledError))
-            //{
-            //    continue;
-            //}
-            //p_CompilePacket(InstallDirectory + CurrentPacket + "/");
-        }
         return ReturnValue;
     }
     int MBPM_ClI::p_HandleGet(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
@@ -1340,20 +932,6 @@ namespace MBPM
             //implicit att det �r remote packet
             RemotePacket = true;
         }
-        //std::string ObjectToGet = CommandInput.TopCommandArguments[1];
-        //m_ClientToUse.Connect(p_GetDefaultPacketHost());
-        //if (!m_ClientToUse.IsConnected())
-        //{
-        //    AssociatedTerminal->PrintLine("Couldn't establish connection so server");
-        //    return;
-        //}
-        //MBError GetPacketError = true;
-        //MBPP_FileInfoReader PacketFileInfo = m_ClientToUse.GetPacketFileInfo(PacketName,&GetPacketError);
-        //if (!GetPacketError)
-        //{
-        //    AssociatedTerminal->PrintLine("get failed with error: " + GetPacketError.ErrorMessage);
-        //    return;
-        //}
         bool PrintToStdout = false;
         bool DownloadLocally = true;
         std::string OutputDirectory = "./";
@@ -1439,26 +1017,26 @@ namespace MBPM
         else
         {
             std::string PacketDirectory = "";
+            MBError Result = true;
             if (LocalPacket)
             {
                 PacketDirectory = CommandInput.TopCommandArguments[0];
             }
             else if (UserPacket)
             {
-                PacketIdentifier CurrentPacket = p_GetUserPacket(CommandInput.TopCommandArguments[0]);
+                PacketIdentifier CurrentPacket = m_PacketRetriever.GetUserPacket(CommandInput.TopCommandArguments[0],Result);
                 PacketDirectory = CurrentPacket.PacketURI;
             }
             else if(InstalledPacket)
             {
-                PacketIdentifier CurrentPacket = p_GetInstalledPacket(CommandInput.TopCommandArguments[0]);
+                PacketIdentifier CurrentPacket = m_PacketRetriever.GetUserPacket(CommandInput.TopCommandArguments[0],Result);
                 PacketDirectory = CurrentPacket.PacketURI;
             }
-            if (PacketDirectory == "")
+            if(!Result)
             {
-                AssociatedTerminal->PrintLine("Failed to find packet");
-                return 1;
+                AssociatedTerminal->PrintLine("Failed retrieving packet to download from: "+Result.ErrorMessage);   
+                return(1);
             }
-            MBError Result = true;
             if (CommandInput.CommandOptions.find("path") != CommandInput.CommandOptions.end())
             {
                 //a absolute packet path always begins with /
@@ -1619,11 +1197,6 @@ namespace MBPM
         bool UseDirectPath = false;
         for (size_t i = 0; i < PacketsToUpload.size(); i++)
         {
-            if (!p_PacketExists(PacketsToUpload[i]))
-            {
-                FailedPackets.push_back(std::pair<std::string,std::string>(PacketsToUpload[i].PacketName, "Invalid user packet to upload, packet doesnt exist or no MBPM_PacketInfo in directory"));
-                continue;
-            }
             std::string PacketInstallPath = InstalledPacketsDirectory + PacketsToUpload[i].PacketName + "/";
             if (std::filesystem::exists(PacketInstallPath) == false)
             {
@@ -2225,15 +1798,17 @@ namespace MBPM
             }
             else if (CommandInput.CommandOptions.find("installed") != CommandInput.CommandOptions.end())
             {
-                std::string PacketDirectory = p_GetInstalledPacket(CommandInput.TopCommandArguments[1]).PacketURI;
-                if (PacketDirectory == "")
+                //std::string PacketDirectory = p_GetInstalledPacket(CommandInput.TopCommandArguments[1]).PacketURI;
+                MBError Result = true;
+                PacketIdentifier InstalledPacket = m_PacketRetriever.GetInstalledPacket(CommandInput.TopCommandArguments[1],Result);
+                if(!Result)
                 {
-                    AssociatedTerminal->PrintLine("packet \"" + CommandInput.TopCommandArguments[1] + "\" not installed");
-                    return 1;
+                    AssociatedTerminal->PrintLine("Error reading installed packet: "+Result.ErrorMessage);
+                    return(1);
                 }
                 else
                 {
-                    std::string FilePath = PacketDirectory + "MBPM_FileInfo";
+                    std::string FilePath = InstalledPacket.PacketURI+"/" + "MBPM_FileInfo";
                     if (std::filesystem::exists(FilePath) && std::filesystem::directory_entry(FilePath).is_regular_file())
                     {
                         InfoToPrint = MBPM::MBPP_FileInfoReader(FilePath);
@@ -2247,7 +1822,14 @@ namespace MBPM
             }
             else if (CommandInput.CommandOptions.find("user") != CommandInput.CommandOptions.end())
             {
-                PacketIdentifier UserPacket = p_GetUserPacket(CommandInput.TopCommandArguments[1]);
+                MBError Result = true;
+                //PacketIdentifier UserPacket = p_GetUserPacket(CommandInput.TopCommandArguments[1]);
+                PacketIdentifier UserPacket = m_PacketRetriever.GetUserPacket(CommandInput.TopCommandArguments[1],Result);
+                if(!Result)
+                {
+                    AssociatedTerminal->PrintLine("Error reading user packet: "+Result.ErrorMessage);
+                    return(1);
+                }
                 if (UserPacket.PacketName != "")
                 {
                     InfoToPrint = p_GetPacketFileInfo(UserPacket,nullptr);
@@ -2293,70 +1875,19 @@ namespace MBPM
         }
         else if (CommandInput.TopCommandArguments[0] == "diff")
         {
-            //tv� str�ngar som b�da leder till en MBPM_FileInfo
-            std::vector<std::pair<PacketIdentifier,int>> PacketsToDiff = {};
-            std::vector<std::pair<std::string, int>> LocalPacketsSpecifiers = CommandInput.GetSingleArgumentOptionList("p");
-            std::vector<std::pair<std::string, int>> RemotePacketsSpecifiers = CommandInput.GetSingleArgumentOptionList("r");
-            std::vector<std::pair<std::string, int>> InstalledPacketsSpecifiers = CommandInput.GetSingleArgumentOptionList("i");
-            std::vector<std::pair<std::string, int>> UserPacketsSpecifiers = CommandInput.GetSingleArgumentOptionList("u");
-            int TotalPacketsSpecifiers = LocalPacketsSpecifiers.size() + RemotePacketsSpecifiers.size() + InstalledPacketsSpecifiers.size() + UserPacketsSpecifiers.size();
-            if (TotalPacketsSpecifiers > 2)
-            {
-                AssociatedTerminal->PrintLine("To many files supplied");
-                return 1;
-            }
-            else if (TotalPacketsSpecifiers < 2)
-            {
-                AssociatedTerminal->PrintLine("Command requires exactly 2 packets");
-                return 1;
-            }
-            for (size_t i = 0; i < LocalPacketsSpecifiers.size(); i++)
-            {
-                PacketIdentifier NewPacket = p_GetLocalPacket(LocalPacketsSpecifiers[i].first);
-                if (NewPacket.PacketName == "")
-                {
-                    AssociatedTerminal->PrintLine("Couldn't find local packet at path \"" + LocalPacketsSpecifiers[i].first + "\"");
-                    return 1;
-                }
-                PacketsToDiff.push_back({ NewPacket,LocalPacketsSpecifiers[i].second });
-            }
-            for (size_t i = 0; i < InstalledPacketsSpecifiers.size(); i++)
-            {
-                PacketIdentifier NewPacket = p_GetInstalledPacket(InstalledPacketsSpecifiers[i].first);
-                if (NewPacket.PacketName == "")
-                {
-                    AssociatedTerminal->PrintLine("Couldn't find installed packet \"" + InstalledPacketsSpecifiers[i].first + "\"");
-                    return 1;
-                }
-                PacketsToDiff.push_back({ NewPacket,InstalledPacketsSpecifiers[i].second });
-            }
-            for (size_t i = 0; i < UserPacketsSpecifiers.size(); i++)
-            {
-                PacketIdentifier NewPacket = p_GetUserPacket(UserPacketsSpecifiers[i].first);
-                if (NewPacket.PacketName == "")
-                {
-                    AssociatedTerminal->PrintLine("Couldn't find user packet \"" + UserPacketsSpecifiers[i].first + "\"");
-                    return 1;
-                }
-                PacketsToDiff.push_back({ NewPacket,UserPacketsSpecifiers[i].second });
-            }
-            for (size_t i = 0; i < RemotePacketsSpecifiers.size(); i++)
-            {
-                PacketIdentifier NewPacket = p_GetRemotePacketIdentifier(RemotePacketsSpecifiers[i].first);
-                PacketsToDiff.push_back({ NewPacket,RemotePacketsSpecifiers[i].second });
-            }
-            if (PacketsToDiff[0].second > PacketsToDiff[1].second)
-            {
-                std::swap(PacketsToDiff[0], PacketsToDiff[1]);
-            }
             MBError GetFileInfoError = true;
-            MBPM::MBPP_FileInfoReader ClientFileInfo = p_GetPacketFileInfo(PacketsToDiff[0].first,&GetFileInfoError);
+            std::vector<PacketIdentifier> PacketsToDiff = p_GetCommandPackets(CommandInput,PacketLocationType::Installed,GetFileInfoError,1);
+            if(PacketsToDiff.size() > 0)
+            {
+                AssociatedTerminal->PrintLine("To many packets in packet specification: only need client and server packet");    
+            }
+            MBPM::MBPP_FileInfoReader ClientFileInfo = p_GetPacketFileInfo(PacketsToDiff[0],&GetFileInfoError);
             if (!GetFileInfoError)
             {
                 AssociatedTerminal->PrintLine("Error retrieving FileInfo: "+GetFileInfoError.ErrorMessage);
                 return 1;
             }
-            MBPM::MBPP_FileInfoReader ServerFileInfo = p_GetPacketFileInfo(PacketsToDiff[1].first,&GetFileInfoError);
+            MBPM::MBPP_FileInfoReader ServerFileInfo = p_GetPacketFileInfo(PacketsToDiff[1],&GetFileInfoError);
             if (!GetFileInfoError)
             {
                 AssociatedTerminal->PrintLine("Error retrieving FileInfo: " + GetFileInfoError.ErrorMessage);
@@ -2393,451 +1924,6 @@ namespace MBPM
         }
         return(ReturnValue);
     }
-    //Unused
-    int MBPM_ClI::p_HandleCompile(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
-    {
-        int ReturnValue = 0;
-        MBError ParseError = true;
-        std::vector<PacketIdentifier> PacketDirectories = p_GetCommandPackets(CommandInput, PacketLocationType::Installed, ParseError);
-        if (!ParseError)
-        {
-            AssociatedTerminal->PrintLine("Error retrieving command packets: " + ParseError.ErrorMessage);
-            return 1;
-        }
-        if (CommandInput.CommandOptions.find("cmake") != CommandInput.CommandOptions.end())
-        {
-            bool UpdateCmake = true;
-            bool CompileCmake = false;
-            bool OverwriteAll = false;
-            if (CommandInput.CommandOptions.find("create") != CommandInput.CommandOptions.end())
-            {
-                CompileCmake = true;
-            }
-            if (CommandInput.CommandOptions.find("update") != CommandInput.CommandOptions.end())
-            {
-                UpdateCmake = true;
-            }
-            //b�rjar med compile sen update
-            for (size_t i = 0; i < PacketDirectories.size(); i++)
-            {
-                std::string CurrentDirectory = PacketDirectories[i].PacketURI;
-                if (std::filesystem::exists(CurrentDirectory + "MBPM_PacketInfo"))
-                {
-                    MBPM::MBPM_PacketInfo CurrentPacket = MBPM::ParseMBPM_PacketInfo(CurrentDirectory + "MBPM_PacketInfo");
-                    //if (CurrentPacket.Attributes.find(MBPM::MBPM_PacketAttribute::NonMBBuild) != CurrentPacket.Attributes.end())
-                    //{
-                    //    //icke mb builds borde varken uppdateras eller skapas
-                    //    continue;
-                    //}
-                }
-                if (CompileCmake)
-                {
-                    bool OverWrite = true;
-                    if (std::filesystem::exists(CurrentDirectory + "/CMakeLists.txt") && !OverwriteAll)
-                    {
-                        AssociatedTerminal->PrintLine("Packet at location " + CurrentDirectory + " already has a CMakeLists.txt. Do you want to overwrite it? [y/n/overwriteall]");
-                        std::string UserResponse = "";
-                        while (true)
-                        {
-                            AssociatedTerminal->GetLine(UserResponse);
-                            if (UserResponse == "y")
-                            {
-                                OverWrite = true;
-                                break;
-                            }
-                            else if (UserResponse == "n")
-                            {
-                                OverWrite = false;
-                                break;
-                            }
-                            else if (UserResponse == "overwriteall")
-                            {
-                                OverwriteAll = true;
-                                break;
-                            }
-                            else
-                            {
-                                AssociatedTerminal->PrintLine("Invalid response \"" + UserResponse + "\"");
-                            }
-                        }
-                    }
-                    if (OverWrite || OverwriteAll)
-                    {
-                        //MBError CreateResult = p_CreateCmake(CurrentDirectory);
-                        //if (!CreateResult)
-                        //{
-                        //    AssociatedTerminal->PrintLine("Failed creating CMake for \"" + CurrentDirectory + "\": " + CreateResult.ErrorMessage);
-                        //}
-                    }
-                }
-                if (UpdateCmake)
-                {
-                    //MBError UpdateResult = p_UpdateCmake(CurrentDirectory, MBPMStaticData);//ska om packetet f�ljer MBPM standard inte p�verka packetet
-                    //if (!UpdateResult)
-                    //{
-                    //    AssociatedTerminal->PrintLine("Failed updating CMake for \"" + CurrentDirectory + "\": " + UpdateResult.ErrorMessage);
-                    //}
-                }
-            }
-        }
-        else if (CommandInput.CommandOptions.find("index") != CommandInput.CommandOptions.end())
-        {
-            std::vector<PacketIdentifier> InstalledPackets = p_GetInstalledPackets();
-            std::vector<MBParsing::JSONObject> AggregatedInfo;
-            for (auto const& Packet : InstalledPackets)
-            {
-                MBError CurrentPacketInfoResult = true;
-                MBPM_PacketInfo CurrentPacketInfo = p_GetPacketInfo(Packet,&CurrentPacketInfoResult);
-                if (!CurrentPacketInfoResult)
-                {
-                    AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::Yellow);
-                    AssociatedTerminal->PrintLine("WARNING: Error reading info for packet " + Packet.PacketName + ", "+CurrentPacketInfoResult.ErrorMessage);
-                    AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::White);
-                    continue;
-                }
-                //if (CurrentPacketInfo.Attributes.find(MBPM_PacketAttribute::NonMBBuild) != CurrentPacketInfo.Attributes.end())
-                //{
-                //    continue;
-                //}
-                if (!std::filesystem::exists(Packet.PacketURI + "/compile_commands.json") || std::filesystem::is_directory(Packet.PacketURI + "/compile_commands.json"))
-                {
-                    AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::Yellow);
-                    AssociatedTerminal->PrintLine("WARNING: packet " + Packet.PacketName + " has no compile_commands.json, skipping it");
-                    AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::White);
-                    continue;
-                }
-                std::string JsonData = MBUtility::ReadWholeFile(Packet.PacketURI + "/compile_commands.json");
-                MBError ParseError = true;
-                MBParsing::JSONObject PacketCompileCommands = MBParsing::ParseJSONObject(JsonData, 0, nullptr, &ParseError);
-                if (!ParseError)
-                {
-                    AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::Yellow);
-                    AssociatedTerminal->PrintLine("WARNING: Error parsing compile_commands.json for packet "+Packet.PacketName+": "+ParseError.ErrorMessage + ", skipping it");
-                    AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::White);
-                    continue;
-                }
-                try
-                {
-                    auto& CompileUnits = PacketCompileCommands.GetArrayData();
-                    for (MBParsing::JSONObject& TranslationUnit : CompileUnits)
-                    {
-                        AggregatedInfo.push_back(std::move(TranslationUnit));
-                    }
-                }
-                catch (std::exception const& e)
-                {
-                    AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::Yellow);
-                    AssociatedTerminal->PrintLine("WARNING: invalid compile_commands.json for packet "+Packet.PacketName+", skipping it");
-                    AssociatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::White);
-                    continue;
-                }
-            }
-            std::string InstallDirectory = p_GetPacketInstallDirectory();
-            std::ofstream AggregateOutput = std::ofstream(InstallDirectory + "/compile_commands.json");
-            if (AggregateOutput.is_open() == false)
-            {
-                AssociatedTerminal->PrintLine("Error opening output for aggregate compile info");
-                return 1;
-            }
-            MBParsing::JSONObject TotalInfo = std::move(AggregatedInfo);
-            AggregateOutput << TotalInfo.ToString();
-            AggregateOutput.flush();
-            AggregateOutput.close();
-            int IndexResult = std::system(("clangd-indexer --executor=all-TUs " + InstallDirectory + "/compile_commands.json > "+InstallDirectory+"/InstallIndex.dex").c_str());
-            if (IndexResult != 0)
-            {
-                AssociatedTerminal->PrintLine("Error creating total index");
-            }
-            else
-            {
-                AssociatedTerminal->PrintLine("Successfully created total install index");
-            }
-        }
-        else if(CommandInput.CommandOptions.find("sourceinfo") != CommandInput.CommandOptions.end())
-        {
-            
-        }
-        else if (CommandInput.CommandOptions.find("compilecommands") != CommandInput.CommandOptions.end())
-        {
-        }
-        else
-        {
-            //nu ska vi faktiskt ta och kompilera packetsen
-            std::vector<std::pair<std::string,std::string>> FailedCompiles = {};
-            for (size_t i = 0; i < PacketDirectories.size(); i++)
-            {
-                bool MBBuild = true;
-                //if (std::filesystem::exists(PacketDirectories[i] + "MBPM_PacketInfo"))
-                if (p_PacketExists(PacketDirectories[i]))
-                {
-                    //MBPM::MBPM_PacketInfo CurrentPacket = MBPM::ParseMBPM_PacketInfo(PacketDirectories[i] + "MBPM_PacketInfo");
-                    MBPM::MBPM_PacketInfo CurrentPacket = p_GetPacketInfo(PacketDirectories[i],nullptr);
-                    //if (CurrentPacket.Attributes.find(MBPM::MBPM_PacketAttribute::NonMBBuild) != CurrentPacket.Attributes.end())
-                    //{
-                    //    //icke mb builds borde varken uppdateras eller skapas
-                    //    if (!std::filesystem::exists(PacketDirectories[i].PacketURI + "/MBPM_CompileInfo.json"))
-                    //    {
-                    //        continue;
-                    //    }
-                    //    else
-                    //    {
-                    //        MBBuild = false;
-                    //    }
-                    //}
-                }
-                MBError CompilationError = true;
-                if (MBBuild)
-                {
-            //        CompilationError = p_UpdateCmake(PacketDirectories[i].PacketURI, MBPMStaticData);
-                }
-                if (CompilationError)
-                {
-                //     CompilationError = p_CompilePacket(PacketDirectories[i],AssociatedTerminal,CommandInput);
-                }
-                if (!CompilationError)
-                {
-                    FailedCompiles.push_back(std::pair<std::string,std::string>(PacketDirectories[i].PacketURI,CompilationError.ErrorMessage));
-                }
-            }
-            if (FailedCompiles.size() > 0)
-            {
-                AssociatedTerminal->PrintLine("Failed building following packets:");
-                for (size_t i = 0; i < FailedCompiles.size(); i++)
-                {
-                    AssociatedTerminal->Print(FailedCompiles[i].first);
-                    if (FailedCompiles[i].second != "")
-                    {
-                        AssociatedTerminal->PrintLine(" : " + FailedCompiles[i].second);
-                    }
-                    else
-                    {
-                        AssociatedTerminal->PrintLine("");
-                    }
-                }
-                std::exit(1);
-            }
-            else
-            {
-                AssociatedTerminal->PrintLine("All builds successful!");
-            }
-        }
-        return(ReturnValue);
-    }
-    //unused
-    int MBPM_ClI::p_HandleCreate(MBCLI::ProcessedCLInput const& CommandInput,MBCLI::MBTerminal* AssociatedTerminal)
-    {
-        int ReturnValue = 0;
-        MBError PacketListError = true;
-        std::vector<PacketIdentifier> PacketList = p_GetCommandPackets(CommandInput, PacketLocationType::Installed, PacketListError,1);
-        if (!PacketListError)
-        {
-            AssociatedTerminal->PrintLine("Error retrieving command packets: " + PacketListError.ErrorMessage);
-            std::exit(1);
-        }
-        if(CommandInput.TopCommandArguments.size() == 0)
-        {
-            AssociatedTerminal->PrintLine("create top command needs the filetype to create as the first argument"); 
-            std::exit(1);
-        }
-        //Verify no remote
-        for(auto const& Packet : PacketList)
-        {
-            if(Packet.PacketLocation == PacketLocationType::Remote)
-            {
-                AssociatedTerminal->PrintLine("Can't execute create command on remote packet");
-                std::exit(1);
-            } 
-        }
-        std::string PacketTypeToCreate = CommandInput.TopCommandArguments[0];
-        if(PacketTypeToCreate == "packetinfo")
-        {
-            //Creates empty pakcet info, convenience    
-             
-        }
-        return ReturnValue;
-    }
-    //MBError MBPM_ClI::p_CompilePacket(PacketIdentifier const& Identifier,MBCLI::MBTerminal* AssoicatedTerminal,MBCLI::ProcessedCLInput const& Command)
-    //{
-    //    MBError ReturnValue = true;
-    //    if(Identifier.PacketLocation == PacketLocationType::Remote)
-    //    {
-    //        ReturnValue = false;
-    //        ReturnValue.ErrorMessage = "Invalid packet type, can't compile remote packet"; 
-    //        return(ReturnValue);
-    //    }
-    //    MBPM_PacketInfo PacketInfo = p_GetPacketInfo(Identifier, &ReturnValue);
-    //    if (!ReturnValue) return(ReturnValue);
-    //    if (PacketInfo.Type != PacketType::CPP)
-    //    {
-    //        ReturnValue = false;
-    //        ReturnValue.ErrorMessage = "Only C++ packets are currently supported for compilation";
-    //        return(ReturnValue);
-    //    }
-    //    std::error_code FSError;
-    //    if(std::filesystem::exists( Identifier.PacketURI+"/MBSourceInfo.json",FSError))
-    //    {
-    //        std::vector<std::string> TargetsToCompile = {};//Default
-    //        for (auto const& SpecifiedTargets : Command.GetSingleArgumentOptionList("t")) 
-    //        {
-    //            TargetsToCompile.push_back(SpecifiedTargets.first);
-    //        }
-    //        std::vector<std::string> ConfigurationsToCompile = {};
-    //        for (auto const& SpecifiedConfigurations : Command.GetSingleArgumentOptionList("c")) 
-    //        {
-    //            ConfigurationsToCompile.push_back(SpecifiedConfigurations.first);
-    //        }
-    //        PacketRetriever NewRetriever;
-    //        MBBuild::MBBuildCLI Builder(&NewRetriever);
-    //        ReturnValue = Builder.BuildPacket(Identifier.PacketURI, ConfigurationsToCompile, TargetsToCompile);
-    //        //ReturnValue = MBBuild::CompileMBBuild(std::filesystem::path(Identifier.PacketURI),TargetsToCompile,ConfigurationsToCompile, p_GetPacketInstallDirectory(),MBBuild::MBBuildCompileFlags(0));
-    //        if (ReturnValue)
-    //        {
-    //            //Export the compiled executables
-    //            MBBuild::UserConfigurationsInfo UserInfo;
-    //            ReturnValue = MBBuild::ParseUserConfigurationInfo(p_GetPacketInstallDirectory() + "/MBCompileConfigurations.json", UserInfo);
-    //            if (!ReturnValue) return(ReturnValue);
-    //            MBBuild::SourceInfo CompiledSource;
-    //            if (!ReturnValue) return(ReturnValue);
-    //            ReturnValue = MBBuild::ParseSourceInfo(Identifier.PacketURI+"/MBSourceInfo.json", CompiledSource);
-    //            if (!ReturnValue) return(ReturnValue);
-    //            std::filesystem::path ExportedExecutablesPath = p_GetPacketInstallDirectory() + "/MBPM_ExportedExecutables/";
-    //            if (!std::filesystem::exists(ExportedExecutablesPath))
-    //            {
-    //                std::filesystem::create_directories(ExportedExecutablesPath);
-    //            }
-    //            for (std::string const& Executable : PacketInfo.ExportedTargets)
-    //            {
-    //                std::string ExecutableName = Executable;
-    //                if constexpr (MBUtility::IsWindows())
-    //                {
-    //                    ExecutableName += ".exe";
-    //                }
-    //                std::filesystem::path ExecutablePath = Identifier.PacketURI + "/MBPM_Builds/" + UserInfo.Configurations[CompiledSource.Language].DefaultExportConfig+"/"+ExecutableName;
-    //                if (!std::filesystem::exists(ExecutablePath))
-    //                {
-    //                    //AssociatedTerminal
-    //                    AssoicatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::Yellow);
-    //                    AssoicatedTerminal->PrintLine("Exported executable not found in " + UserInfo.Configurations[CompiledSource.Language].DefaultExportConfig+", skipping export");
-    //                    AssoicatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::White);
-    //                    continue;
-    //                }
-    //                std::filesystem::path SymlinkPath = ExportedExecutablesPath/ExecutableName;
-    //                if (std::filesystem::is_symlink(SymlinkPath))
-    //                {
-    //                    std::filesystem::remove(SymlinkPath);
-    //                }
-    //                std::filesystem::create_symlink(ExecutablePath, SymlinkPath);
-    //            }
-    //        }
-    //    }
-    //    else
-    //    {
-    //        if (PacketInfo.Attributes.find(MBPM_PacketAttribute::NonMBBuild) == PacketInfo.Attributes.end())
-    //        {
-    //            if (!std::filesystem::is_regular_file(Identifier.PacketURI + "/CMakeLists.txt"))
-    //            {
-    //                ReturnValue = false;
-    //                ReturnValue.ErrorMessage = "Missing CMakeLists.txt for MBBuild without MBSourceInfo.json";
-    //                return(ReturnValue);
-    //            }
-    //            //Tar och kompilerar
-    //            MBBuild::UserConfigurationsInfo UserInfo;
-    //            ReturnValue = MBBuild::ParseUserConfigurationInfo(p_GetPacketInstallDirectory() + "/MBCompileConfigurations.json", UserInfo);
-    //            if (!ReturnValue) return(ReturnValue);
-    //            //OBS implicitly assumes that the code is C++
-    //            if (UserInfo.Configurations.find("C++") == UserInfo.Configurations.end()) 
-    //            {
-    //                ReturnValue = false;
-    //                ReturnValue.ErrorMessage = "No C++ configuration found in user MBCompileConfigurations.json";
-    //                return(ReturnValue);
-    //            }
-    //            std::vector<std::string> CmakeBuildTypes;
-    //            for (auto const& SpecifiedConfiguration : Command.GetSingleArgumentOptionList("c")) 
-    //            {
-    //                if (UserInfo.Configurations["C++"].Configurations.find(SpecifiedConfiguration.first) == UserInfo.Configurations["C++"].Configurations.end()
-    //                    || UserInfo.Configurations["C++"].Configurations[SpecifiedConfiguration.first].Toolchain != "mbpm_cmake")
-    //                {
-    //                    ReturnValue = false;
-    //                    ReturnValue.ErrorMessage = "Invalid configuration speficied: " + SpecifiedConfiguration.first;
-    //                    return(ReturnValue);
-    //                }
-    //                CmakeBuildTypes.push_back(SpecifiedConfiguration.first);
-    //            }
-    //            if (CmakeBuildTypes.size() == 0) 
-    //            {
-    //                //TODO Inefficient accessing of dictionary
-    //                //TODO checking wheter or not a config actually exists in the specified configurations is a bit tedious, maybe should be checked att parse time and assumed?
-    //                for (std::string const& DefaultBuild : UserInfo.Configurations["C++"].DefaultConfigs)
-    //                {
-    //                    if (UserInfo.Configurations["C++"].Configurations.find(DefaultBuild) == UserInfo.Configurations["C++"].Configurations.end())
-    //                    {
-    //                        ReturnValue = false;
-    //                        ReturnValue.ErrorMessage = "Invalid LangaugeConfiguration for C++ in MBCompileConfigurations: Default configurations not specified";
-    //                        return(ReturnValue);
-    //                    }
-    //                    if (UserInfo.Configurations["C++"].Configurations[DefaultBuild].Toolchain == "mbpm_cmake")
-    //                    {
-    //                        CmakeBuildTypes.push_back(DefaultBuild);
-    //                    }
-    //                }
-    //            }
-    //            for (std::string const& CmakeBuildType : CmakeBuildTypes)
-    //            {
-    //                int CommandReturnValue = std::system(("cmake -S " + Identifier.PacketURI + " -B " + Identifier.PacketURI + "/MBPM_BuildFiles/"+CmakeBuildType+" -DCMAKE_BUILD_TYPE="+CmakeBuildType).c_str());
-    //                if (CommandReturnValue != 0)
-    //                {
-    //                    ReturnValue = false;
-    //                    ReturnValue.ErrorMessage = "Error configuring CMake";
-    //                    return(ReturnValue);
-    //                }
-    //                //TODO should probably check for visual studio generator instead
-    //                if constexpr (MBUtility::IsWindows())
-    //                {
-    //                    CommandReturnValue = std::system(("cmake --build " + Identifier.PacketURI + "/MBPM_BuildFiles/"+CmakeBuildType +" --config "+CmakeBuildType).c_str());
-    //                }
-    //                else 
-    //                {
-    //                    CommandReturnValue = std::system(("cmake --build " + Identifier.PacketURI + "/MBPM_BuildFiles/" + CmakeBuildType).c_str());
-    //                }
-    //                if (CommandReturnValue != 0)
-    //                {
-    //                    ReturnValue = false;
-    //                    ReturnValue.ErrorMessage = "Error compiling cmake configuration";
-    //                    return(ReturnValue);
-    //                }
-    //            }
-    //            std::filesystem::path ExportedExecutablesPath = p_GetPacketInstallDirectory() + "/MBPM_ExportedExecutables/";
-    //            for (std::string const& Executable : PacketInfo.ExportedTargets)
-    //            {
-    //                std::string ExecutableName = Executable;
-    //                if constexpr (MBUtility::IsWindows())
-    //                {
-    //                    ExecutableName += ".exe";
-    //                }
-    //                std::filesystem::path ExecutablePath = Identifier.PacketURI + "/MBPM_Builds/" + UserInfo.Configurations["C++"].DefaultExportConfig + "/" + ExecutableName;
-    //                if (!std::filesystem::exists(ExecutablePath))
-    //                {
-    //                    //AssociatedTerminal
-    //                    AssoicatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::Yellow);
-    //                    AssoicatedTerminal->PrintLine("Exported executable not found in " + UserInfo.Configurations["C++"].DefaultExportConfig + ", skipping export");
-    //                    AssoicatedTerminal->SetTextColor(MBCLI::ANSITerminalColor::White);
-    //                    continue;
-    //                }
-    //                std::filesystem::path SymlinkPath = ExportedExecutablesPath/ExecutableName;
-    //                if (std::filesystem::is_symlink(SymlinkPath))
-    //                {
-    //                    std::filesystem::remove(SymlinkPath);
-    //                }
-    //                std::filesystem::create_symlink(ExecutablePath, SymlinkPath);
-    //            }
-    //        }
-    //        else
-    //        {
-    //            ReturnValue =  MBPM::CompileAndInstallPacket(Identifier.PacketURI);
-    //        }
-    //    }
-    //    return(ReturnValue);
-    //}
     template <typename T>
     void __Delete(void* PointerToDelete)
     {

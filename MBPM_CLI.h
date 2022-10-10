@@ -69,7 +69,6 @@ namespace MBPM
     private:
         std::string m_PacketInstallDirectory = "";//kan bara finnas en
         MBPM::MBPP_Client m_ClientToUse;
-
         PacketRetriever m_PacketRetriever;
         
         std::vector<std::unique_ptr<CLI_Extension,void (*)(void*)>> m_RegisteredExtensions;
@@ -85,18 +84,14 @@ namespace MBPM
         int p_HandleUpdate(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
         int p_HandleInstall(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
         int p_HandleUpload(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
+
         int p_HandleExec(MBCLI::ProcessedCLInput const& CommandInput,MBCLI::MBTerminal& AssociatedTerminal);
         int p_HandleCreate(MBCLI::ProcessedCLInput const& CommandInput,MBCLI::MBTerminal* AssociatedTerminal);
         int p_HandleGet(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
         int p_HandleIndex(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
         int p_HandlePackets(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
         
-        int p_HandleExport(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
-        int p_HandleRetract(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
-
         int p_HandleCustomCommand(MBCLI::ProcessedCLInput const& CommandInput,MBCLI::MBTerminal* AssociatedTerminal);
-
-        int p_HandleCompile(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
 
         int p_UploadPacketsLocal(std::vector<PacketIdentifier> const& PacketsToUpload,MBCLI::ProcessedCLInput const& Command,MBCLI::MBTerminal* AssociatedTerminal);
     
@@ -110,38 +105,16 @@ namespace MBPM
         MBPM::MBPP_FileInfoReader i_GetInstalledFileInfo(std::string const& InstalledPacket, MBError* OutError);
         MBPM::MBPP_FileInfoReader i_GetPathFileInfo(std::string const& InstalledPacket, MBError* OutError);
         MBPM::MBPP_FileInfoReader i_GetUserFileInfo(std::string const& PacketName, MBError* OutError);
-
-        
         
         //packet retrievers
-        bool p_PacketExists(PacketIdentifier const& PacketToCheck);
-        MBPM::MBPM_PacketInfo p_GetPacketInfo(PacketIdentifier const& PacketToInspect,MBError* OutError);
         MBPM::MBPP_FileInfoReader p_GetPacketFileInfo(PacketIdentifier const& PacketToInspect,MBError* OutError);
 
         //std::string p_GetInstalledPacketDirectory();
         std::vector<PacketIdentifier> p_GetCommandPackets(MBCLI::ProcessedCLInput const& CLIInput, PacketLocationType DefaultType,MBError& OutError, size_t ArgumentOffset = 0);
         PacketIdentifier p_GetPacketIdentifier(std::string const& PacketName, PacketLocationType Type, MBError& OutError);
 
-        std::vector<PacketIdentifier> p_GetInstalledPacketsDependancyOrder(std::vector<std::string>* MissingPackets);
-
-        std::map<std::string, MBPM_PacketDependancyRankInfo> p_GetPacketDependancieInfo(
-            std::vector<PacketIdentifier> const& InPacketsToCheck,
-            MBError& OutError,
-            std::vector<std::string>* OutMissing);
-
-        std::vector<PacketIdentifier> p_GetPacketDependants_DependancyOrder(std::vector<PacketIdentifier> const& PacketsToCheck,MBError& OutError, std::vector<std::string>* MissingPackets);
-        std::vector<PacketIdentifier> p_GetPacketDependancies_DependancyOrder(std::vector<PacketIdentifier> const& PacketsToCheck,MBError& OutError,std::vector<std::string>* MissingPackets);
-
-        std::vector<PacketIdentifier> p_UnrollPacketDependancyInfo(std::map<std::string, MBPM_PacketDependancyRankInfo> const& InPackets);
-
         std::vector<PacketIdentifier> p_GetUserPackets();//ingen garanti p� dependancy order
         std::vector<PacketIdentifier> p_GetInstalledPackets();//TAR INTE I DEPENDANCY ORDER
-
-
-        PacketIdentifier p_GetInstalledPacket(std::string const& PacketName);
-        PacketIdentifier p_GetUserPacket(std::string const& PacketName);
-        PacketIdentifier p_GetLocalPacket(std::string const& PacketPath);
-        PacketIdentifier p_GetRemotePacketIdentifier(std::string const& PacketPath);
 
     public:
         int HandleCommand(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);

@@ -14,28 +14,16 @@
 #include "MB_PacketProtocol.h"
 namespace MBPM
 {
-	struct MBPM_SubLibrary
-	{
-		std::string LibraryName = "";
-	};
-
-	//enum class PacketType
-	//{
-	//	CPP,
-	//	MBDoc,
-	//	Unkown,
-	//	Null
-	//};
 	struct MBPM_PacketInfo
 	{
 		std::string PacketName = "";
 		std::unordered_set<std::string> Attributes = {};
 		std::vector<std::string> PacketDependancies = {};
         std::string Type = "C++";
+        std::vector<std::string> SubPackets;
         MBParsing::JSONObject TypeInfo;
 	};
 	MBPM_PacketInfo ParseMBPM_PacketInfo(std::string const& PacketPath);
-	MBError WriteMBPM_PacketInfo(MBPM_PacketInfo const& PacketToWrite);
 
     enum class PacketLocationType
     {
@@ -96,52 +84,28 @@ namespace MBPM
 			MBError& OutError,
 			std::vector<std::string>* OutMissing);
         std::vector<PacketIdentifier> p_GetPacketDependancies_DependancyOrder(std::vector<PacketIdentifier> const& InPacketsToCheck,MBError& OutError, std::vector<std::string>* MissingPackets,bool IncludeInitial = false);
+        std::vector<PacketIdentifier> p_GetPacketDependants_DependancyOrder(std::vector<PacketIdentifier> const& InPacketsToCheck,MBError& OutError,bool IncludeInitial = false);
+
+
+
         PacketIdentifier p_GetUserPacket(std::string const& PacketName);
         PacketIdentifier p_GetInstalledPacket(std::string const& PacketName);
         PacketIdentifier p_GetLocalPacket(std::string const& PacketName);
         PacketIdentifier p_GetRemotePacketIdentifier(std::string const& PacketName);
     public:
-        PacketIdentifier GetInstalledPacket(std::string const& PacketName);
-        PacketIdentifier GetUserPacket(std::string const& PacketName);
-        std::vector<PacketIdentifier> GetPacketDependancies(PacketIdentifier const& PacketToInspect,MBError& OutError);
-        std::vector<PacketIdentifier> GetTotalDependancies(std::vector<std::string> const& DependancyNames,MBError& OutError);
-        std::vector<PacketIdentifier> GetPacketDependees(std::string const& PacketName);
+        PacketIdentifier GetInstalledPacket(std::string const& PacketName,MBError& OutError);
+        PacketIdentifier GetUserPacket(std::string const& PacketName,MBError& OutError);
+        PacketIdentifier GetLocalpacket(std::string const& path,MBError& OutError);
+
+        std::vector<PacketIdentifier> GetInstalledPackets(MBError& OutError);
+
+        std::vector<PacketIdentifier> GetPacketDependancies(PacketIdentifier const& PacketToInspect,MBError& OutError,bool Inclusive=false);
+        std::vector<PacketIdentifier> GetPacketsDependancies(std::vector<PacketIdentifier> const& PacketsToInspect,MBError& OutError,bool Inclusive=false);
+        std::vector<PacketIdentifier> GetTotalDependancies(std::vector<std::string> const& DependancyNames,MBError& OutError,bool Inclusive=true);
+
+        std::vector<PacketIdentifier> GetPacketsDependees(std::vector<PacketIdentifier> const& PacketsToInspect,MBError& OutError,bool Inclusive=false);
+        std::vector<PacketIdentifier> GetPacketDependees(std::string const& PacketName,MBError& OutError,bool Inclusive=false);
         MBPM_PacketInfo GetPacketInfo(PacketIdentifier const& PacketToRetrieve);
     };
-
-
-
-    
-    //Self contained
-	
-    
-    
-    //std::string GetMBPMCmakeFunctions();
-
-	//MBError WriteCMakeProjectToFile(MBPM_CmakeProject const& ProjectToWrite, std::string const& OutputFilePath);
-
-	MBError UpdateCmakeMBPMVariables(std::string const& PacketPath,std::vector<std::string>const&  TotalPacketDependancies,std::string const& StaticMBPMData);
-
-	//MBError GenerateCmakeFile(MBPM_PacketInfo const& PacketToConvert, std::string const& PacketDirectory, MBPM_MakefileGenerationOptions const& CompileConfiguration,std::string const& FileName);
-	//MBError GenerateCmakeFile(std::string const& PacketPath, MBPM_MakefileGenerationOptions const& CompileConfiguration,std::string const& FileName);
-	MBError GenerateCmakeFile(std::string const& PacketPath, std::string const& CmakeName = "CMakeLists.txt");
-
-
-	//MBError EmbeddDependancies(std::string const& PacketDirectory, MBPM_MakefileGenerationOptions const& CompileConfiguration, std::string const& TargetFilepath);
-	//MBError EmbeddDependancies(MBPM_PacketInfo const& PacketInfo,std::string const& PacketDirectory, MBPM_MakefileGenerationOptions const& CompileConfiguration, std::string const& TargetFilepath);
-
-    
-    
-	//MBError CompilePacket(std::string const& PacketDirectory);
-	//MBError InstallCompiledPacket(std::string const& PacketDirectory);
-
-	//MBError CompileMBCmake(std::string const& PacketDirectory, std::string const& Configuration, std::vector<std::string> const& Targets);
-
-	//[[deprecated]]
-	//MBError CompileAndInstallPacket(std::string const& PacketToCompileDirectory);
-
-	//bool PacketIsPrecompiled(std::string const& PacketDirectoryToCheck, MBError* OutError);
-
 	std::string GetSystemPacketsDirectory();
-	//MBError SetSystemPacketsDirectory(std::string const& DirectoryPath);
 };
