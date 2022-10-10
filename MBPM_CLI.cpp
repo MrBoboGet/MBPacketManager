@@ -2126,8 +2126,9 @@ namespace MBPM
             }
             if (PrintPath)
             {
-                AssociatedTerminal->PrintLine(Packet.PacketURI);
+                AssociatedTerminal->Print(Packet.PacketURI+" ");
             }
+            AssociatedTerminal->PrintLine("");
         }
         return(ReturnValue);
     }

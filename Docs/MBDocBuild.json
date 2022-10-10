@@ -5,6 +5,8 @@
         "DevelopmentStructure.mbd",
         "Packets.mbd",
         "PacketsSpecification.mbd",
+        "SubPackets.mbd",
+        "Extensions.mbd",
         "Terminology.mbd",
         "History.mbd"
         ],

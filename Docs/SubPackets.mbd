@@ -1,0 +1,23 @@
+%title SubPackets
+
+Subpacket are a speciall type of packets, that aren't distributed separetly but
+instead are the contents of another packet.
+
+The purpose of subpackets are to be able to provide optional functionality
+associated with packet, but that isn't strictly needed for the packet to
+function, or not big or decoupled enough to warrant using as a seprate packet. 
+
+The specific use case that lead to this creation was having bash autocompletion/vim extensions
+associated with a packet. These are extensions that aren't needed by any means,
+and they also provide functionality that is only relevant for the exact packet
+in question, which means that making them into a completely seperate packet is
+also a bit uneccesary. 
+
+The only difference between a subpacket and a regular packet is in how
+it is accessed through a @[packets specification](PacketsSpecification.mbd), and
+with the upload and update command.
+
+A subpacket can't be uploaded to a remote, and also not updated separately. They
+are also @[retracted](Extensions.mbd#retract) whenever it's parent packet is removed,
+and @[verified](Extensions.mbd#verify) whenever it's parent is verified for
+upload.

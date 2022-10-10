@@ -1,0 +1,392 @@
+%title Extensions
+
+mbpm was originally designed only with the explicit goal of being able to
+compile C++ on different machines. But as more features were added to the
+program, I realised that using different packet managers for different programs
+is at bit uneccesary. The current philosophy of is that the packet manager
+should be able to extended to support arbitrary kind of packets. This document
+describes how these extensions mechanisms are integreated in the use of mbpm,
+the design philosophy for the extensions mechanisms and assumption of it's use,
+aswell as of to create your own extensions.
+
+# Design
+
+    This part documents the design goals with which the implementation is based
+    upon. This means that this part isn't strictly neccessary to use the
+    program, but may be helpful in order to understand why it works as it does,
+    and how to think about the behaviour expected of the program.
+
+
+    _# Extension mechanisms design philosophy 
+        
+
+
+        _# Seamless integration
+                
+            Extensions should not be something that requires a lot of
+            boilerplate when invoking the program, nor should it be something
+            that interferes with default behaviour of the program.  One
+            shouldn't neccesraily be aware that a specific command is handled by
+            an extension, and one should not be detered of using extensions by
+            the hassle to set it up / fear of it chaning previous behaviour.
+            
+        /#
+
+        #_ Uniform syntax and behaviour
+            
+            One of the most difficult parts of designing a good extension system
+            is the trade-off allowing extensions the ability to modify any kind
+            of behavior in any way they want, and with keeping the behaviour
+            familiar and consistent across the program.
+
+            Having too weak extension mechanisms makes the functionality the
+            extensions can execute limited, to liberal and few assumptions can
+            be made about the programs behaviour, and to much functionality is
+            bound to all of the internals of the program, making it hard to
+            maintain.
+
+            The goal here is not to give the most powerful extensions system,
+            and instead focuses on exposing functionality that is common with
+            the operations of the program. Extensions are supposed to work like
+            the builting commands. This means that the functionality of
+            extensinos are completely uniform. 
+
+            In order to also make the integration seamless, and the behaviour
+            predictably, so should the extensions also employ the same CLI
+            syntax as the program uses itself.
+            
+        /_
+        
+        _# Remove extension implementation boilerplate
+            
+            Extensions should be easy to write, and common functionality should
+            not have to be duplicated for every extensions that is created.
+            
+        /#
+
+        #_ Vectorisation
+            
+            The @[packet specification](PacketSpecification.mbd) is in many ways
+            the core of mbpm. This is how the program is mostly used, and what
+            allows it to efficiently handle multiple packets at the same time.
+            It is also one of the parts of the program that can benefit all
+            extensions simultaneously when new features are added, which means
+            that we want as many extensions as possible to use this
+            functionality in order to both make the behaviour in line with the
+            default, and to maximize how much they gain from development of the
+            main program.
+
+        /_
+
+    /#
+
+    #_ Extension functionality design philosophy
+            
+        The builtins of mbpm should provide the means for packet managment that
+        is the same for every type of packet no matter it's contents, which for
+        example include creating dependancy graphs, downloading and uploading
+        packets, removing packets etc etc.
+
+        However, in order to make mbpm as general as possible, *every single
+        action* that requires interpreting the contents of the packet should be
+        implemented as an extensions. Compiling for example is solely
+        implemented by @[MBBuild]({MBBuild}).
+
+        # Builtin extensions are just as any other extension
+
+            While the distinction between an extension and regular behavior of
+            the program is pretty muddy when the extensions are a part of the
+            main program, so is it still important to make it clear which
+            operations are addons to the infrastructure, both in order to test
+            the capabilities of the extension system, and to make it clear what
+            is not a part of the extensions system.
+
+        # Configuration location is uniform
+
+            In order to make extensions easy to integrate, and in order to make
+            them easy to export and copy to another computer, so
+            should the configuration for the extensions be stored in an uniform
+            way, but they do not neccesrialy have to have a common configuration
+            format. 
+
+
+    /_
+        
+
+
+#_ The extension mechanisms
+
+    The exact way an extensions is implemented and interfaces with the program
+    is dependant on the codebase, so this part describes what the extensions
+    mechanisms are supposed to offer through a slightly higher level
+    perspective, and works more as specifcition for which the exact interface is
+    designed agaisnt. How extensions are implemented can be found at 
+    @[creating an extension](Code/CreatingAnExtensions.mbd).
+
+
+    #_ Vectorized handling
+
+        These kind of extensions add some sort of functionality that vectorised
+        over all packets in a @[packet specification](PacketSpecification.mbd).
+        They all support the builtin 
+        @[iteration options](CLI.mbd#IterationOptions), and the default 
+        @[packet specification](PacketSpecification.mbd). Any flag or option
+        that isn't interpreted by these 2 parts are passed on to the extension,
+        and conversely any flag or optino interpreted by these 2 steps are *not*
+        given to the extension.
+
+        This is ment to ensure that a packet doesn't override default behaviour,
+        and that the flags interpreted by the extensions doesn't have unintended
+        sideffects. 
+        
+        New commands are accepted as valid as extensions registers handler for
+        them, so they need not exist before the extensions handles them.
+        However, a top command apperaing that isn't handled by any extension are
+        treated as a fatal error.
+
+        All vectorization option specify which 
+        @[types of packets](Packets.mbd#Type) they handle. Packets which aren't
+        being handled by an extension is silently skipped, 
+        @[unless overriden](CLI.mbd#CustomCommand).
+
+        # Top command handling
+
+            [[Usage]]
+            mbpm {OverridenTopCommand} <PacketSpecification> <IterationOptions>
+            [Options]
+            
+            This kind of extensions override the meaning of the top command for
+            every packet in the packet list, and specifies the top command it
+            overrides, aswell as the valid packet types it handles. 
+
+            Whenever the overriden top command is encountered in a command line
+            so is the @[packet specification](PacketSpecification.mbd) first
+            evaluated, and any eventual errors termine the program at that
+            point. After that so are all packets in the packet list inspected
+            for their @[packet type](Packets.mbd#Type), and if a an extension is
+            found that handles this type exists, so is the packet given this
+            packet as an argument to handle.
+        
+        # Sub command handling
+
+            [[Usage]]
+            mbpm {OverridenTopCommand} {OverridenSubCommand} <PacketList>
+            <IterationOptions>
+
+            Sub command handling specifies a top command for which the command
+            is a subcommand of, and the subcommand this command handles. This
+            alters the parsing of the packet. The first command line argument is
+            the top command, and the next argument is interpreted as the
+            subcommand, which is therefore not a part of the packet
+            specification. It also specifies a which packets types it 
+
+            Whenever the overriden top command is encountered in a command line
+            so is the first argument intepreted as specifying which subcomand 
+            that should be invoked, and then
+            the @[packet specification](PacketSpecification.mbd) is evaluated.
+            Any errors with creating the packet list is a fatal error and
+            terminates the program with a returnvalue > 0.
+            After that so are all packets in the packet list inspected
+            for their @[packet type](Packets.mbd#Type), and if a an extension is
+            found that handles this type and subcommand exists, so is the packet given this
+            packet as an argument to handle.
+
+            [[Note]]
+            As sub command handling changes the way the packet specification is
+            evaluated, skipping the first argument, so can a top command only by
+            overriden as either a simplet top command, or a topcommand with
+            subcommands. Doing both results in a fatal error. However, a given
+            command can be overriden by multiple extensions as long as they use
+            the same type for their. 
+
+    /_
+
+    # Custom packet specification
+
+        [[Usage]]
+        mbpm packspec {SubCommandName} [packespec options + arguments] '--'
+        <VectorisedCommand> ...
+
+        Sometimes, the propety determining which packets should be affected by a
+        command is specific to it's individual semantic, and the default packet
+        behaviour isn't able to properly handle the query. All custom packets
+        specifications are all accessed through the special "packspec" top
+        command.
+
+        The argument following the top command is what can be overriden by an
+        extension, and uniquely determines the extensions used to handle the
+        packet specification. The extension can specify which subcommand they
+        override, and multiple subcommands specifying the same subcommand is
+        treated as a fatal error. 
+
+        In order to use these packets so are "--" used as a delimiter. The
+        string after "--" are interpreted as consisting of the parts of a
+        command line string after "mbpm" that makes up valid command. The set of
+        command that are able to appear here are limited however, as only the 
+        vectorised command can appear here. That is, upload and update, aswell
+        as the custom commands. 
+
+        The command specified can in turn contain a
+        @[packet specification](PacketSpecification.mbd). The difference is
+        execution is that the command specification from the packspec command is
+        the initial packet specificaton, and the
+        @[simple packet specification](PacketSpecification.mbd) is appended to
+        this packet list, and the rest of the specification continues as normal.
+        
+        This means that the specfication can for example be filtered with
+        "-na:NonMBBuild" and similar.
+
+        _# builtin packspec
+
+            These are the builtin supported packspec subcommands.
+
+            # shellpred
+
+                [[Usage]]
+                mbpm packspec shellpred [CommandString+] -- ...
+
+                This packspec goes through every installed packet, invokes the
+                shell command that is the concatenation of the CommandStrings
+                and executes the command. If the returnvalue is 0 so is the
+                packet included in the packet list, and not included if the
+                returnvalue is different from 0.
+       
+        
+        /#    
+
+        _# Examples
+
+```
+# This command goes through all "C++" packets and adds the packet to the list if
+# doesn't have any compiled version.
+
+mbpm packspec mbbuild_empty -- compile
+```
+
+        /#
+/_
+
+# Extension semantics
+
+    While an extension has very little restrictions it can do, and packets have
+    very few restrictions how they can be constructed, so is there still a
+    expected behaviour that makes a packet type, and it's assoicated extensions
+    compliant with the mbpm system.
+
+    This both includes what commands with a given name is expected to do, and
+    invariants the are to be preserved, aswell as how packets depend on each
+    other.
+
+    _# Packet Semantics
+        
+        The most important property of a packet is in some sense it's
+        dependancies, as these define exactly what is needed to transfer between
+        computers in order for the packet to work. However, the second most
+        important property, is exactly *how* the packet uses these dependancies. 
+
+
+        The assumption made by mbpm, is that all packets on the local computer,
+        user and installed, depend on the installed packets. Take for example
+        how @[MBBuild]({MBBuild}) compiles C++. It uses the packet installed
+        directory as an additional include, and links against the compiled
+        versions in the install directory. 
+
+        Another assumption made by mbpm is that a packet is *solely* dependant on
+        mbpm packets. This might seem obvious in one sense, that's the whole
+        point packet managment, but it also means that it should make no
+        assumption about the host computer in general. It should not need to
+        know what kind of filesystem it uses, posix or windows, or make any
+        assumptions about the directory structure of the computer.
+
+        However, all packets being installed in the same directory also means
+        that many types of packets can't be supported. Take for example packets
+        which define config files for various programs, or different kind of
+        plugins. These kind of files are assumed to be at specific directories
+        on the computer, and can't be used if they only reside in the install
+        directory. This means that there has to be a way to make these files
+        usable to the rest of the computer, and preferably in a uniform way so
+        that the steps needed to use a packet isn't different for every
+        differernt kind of packet.
+        
+        //Better name?
+        This leads to the purpose of the *Semantic commands*.
+
+        # Semantic commands
+
+            These are the commands that have predefined semantics by mbpm. These
+            commands are assumed to work a specific way by the program, and used
+            at during builtin operations if the command exist for the given
+            type. 
+
+            They are expected to be implemented for every packet type. The
+            default implementation, that is to do nothing, can also be seen as
+            valid if nothing needs to be done, but then that behaviour is
+            assumed to be intended. This also means that commands with similar
+            properties should not be implemented for the packet type, in order
+            to make the behaviour conistent across packets.
+
+            _# export
+
+                Export is the command that is responsible to make the packet
+                usable outside of the mbpm system and to the rest of the
+                computer. 
+
+                The semantics of export is in some sense in opposition to other
+                principles of the packet manager system. These assumption are
+                that dependancies should only depend on the installed versions.
+                But export goes against these assumptions, and is intended to
+                provide an alternative way to make these packets usable for the
+                rest of the system. 
+
+                An example of a export command used is with @[MBBuild](MBBuild).
+                The exportation of a C++ packet for example means that all of
+                it's executables and libraries are symlinked to from a
+                predetermined directory, which can for example be added to the
+                path. This kind of exportation means the the program can be
+                usable by the shell, and that other buildsystems can link to the
+                libraries.
+
+            /#
+
+            _# retract
+               
+                This is the opposite of export, and should revert any actions
+                made by the export command. 
+
+                This command is used on each packet that is to be removed by the 
+                remove command, and it's @[sub packets](SubPackets.mbd), with
+                no arguments or flags. It is not invoked if it isn't
+                implemented for the packet type, and it is not treated as an
+                error.
+
+                This behaviour is implemented in order to provide a consistent
+                and uniform way to remove a packet. This also means that the
+                expected behaviour of retract without any additional
+                flags/options should be to retract as much as possible.
+                
+                The retract command should only fail given that the verify
+                command fails. A fail to remove not existing should not be
+                treated as an error, exported files being modified by the user
+                is allowed behaviour. This means that the retract command should
+                only fail in the cases where it cannot know which files to
+                remove in the first place, which should be atleast a subset of
+                those cases where the verify command fails. 
+
+
+            /#
+
+            _# verify
+
+                Verify is a command intended to produce an error if the contents
+                of the packet doesn't align with the type specific requirements.
+
+                It is used if it exists before uploading a packet, and each of
+                it it's @[sub packets](SubPackets.mbd), and an error
+                results in the upload failing and not being executed. This is
+                intended to be used as a way to ensure that only valid packets
+                are uploaded, in order to not break local or remote
+                installations. 
+
+            /#
+
+    /#    

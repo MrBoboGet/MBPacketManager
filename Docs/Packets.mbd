@@ -24,12 +24,64 @@ intended to solve.
     But one of the main goals of this project, more of which can be found 
     @[here](History.mbd), is to also make it easy to create packets yourself and
     use locally. Packets shouldn't be a hassle to create and distribute and
-    utilize, that would remove halft of the reason to use them in the first
+    utilize, that would remove half of the reason to use them in the first
     place. This means that the structure of the packet is extremly free and few
     things are mandated, which also ties in with the previous point in that
     package managment should work for every type of packet. 
 
+    _# Complete portability
+            
+        mbpm isn't just designed to be a way to distribute packages between
+        computer, but more importantly a way use the functionality provided for
+        every computer. This means that packets should be designed to be
+        completely portable, with semantics that makes the usable for every kind
+        of computer.
+
+        This for example means that it's not enough to just be able to
+        distribute a C++ packet in a compiled form, but that the packet has to
+        be compileable for an arbitrary computer.
+            
+    /#
+
+    _# No arbitrary code execution
+       
+        One of the most important principles, and one of the principles that
+        make the philosophy of mbpm different form other kind of packet
+        managers, is that the installation/usage of a packet MUST NOT use a
+        user provied script in order to be successfully installed. 
+
+        Another purpose of packet managers is to modularize and make the
+        dependancies of projects more managable, but if the installation of a
+        packet that uses arbitrary scripts ever go wrong, so is the ability to
+        understand and fix the problem is severely limited by needing to
+        reverse engineer the installation process.
+
+        It also makes the invariants and assumption made by mbpm harder to
+        enforce, and it also enforces implicit dependancies on the computer
+        in order to able to execute the scripts in question.
+
+        The installation of a packet should be handled solely by an appropriate
+        @[extension](Extensions.mbd) in order to make the behaviour well
+        documented and reproducible, and to ensure that errors in the build
+        process are either easily identified, or centraly fixable.
+       
+    /#
+
+    _# Complete track of exported files
+
+        Some packet managers doesn't support true removal of a packet, because
+        these packet might create files that are outside of the location of the
+        directories managed by the packet manager, or because few restrictions
+        are placed on it's installation script. 
+
+        Packets used by mbpm should always have complete knowledge about the
+        files they use on the system, so that removal of the packet doesn't
+        result in broken symlinks or superflous directories not being removed.
+
+    /#
+
 # Packet structure and creating a packet
+
     In order to create a packet so is exactly one thing needed: A valid
     MBPM_PacketInfo file, it's content is 
     @[described further down](#MBPM_PacketInfo).
@@ -136,8 +188,8 @@ intended to solve.
 
             This field MUST be a string, describing the name of the packet. This
             name should be unique in order to avoid clashes, but there are
-            ultimately no safegaurds against name's clashing. This field being a
-            empty string is also treated as an error.
+            ultimately no safegaurds against name's clashing. This field being
+            an empty string is also treated as an error.
 
         # Dependancies
 
@@ -167,13 +219,13 @@ intended to solve.
 
             The default value for Type is "C++".
 
-        # TypeData
+        # TypeInfo
             
             A JSON object which is used pass type specific info to MBPM, and
             it's semantics is therefore dependant on the packet. 
 
-            No matter the type of packet so is a empty TypeData always a valid
-            value, and the default is also the empty json object. 
+            No matter the type of packet so should an empty TypeInfo always be a
+            valid value, and the default is also the empty json object. 
 
             Here the TypeData objects for the builtin types listed:
 

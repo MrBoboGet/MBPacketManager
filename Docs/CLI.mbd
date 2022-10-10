@@ -329,7 +329,7 @@ mbpm create compilecommands --alluser
         In short: Extensions can hook in the name of the command, and the type
         of packet being processed. This means that for example the "compile"
         command can be implemented by multiple extensions for different kind of
-        packetes.
+        packets.
 
         _# Flags
             

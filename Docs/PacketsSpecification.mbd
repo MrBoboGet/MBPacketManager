@@ -140,7 +140,7 @@ mbpm compile MBUtility MBParsing --remote -u:MBCLI
         new packet list. It currently consists of 2 flags, dependants, and
         dependancies. 
        
-        _# dependancies
+        _# dependancies / dependanciesi
 
             If this flag is specified, the packet list is replaced with a list
             of packets that contains all of the packets that are a dependancy of
@@ -152,8 +152,13 @@ mbpm compile MBUtility MBParsing --remote -u:MBCLI
             installed packets, which means that all of the new packets are
             always installed packets.
 
+            The difference between dependancies and dependanciesi is that
+            dependanciesi is inclusive, that is it also includes the original
+            packets in the newly generated list on the correct dependancy order,
+            and as an installed packet. 
+
         /#
-        _# dependants
+        _# dependants / dependantsi
 
             If this flag is specified, the packet list is replaced with a list
             of packet that contains all of the dependants of every packet in the
@@ -164,6 +169,11 @@ mbpm compile MBUtility MBParsing --remote -u:MBCLI
             Dependants for the packet list are always checked against the
             installed packets, which means that all of the new packets 
             installed packets.
+
+            The difference between dependants and dependantsi is that
+            dependantsi is inclusive, that is it also includes the original
+            packets in the newly generated list on the correct dependancy order,
+            and as an installed packet. 
 
         /#
 
