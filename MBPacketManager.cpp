@@ -531,6 +531,10 @@ namespace MBPM
         }
         return(ReturnValue);
     }
+    std::vector<PacketIdentifier> PacketRetriever::GetUserPackets(MBError& OutError)
+    {
+        return(p_GetUserPackets());    
+    }
     std::vector<PacketIdentifier> PacketRetriever::GetInstalledPackets(MBError& OutError)
     {
        	std::map<std::string, MBPM_PacketDependancyRankInfo> Packets = {};

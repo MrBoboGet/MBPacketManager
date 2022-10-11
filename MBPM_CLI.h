@@ -78,24 +78,24 @@ namespace MBPM
 
         std::pair<CLI_Extension*,CommandInfo> p_GetHandlingExtension(MBCLI::ProcessedCLInput const& CLIInput,MBPM_PacketInfo const& PacketToHandle);
         void p_RegisterExtension(std::unique_ptr<CLI_Extension,void (*)(void*)> ExtensionToRegister);
-
-        int p_HandleHelp(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
         
-        int p_HandleUpdate(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
-        int p_HandleInstall(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
-        int p_HandleUpload(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
 
-        int p_HandleExec(MBCLI::ProcessedCLInput const& CommandInput,MBCLI::MBTerminal& AssociatedTerminal);
-        int p_HandleCreate(MBCLI::ProcessedCLInput const& CommandInput,MBCLI::MBTerminal* AssociatedTerminal);
+        //Not vectorized commands
+        int p_HandleInstall(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
         int p_HandleGet(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
         int p_HandleIndex(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
-        int p_HandlePackets(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
-        
-        int p_HandleCustomCommand(MBCLI::ProcessedCLInput const& CommandInput,MBCLI::MBTerminal* AssociatedTerminal);
+
+
+        //Vectorized commands
+        int p_HandleUpload(std::vector<PacketIdentifier> PacketsToUpload,MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
+        int p_HandleUpdate(std::vector<PacketIdentifier> PacketsToUpdate,MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
+        int p_HandleExec(std::vector<PacketIdentifier> PacketsToExecute,MBCLI::ProcessedCLInput const& CommandInput,MBCLI::MBTerminal& AssociatedTerminal);
+        int p_HandlePackets(std::vector<PacketIdentifier> PacketsToDisplay,MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
+        int p_HandleCustomCommand(std::vector<PacketIdentifier> PackestToHandle,MBCLI::ProcessedCLInput const& CommandInput,MBCLI::MBTerminal* AssociatedTerminal);
+
+        int p_HandlePackSpec(MBCLI::ProcessedCLInput const& CommandInput,MBCLI::ProcessedCLInput& OutInput,std::vector<PacketIdentifier>& OutPackets,MBCLI::MBTerminal& AssociatedTerminal);
 
         int p_UploadPacketsLocal(std::vector<PacketIdentifier> const& PacketsToUpload,MBCLI::ProcessedCLInput const& Command,MBCLI::MBTerminal* AssociatedTerminal);
-    
-        //MBError p_CompilePacket(PacketIdentifier const& PacketDirectory,MBCLI::MBTerminal* AssociatedTerminal,MBCLI::ProcessedCLInput const& Input);
         
         std::string p_GetPacketInstallDirectory();
         MBPP_PacketHost p_GetDefaultPacketHost();
@@ -108,13 +108,11 @@ namespace MBPM
         
         //packet retrievers
         MBPM::MBPP_FileInfoReader p_GetPacketFileInfo(PacketIdentifier const& PacketToInspect,MBError* OutError);
+        void p_FilterTypes(MBCLI::ProcessedCLInput const& Command,std::vector<PacketIdentifier>& PacketsToFilter);
 
         //std::string p_GetInstalledPacketDirectory();
-        std::vector<PacketIdentifier> p_GetCommandPackets(MBCLI::ProcessedCLInput const& CLIInput, PacketLocationType DefaultType,MBError& OutError, size_t ArgumentOffset = 0);
+        MBError p_GetCommandPackets(MBCLI::ProcessedCLInput const& CLIInput,PacketLocationType DefaultType,std::vector<PacketIdentifier>& OutPackets, size_t ArgumentOffset = 0);
         PacketIdentifier p_GetPacketIdentifier(std::string const& PacketName, PacketLocationType Type, MBError& OutError);
-
-        std::vector<PacketIdentifier> p_GetUserPackets();//ingen garanti p� dependancy order
-        std::vector<PacketIdentifier> p_GetInstalledPackets();//TAR INTE I DEPENDANCY ORDER
 
     public:
         int HandleCommand(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
