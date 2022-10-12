@@ -1,5 +1,6 @@
 #pragma once
 #include <filesystem>
+#include <stdint.h>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -48,11 +49,33 @@ namespace MBPM
 			return(ReturnValue);
 		}
 	};
+    enum class PacketIdentifierFlag
+    {
+        Null = 0,
+        SubPacket = 1
+    };
+    inline PacketIdentifierFlag operator&(PacketIdentifierFlag Lhs,PacketIdentifierFlag Rhs)
+    {
+        return(PacketIdentifierFlag(uint64_t(Lhs)&uint64_t(Rhs)));
+    };
+    inline PacketIdentifierFlag operator|(PacketIdentifierFlag Lhs,PacketIdentifierFlag Rhs)
+    {
+        return(PacketIdentifierFlag(uint64_t(Lhs)|uint64_t(Rhs)));
+    };
+    inline bool operator==(PacketIdentifierFlag Lhs,uint64_t Rhs)
+    {
+        return(uint64_t(Lhs) == Rhs);
+    }
+    inline bool operator!=(PacketIdentifierFlag Lhs,uint64_t Rhs)
+    {
+        return(!(Lhs == Rhs));
+    }
     struct PacketIdentifier
     {
         std::string PacketName = "";
         std::string PacketURI = "";//Default/"" implicerar att man anv�nder default remoten
         PacketLocationType PacketLocation = PacketLocationType::Null;
+        PacketIdentifierFlag Flags = PacketIdentifierFlag::Null;
         bool operator==(PacketIdentifier const& rhs) const
         {
             bool ReturnValue = true;
@@ -96,6 +119,8 @@ namespace MBPM
         PacketIdentifier GetInstalledPacket(std::string const& PacketName,MBError& OutError);
         PacketIdentifier GetUserPacket(std::string const& PacketName,MBError& OutError);
         PacketIdentifier GetLocalpacket(std::string const& path,MBError& OutError);
+
+        std::vector<PacketIdentifier> GetSubPackets(PacketIdentifier const& PacketToInspect,MBError& OutError);
 
         std::vector<PacketIdentifier> GetInstalledPackets(MBError& OutError);
         std::vector<PacketIdentifier> GetUserPackets(MBError& OutError);

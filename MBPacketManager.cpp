@@ -35,6 +35,7 @@ namespace MBPM
 			return(std::string(Result)+"/");
 		}
 	}
+    //TODO change to display the error that occurred
 	MBPM_PacketInfo ParseMBPM_PacketInfo(std::string const& PacketPath)
 	{
 		std::string JsonData = std::string(std::filesystem::file_size(PacketPath), 0);
@@ -76,6 +77,19 @@ namespace MBPM
             else
             {
                 ReturnValue.TypeInfo = MBParsing::JSONObject(MBParsing::JSONObjectType::Aggregate);   
+            }
+            if(ParsedJson.HasAttribute("SubPackets"))
+            {
+                auto const& SubPackets = ParsedJson["SubPackets"].GetArrayData();    
+                for(auto const& String : SubPackets)
+                {
+                    ReturnValue.SubPackets.push_back(String.GetStringData());
+                    if(ReturnValue.SubPackets.back().size() == 0 || ReturnValue.SubPackets.back()[0] != '/')
+                    {
+                        ReturnValue = MBPM_PacketInfo();
+                        return(ReturnValue);
+                    }
+                }
             }
 		}
 		catch(std::exception const& e)
@@ -528,6 +542,29 @@ namespace MBPM
         {
             OutError = false;
             OutError.ErrorMessage = "invalid local packet";
+        }
+        return(ReturnValue);
+    }
+    std::vector<PacketIdentifier> PacketRetriever::GetSubPackets(PacketIdentifier const& PacketToInspect,MBError& OutError)
+    {
+        std::vector<PacketIdentifier> ReturnValue; 
+        if(PacketToInspect.PacketLocation == PacketLocationType::Remote)
+        {
+            OutError = false;
+            OutError = "Can't get subpackets for remote packets";   
+            return(ReturnValue);
+        }
+        MBPM_PacketInfo PacketInfo = GetPacketInfo(PacketToInspect);
+        for(std::string const& Directory : PacketInfo.SubPackets)
+        {
+            PacketIdentifier SubPacket = GetLocalpacket(PacketToInspect.PacketURI+Directory,OutError);
+            if(!OutError)
+            {
+                return(ReturnValue);
+            }
+            SubPacket.Flags = SubPacket.Flags | PacketIdentifierFlag::SubPacket;
+            SubPacket.PacketLocation = PacketToInspect.PacketLocation;
+            ReturnValue.push_back(std::move(SubPacket));
         }
         return(ReturnValue);
     }

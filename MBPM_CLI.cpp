@@ -284,7 +284,27 @@ namespace MBPM
         {
             PacketModifiers += 1;
             std::vector<std::string> MissingPackets;
-            OutPackets = m_PacketRetriever.GetPacketsDependancies(OutPackets,ReturnValue);
+            OutPackets = m_PacketRetriever.GetPacketsDependees(OutPackets,ReturnValue);
+            if(!ReturnValue)
+            {
+                return(ReturnValue);   
+            }
+        }
+        if (CLIInput.CommandOptions.find("dependantsi") != CLIInput.CommandOptions.end())
+        {
+            PacketModifiers += 1;
+            std::vector<std::string> MissingPackets;
+            OutPackets = m_PacketRetriever.GetPacketsDependees(OutPackets,ReturnValue,true);
+            if(!ReturnValue)
+            {
+                return(ReturnValue);   
+            }
+        }
+        if (CLIInput.CommandOptions.find("dependanciesi") != CLIInput.CommandOptions.end())
+        {
+            PacketModifiers += 1;
+            std::vector<std::string> MissingPackets;
+            OutPackets = m_PacketRetriever.GetPacketsDependancies(OutPackets,ReturnValue,true);
             if(!ReturnValue)
             {
                 return(ReturnValue);   
@@ -294,7 +314,7 @@ namespace MBPM
         {
             PacketModifiers += 1;
             std::vector<std::string> MissingPackets;
-            OutPackets = m_PacketRetriever.GetPacketsDependees(OutPackets,ReturnValue);
+            OutPackets = m_PacketRetriever.GetPacketsDependancies(OutPackets,ReturnValue);
             if(!ReturnValue)
             {
                 return(ReturnValue);   
@@ -305,6 +325,34 @@ namespace MBPM
             ReturnValue = false;
             ReturnValue.ErrorMessage = "Can only specify at 1 packet modifier";
             return(ReturnValue);
+        }
+        //Sub Packets
+        auto SubsIt = CLIInput.CommandOptions.find("subs");
+        auto SubsiIt = CLIInput.CommandOptions.find("subsi");
+        if(SubsiIt != CLIInput.CommandOptions.end() || SubsIt != CLIInput.CommandOptions.end())
+        {
+            if(SubsiIt != CLIInput.CommandOptions.end() && SubsIt != CLIInput.CommandOptions.end())
+            {
+                ReturnValue = false;
+                ReturnValue.ErrorMessage = "Can only specify either subs or subsi"; 
+                return(ReturnValue);
+            } 
+            bool Inclusive = SubsiIt != CLIInput.CommandOptions.end();
+            std::vector<PacketIdentifier> NewPackets;
+            for(auto& Packet : OutPackets)
+            {
+                if(Inclusive)
+                {
+                    NewPackets.push_back(std::move(Packet));   
+                }
+                auto SubPackets = m_PacketRetriever.GetSubPackets(Packet,ReturnValue);
+                if(!ReturnValue) return(ReturnValue);
+                for(auto& SubPacket : SubPackets)
+                {
+                    NewPackets.push_back(std::move(SubPacket)); 
+                }
+            }
+            OutPackets = std::move(NewPackets);
         }
         //Packet filters
         auto PositiveAttributeStrings = CLIInput.GetSingleArgumentOptionList("a");
@@ -686,6 +734,11 @@ namespace MBPM
         bool AllowUser = CommandInput.CommandOptions.find("allowuser") != CommandInput.CommandOptions.end();
         for (size_t i = 0; i < PacketsToUpdate.size(); i++)
         {
+            if((PacketsToUpdate[i].Flags & PacketIdentifierFlag::SubPacket) != 0)
+            {
+                AssociatedTerminal->PrintLine("Can't update subpackets individually"); 
+                return(1);
+            }
             if (PacketsToUpdate[i].PacketLocation != PacketLocationType::Installed)
             {
                 if(PacketsToUpdate[i].PacketLocation == PacketLocationType::User && AllowUser)
@@ -1343,6 +1396,11 @@ namespace MBPM
         bool NameClashes = false;
         for (size_t i = 0; i < PacketsToUpload.size(); i++)
         {
+            if((PacketsToUpload[i].Flags & PacketIdentifierFlag::SubPacket) != 0)
+            {
+                AssociatedTerminal->PrintLine("Error uploading packets: Can't upload subpackets individually");   
+                return(1);
+            }
             if (PacketNames.find(PacketsToUpload[i].PacketName) != PacketNames.end())
             {
                 NameClashes = true;

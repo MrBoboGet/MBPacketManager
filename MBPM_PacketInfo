@@ -2,5 +2,6 @@
 	"PacketName":"MBPacketManager",
 	"Version":"0.1.0",
 	"Attributes":[],
+    "SubPackets":["/BashCompletion"],
 	"Dependancies":["MrBoboSockets","MBParsing","MBCrypto","MBUtility","MBSystem","MBUnicode","MBCLI"]
 }

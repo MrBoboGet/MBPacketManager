@@ -1,0 +1,6 @@
+{
+    "PacketName":"mbpm_bash",
+    "Type":"Bash",
+    "Attributes":[],
+    "Dependancies":[]
+}
