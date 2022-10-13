@@ -1,0 +1,6 @@
+{
+	"PacketName":"mbpm_vim",
+    "PacketType":"Vim",
+	"Attributes":[],
+	"Dependancies":[]
+}

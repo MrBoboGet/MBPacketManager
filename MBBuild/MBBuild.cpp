@@ -1845,8 +1845,12 @@ namespace MBPM
         RetractCommand.Name = "retract";
         RetractCommand.Type = CommandType::TopCommand;
         RetractCommand.SupportedTypes = {"C","C++"};
+        CustomCommand VerifyCommand;
+        RetractCommand.Name = "verify";
+        RetractCommand.Type = CommandType::TopCommand;
+        RetractCommand.SupportedTypes = {"C","C++"};
 
-        ReturnValue.Commands = {CompileCommand,CreateCommand,ExportCommand,RetractCommand};
+        ReturnValue.Commands = {CompileCommand,CreateCommand,ExportCommand,RetractCommand,VerifyCommand};
         return(ReturnValue);
     }
     void MBBuild_Extension::SetConfigurationDirectory(const char* ConfigurationDirectory,const char** OutError)
@@ -1873,6 +1877,10 @@ namespace MBPM
         else if(CommandToHandle.CommandName == "retract")
         {
             ReturnValue = p_Handle_Retract(CommandToHandle,PacketToHandle,RetrieverToUse,AssociatedTerminal);
+        }
+        else if(CommandToHandle.CommandName == "verify")
+        {
+            ReturnValue = p_Handle_Verify(CommandToHandle,PacketToHandle,RetrieverToUse,AssociatedTerminal);
         }
         return(ReturnValue);
     }
@@ -1915,6 +1923,35 @@ namespace MBPM
         MBError ReturnValue = true; 
         ReturnValue =  RetractPacket(PacketToHandle.PacketURI);
         return(ReturnValue);
+    }
+    MBError MBBuild_Extension::p_Handle_Verify(CommandInfo const& CommandToHandle,PacketIdentifier const& PacketToHandle,PacketRetriever& RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal)
+    {
+        MBError ReturnValue = true;
+        SourceInfo LocalSourceInfo;
+        ReturnValue = ParseSourceInfo(PacketToHandle.PacketURI+"/MBSourceInfo.json",LocalSourceInfo);
+        if(!ReturnValue)
+        {
+            return(ReturnValue);
+        }
+        std::vector<std::string> AllSources = h_GetAllSources(LocalSourceInfo);
+        try
+        {
+            for(std::string const& Source : AllSources)
+            {
+                if(!std::filesystem::exists(PacketToHandle.PacketURI+"/"+Source))
+                {
+                    ReturnValue = false;
+                    ReturnValue.ErrorMessage = "Source \""+Source+"\" doesn't exists";
+                    return(ReturnValue);
+                }
+            }
+        }
+        catch(std::exception const& e)
+        {
+            ReturnValue = false;
+            ReturnValue.ErrorMessage = "Error checking sources: "+std::string(e.what());
+        }
+        return(ReturnValue);    
     }
     MBError MBBuild_Extension::p_Handle_Create(CommandInfo const& CommandToHandle,PacketIdentifier const& Packet,PacketRetriever& RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal)
     {

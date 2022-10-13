@@ -1,4 +1,5 @@
 #include "MBPM_CLI.h"
+#include "MBCLI/MBCLI.h"
 #include "MBPacketManager.h"
 #include <MBParsing/MBParsing.h>
 #include "MB_PacketProtocol.h"
@@ -13,6 +14,7 @@
 #include <system_error>
 #include <unordered_set>
 #include "MBBuild/MBBuild.h"
+#include "Vim/MBPM_Vim.h"
 //#include "MBBuild/MBBuild.h"
 //#include "MBCLI/"
 
@@ -1440,6 +1442,13 @@ namespace MBPM
             std::string PacketName = PacketsToUpload[i].PacketName;
             std::string PacketToUploadDirectory = PacketsToUpload[i].PacketURI;
             AssociatedTerminal->PrintLine("Uploading packet " + PacketsToUpload[i].PacketName);
+            MBError VerificationResult = p_ExecuteEmptyCommand(PacketsToUpload[i],"verify",*AssociatedTerminal);
+            if(!VerificationResult)
+            {
+                AssociatedTerminal->PrintLine("Error verifying packet for upload: "+VerificationResult.ErrorMessage);
+                ReturnValue = 1;
+                continue;
+            }
             if (!UseDirectPaths)
             {
                 MBPM::UpdateFileInfo(PacketToUploadDirectory);
@@ -1525,7 +1534,19 @@ namespace MBPM
         //    AssociatedTerminal->PrintLine("Upload packet sucessful");
         //}
     }
-
+    MBError MBPM_ClI::p_ExecuteEmptyCommand(PacketIdentifier const& PacketToHandle,std::string const& CommandName,MBCLI::MBTerminal& TerminalToUse)
+    {
+        MBError ReturnValue = true;
+        MBPM_PacketInfo CurrentPacketInfo = m_PacketRetriever.GetPacketInfo(PacketToHandle);
+        const char* Argv[] = {"mbpm",CommandName.c_str()};
+        MBCLI::ProcessedCLInput EmptyCommandInfo(2,Argv);
+        std::pair<CLI_Extension*,CommandInfo> HandlingExtension = p_GetHandlingExtension(EmptyCommandInfo,CurrentPacketInfo);
+        if(HandlingExtension.first != nullptr)
+        {
+            ReturnValue = HandlingExtension.first->HandleCommand(HandlingExtension.second,PacketToHandle,m_PacketRetriever,TerminalToUse);
+        }
+        return(ReturnValue);
+    }
     int MBPM_ClI::p_HandleCustomCommand(std::vector<PacketIdentifier> PacketList ,MBCLI::ProcessedCLInput const& CommandInput,MBCLI::MBTerminal* AssociatedTerminal)
     {
         int ReturnValue = 0;
@@ -1961,8 +1982,11 @@ namespace MBPM
         //Extensions
         std::unique_ptr<CLI_Extension, void (*)(void*)> BuildExtension = std::unique_ptr<CLI_Extension, void (*)(void*)>(new MBBuild::MBBuild_Extension(),
             __Delete<MBBuild::MBBuild_Extension>);
+        std::unique_ptr<CLI_Extension, void (*)(void*)> VimExtension = std::unique_ptr<MBPM_Vim, void (*)(void*)>(new MBPM_Vim(),
+            __Delete<MBPM_Vim>);
         //
         p_RegisterExtension(std::move(BuildExtension));
+        p_RegisterExtension(std::move(VimExtension));
 
         if (CommandInput.CommandOptions.find("computerdiff") != CommandInput.CommandOptions.end())
         {

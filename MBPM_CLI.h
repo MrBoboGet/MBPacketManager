@@ -92,6 +92,7 @@ namespace MBPM
         int p_HandleExec(std::vector<PacketIdentifier> PacketsToExecute,MBCLI::ProcessedCLInput const& CommandInput,MBCLI::MBTerminal& AssociatedTerminal);
         int p_HandlePackets(std::vector<PacketIdentifier> PacketsToDisplay,MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
         int p_HandleCustomCommand(std::vector<PacketIdentifier> PackestToHandle,MBCLI::ProcessedCLInput const& CommandInput,MBCLI::MBTerminal* AssociatedTerminal);
+        MBError p_ExecuteEmptyCommand(PacketIdentifier const& PacketToHandle,std::string const& CommandName,MBCLI::MBTerminal& TerminalToUse);
 
         int p_HandlePackSpec(MBCLI::ProcessedCLInput const& CommandInput,MBCLI::ProcessedCLInput& OutInput,std::vector<PacketIdentifier>& OutPackets,MBCLI::MBTerminal& AssociatedTerminal);
 
