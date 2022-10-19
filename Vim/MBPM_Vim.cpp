@@ -48,52 +48,62 @@ namespace MBPM
     MBError ParseVimPacketInfo(std::filesystem::path const& FilePath,VimPacketInfo& OutInfo)
     {
         MBError ReturnValue = true;
-        VimPacketInfo Result;
-        std::string TotalFileData = MBUtility::ReadWholeFile(MBUnicode::PathToUTF8(FilePath));
-        MBParsing::JSONObject JsonData = MBParsing::ParseJSONObject(TotalFileData,0,nullptr,&ReturnValue);
-        if(!ReturnValue) return(ReturnValue);
-        try
-        {
-            if(JsonData.HasAttribute("PluginFiles"))
-            {
-                for(auto const& PluginFile : JsonData["PluginFiles"].GetArrayData())
-                {
-                    Result.PluginFiles.push_back(PluginFile.GetStringData());
-                }
-            }
-            if(JsonData.HasAttribute("FiletypeFiles"))
-            {
-                for(auto const& FiletypeFile : JsonData["FiletypeFiles"].GetArrayData())
-                {
-                    Result.FiletypeFiles.push_back(FiletypeFile.GetStringData());
-                }
-            }
-        }
-        catch(std::exception const& e)
-        {
-            ReturnValue = false;
-            ReturnValue.ErrorMessage = e.what();
-        }
-        OutInfo = std::move(Result);
+        //VimPacketInfo Result;
+        //std::string TotalFileData = MBUtility::ReadWholeFile(MBUnicode::PathToUTF8(FilePath));
+        //MBParsing::JSONObject JsonData = MBParsing::ParseJSONObject(TotalFileData,0,nullptr,&ReturnValue);
+        //if(!ReturnValue) return(ReturnValue);
+        //try
+        //{
+        //    if(JsonData.HasAttribute("PluginFiles"))
+        //    {
+        //        for(auto const& PluginFile : JsonData["PluginFiles"].GetArrayData())
+        //        {
+        //            Result.PluginFiles.push_back(PluginFile.GetStringData());
+        //        }
+        //    }
+        //    if(JsonData.HasAttribute("FiletypeFiles"))
+        //    {
+        //        for(auto const& FiletypeFile : JsonData["FiletypeFiles"].GetArrayData())
+        //        {
+        //            Result.FiletypeFiles.push_back(FiletypeFile.GetStringData());
+        //        }
+        //    }
+        //}
+        //catch(std::exception const& e)
+        //{
+        //    ReturnValue = false;
+        //    ReturnValue.ErrorMessage = e.what();
+        //}
+        //OutInfo = std::move(Result);
         return(ReturnValue);    
     }
     MBError MBPM_Vim::p_HandleExport(MBPM::CommandInfo const& CommandToHandle,MBPM::PacketIdentifier const& PacketToHandle,MBPM::PacketRetriever& RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal)
     {
         MBError ReturnValue = true;
-        VimPacketInfo VimInfo;
-        ReturnValue = ParseVimPacketInfo(PacketToHandle.PacketURI+"/VimPacketInfo.json",VimInfo);
-        if(!ReturnValue) return(ReturnValue);
-        std::filesystem::path UserHomeDir =  MBSystem::GetUserHomeDirectory();
-        for(std::string const& PluginFile : VimInfo.PluginFiles)
+        //VimPacketInfo VimInfo;
+        //ReturnValue = ParseVimPacketInfo(PacketToHandle.PacketURI+"/VimPacketInfo.json",VimInfo);
+        //if(!ReturnValue) return(ReturnValue);
+        //Creates a symlink to the specified directory, doesn't copy any files
+        std::filesystem::path UserVimDirectory =  MBSystem::GetUserHomeDirectory()/i_GetVimUserDir();
+        std::filesystem::path VimPluginDirectory = UserVimDirectory/"mbpm";
+        if(!std::filesystem::exists(VimPluginDirectory))
         {
-            std::filesystem::path OutPath = UserHomeDir/i_GetVimUserDir()/("plugin/"+PacketToHandle.PacketName+"/"+PluginFile);
-            std::filesystem::path SourcePath = PacketToHandle.PacketURI+"/"+PluginFile;
-            if(!std::filesystem::exists(OutPath.parent_path()))
-            {
-                std::filesystem::create_directories(OutPath.parent_path());   
-            }
-            std::filesystem::copy(SourcePath,OutPath);
+            std::filesystem::create_directories(VimPluginDirectory);       
         }
+        std::filesystem::path MBPMScriptPath = UserVimDirectory/"autoload"/"mbpm.vim";
+        if(!std::filesystem::exists(MBPMScriptPath))
+        {
+            std::filesystem::create_directories(MBPMScriptPath.parent_path());
+            std::ofstream OutFile = std::ofstream(MBPMScriptPath);
+            OutFile << 
+#include "mbpmscript.inc"
+                ;
+        }
+        if(std::filesystem::exists(VimPluginDirectory/PacketToHandle.PacketName))
+        {
+            std::filesystem::remove(VimPluginDirectory/PacketToHandle.PacketName);
+        }
+        std::filesystem::create_directory_symlink(PacketToHandle.PacketURI,VimPluginDirectory/PacketToHandle.PacketName);
         return(ReturnValue);
     }
     void MBPM_Vim::HandleHelp(MBPM::CommandInfo const& CommandToHandle,MBCLI::MBTerminal& AssociatedTerminal)

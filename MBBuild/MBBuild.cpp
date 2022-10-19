@@ -753,6 +753,8 @@ namespace MBPM
     std::string DependancyInfo::GetGCCDependancyCommand(std::filesystem::path const& BuildRoot,std::vector<std::string> const& SourcesToCheck,std::vector<std::string> const& ExtraIncludeDirectories)
     {
         std::string ReturnValue;
+        //Hack
+        //maby add -std=c++17?
         ReturnValue = "gcc -MM -MF - ";
         for(std::string const& String : SourcesToCheck)
         {

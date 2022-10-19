@@ -6,8 +6,8 @@ namespace MBPM
        
     struct VimPacketInfo
     {
-        std::vector<std::string> PluginFiles;
-        std::vector<std::string> FiletypeFiles;
+        //std::vector<std::string> PluginFiles;
+        //std::vector<std::string> FiletypeFiles;
     };
     MBError ParseVimPacketInfo(std::filesystem::path const& FilePath,VimPacketInfo& OutInfo);
     class MBPM_Vim : public MBPM::CLI_Extension

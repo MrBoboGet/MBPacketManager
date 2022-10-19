@@ -343,15 +343,15 @@ namespace MBPM
             std::vector<PacketIdentifier> NewPackets;
             for(auto& Packet : OutPackets)
             {
-                if(Inclusive)
-                {
-                    NewPackets.push_back(std::move(Packet));   
-                }
                 auto SubPackets = m_PacketRetriever.GetSubPackets(Packet,ReturnValue);
                 if(!ReturnValue) return(ReturnValue);
                 for(auto& SubPacket : SubPackets)
                 {
                     NewPackets.push_back(std::move(SubPacket)); 
+                }
+                if(Inclusive)
+                {
+                    NewPackets.push_back(std::move(Packet));   
                 }
             }
             OutPackets = std::move(NewPackets);
