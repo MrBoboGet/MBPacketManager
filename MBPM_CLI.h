@@ -84,6 +84,7 @@ namespace MBPM
         int p_HandleInstall(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
         int p_HandleGet(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
         int p_HandleIndex(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal);
+        int p_HandleCommands(MBCLI::ProcessedCLInput const& CommandInput,MBCLI::MBTerminal& AssociatedTerminal);
 
 
         //Vectorized commands

@@ -15,7 +15,8 @@
                 "/MBPM_CLI.cpp",
                 "/MB_PacketProtocol.cpp",
                 "/MBBuild/MBBuild.cpp",
-                "/Vim/MBPM_Vim.cpp"
+                "/Vim/MBPM_Vim.cpp",
+                "/Bash/MBPM_Bash.cpp"
             ]
         },
         "mbpm":
@@ -29,6 +30,7 @@
                 "/MB_PacketProtocol.cpp",
                 "/MBBuild/MBBuild.cpp",
                 "/Vim/MBPM_Vim.cpp",
+                "/Bash/MBPM_Bash.cpp",
                 "/MBPMCLIMain.cpp"
             ]
         }

@@ -15,6 +15,7 @@
 #include <unordered_set>
 #include "MBBuild/MBBuild.h"
 #include "Vim/MBPM_Vim.h"
+#include "Bash/MBPM_Bash.h"
 //#include "MBBuild/MBBuild.h"
 //#include "MBCLI/"
 
@@ -1944,6 +1945,25 @@ namespace MBPM
         }
         return(ReturnValue);
     }
+    int MBPM_ClI::p_HandleCommands(MBCLI::ProcessedCLInput const& CommandInput,MBCLI::MBTerminal& AssociatedTerminal)
+    {
+        int ReturnValue = 0; 
+        //lists all builtin commands, aswell as all user defined commands
+        std::vector<std::string> StringToPrint = {"update","install","index","upload","get","packets"};
+        for(auto const& Hook : m_CustomCommandTypes)
+        {
+            StringToPrint.push_back(Hook.first);
+        }
+        for(std::string const& StringToPrint : StringToPrint)
+        {
+            if(StringToPrint == "")
+            {
+                continue; 
+            }
+            AssociatedTerminal.PrintLine(StringToPrint);
+        }
+        return(ReturnValue);
+    }
     std::string h_ReadMBPMStaticData(std::string const& Filepath)
     {
         std::string ReturnValue = "";
@@ -1984,9 +2004,12 @@ namespace MBPM
             __Delete<MBBuild::MBBuild_Extension>);
         std::unique_ptr<CLI_Extension, void (*)(void*)> VimExtension = std::unique_ptr<MBPM_Vim, void (*)(void*)>(new MBPM_Vim(),
             __Delete<MBPM_Vim>);
+        std::unique_ptr<CLI_Extension, void (*)(void*)> BashExtension = std::unique_ptr<MBPM_Bash, void (*)(void*)>(new MBPM_Bash(),
+            __Delete<MBPM_Bash>);
         //
         p_RegisterExtension(std::move(BuildExtension));
         p_RegisterExtension(std::move(VimExtension));
+        p_RegisterExtension(std::move(BashExtension));
 
         if (CommandInput.CommandOptions.find("computerdiff") != CommandInput.CommandOptions.end())
         {
@@ -2009,6 +2032,10 @@ namespace MBPM
         else if(CommandInput.TopCommand == "get")
         {
             return( p_HandleGet(CommandInput, AssociatedTerminal));
+        }
+        else if(CommandInput.TopCommand == "commands")
+        {
+            return(p_HandleCommands(CommandInput, *AssociatedTerminal));
         }
         else if (CommandInput.TopCommand == "index")
         {

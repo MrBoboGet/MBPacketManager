@@ -30,6 +30,11 @@ namespace MBPM
         ExportCommand.SupportedTypes = {"Vim"};
         ExportCommand.Type = CommandType::TopCommand;
         ReturnValue.Commands = {std::move(ExportCommand)};
+        CustomCommand RetractCommand;
+        RetractCommand.Name = "retract";
+        RetractCommand.SupportedTypes = {"Vim"};
+        RetractCommand.Type = CommandType::TopCommand;
+        ReturnValue.Commands = {std::move(RetractCommand)};
         return(ReturnValue);
     }
     void MBPM_Vim::SetConfigurationDirectory(const char* ConfigurationDirectory,const char** OutError) 
@@ -80,9 +85,6 @@ namespace MBPM
     MBError MBPM_Vim::p_HandleExport(MBPM::CommandInfo const& CommandToHandle,MBPM::PacketIdentifier const& PacketToHandle,MBPM::PacketRetriever& RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal)
     {
         MBError ReturnValue = true;
-        //VimPacketInfo VimInfo;
-        //ReturnValue = ParseVimPacketInfo(PacketToHandle.PacketURI+"/VimPacketInfo.json",VimInfo);
-        //if(!ReturnValue) return(ReturnValue);
         //Creates a symlink to the specified directory, doesn't copy any files
         std::filesystem::path UserVimDirectory =  MBSystem::GetUserHomeDirectory()/i_GetVimUserDir();
         std::filesystem::path VimPluginDirectory = UserVimDirectory/"mbpm";
@@ -104,6 +106,17 @@ namespace MBPM
             std::filesystem::remove(VimPluginDirectory/PacketToHandle.PacketName);
         }
         std::filesystem::create_directory_symlink(PacketToHandle.PacketURI,VimPluginDirectory/PacketToHandle.PacketName);
+        return(ReturnValue);
+    }
+    MBError MBPM_Vim::p_HandleRetract(MBPM::CommandInfo const& CommandToHandle,MBPM::PacketIdentifier const& PacketToHandle,MBPM::PacketRetriever& RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal)
+    {
+        MBError ReturnValue = true;
+        std::filesystem::path UserVimDirectory =  MBSystem::GetUserHomeDirectory()/i_GetVimUserDir();
+        std::filesystem::path DirectoryToRemove = UserVimDirectory/"mbpm"/PacketToHandle.PacketName;
+        if(std::filesystem::exists(DirectoryToRemove))
+        {
+            std::filesystem::remove(DirectoryToRemove);
+        }
         return(ReturnValue);
     }
     void MBPM_Vim::HandleHelp(MBPM::CommandInfo const& CommandToHandle,MBCLI::MBTerminal& AssociatedTerminal)

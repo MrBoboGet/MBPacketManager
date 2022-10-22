@@ -14,6 +14,7 @@ namespace MBPM
     {
         private:
             MBError p_HandleExport(MBPM::CommandInfo const& CommandToHandle,MBPM::PacketIdentifier const& PacketToHandle,MBPM::PacketRetriever& RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal);
+            MBError p_HandleRetract(MBPM::CommandInfo const& CommandToHandle,MBPM::PacketIdentifier const& PacketToHandle,MBPM::PacketRetriever& RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal);
         public:
             virtual const char* GetName() override;
             virtual MBPM::CustomCommandInfo GetCustomCommands() override;
