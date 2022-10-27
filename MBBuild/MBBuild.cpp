@@ -1194,19 +1194,16 @@ namespace MBPM
     bool MBBuild_Extension::p_VerifyToolchain(SourceInfo const& InfoToCompile,CompileConfiguration const& CompileConfigToVerify)
     {
         bool ToolchainSupported = false; 
-        for(auto const& Toolchain : {"msvc","gcc","clang"})
-        {
-            if(CompileConfigToVerify.Toolchain == Toolchain)
-            {
-                ToolchainSupported = true;
-                break;   
-            }
-        }
-        if(!ToolchainSupported)
+        auto const& ItToolchain = m_SupportedCompilers.find(CompileConfigToVerify.Toolchain);
+        if(ItToolchain == m_SupportedCompilers.end())
         {
             throw std::runtime_error("Unsupported toolchain: "+CompileConfigToVerify.Toolchain);   
         }
-        //TODO per toolchain verify that booth the language and standard is supported
+        MBError SupportedSources = ItToolchain->second->SupportsLanguage(InfoToCompile);
+        if(!SupportedSources)
+        {
+            throw std::runtime_error("Unsupported SourceInfo: "+SupportedSources.ErrorMessage);
+        }
         return(ToolchainSupported);
     }
 
@@ -1232,11 +1229,13 @@ namespace MBPM
         }
         else if(Standard == "C99")
         {
-            ReturnValue = "c99";
+            //a little bit bruh, but msvc doesn't seem to support c99
+            ReturnValue += "c11";
         }
         else if(Standard == "C89")
         {
-            ReturnValue = "c89";
+            //default is c89
+            ReturnValue = "";
         }
         ReturnValue += " ";
         return(ReturnValue);
@@ -1464,11 +1463,11 @@ namespace MBPM
                 ReturnValue.ErrorMessage = "Invalid targets for compilation: Target not found in MBSourceInfo.json";
                 return(ReturnValue);
             }
-            auto const& ConfIt = CompileConfigurations.Configurations.find("C++");
+            auto const& ConfIt = CompileConfigurations.Configurations.find(BuildInfo.Language);
             if(ConfIt == CompileConfigurations.Configurations.end())
             {
                 ReturnValue = false;
-                ReturnValue.ErrorMessage = "MBBuild currently only supports C++ builds";   
+                ReturnValue.ErrorMessage = "No compile configurations exist for language: "+BuildInfo.Language;
                 return(ReturnValue);
             }
             LanguageConfiguration const& LanguageInfo = ConfIt->second;
@@ -1476,7 +1475,7 @@ namespace MBPM
             if(!ConfigsAreValid)
             {
                 ReturnValue = false;
-                ReturnValue.ErrorMessage = "Invalid config: Configuration not found in C++ language configurations";
+                ReturnValue.ErrorMessage = "Invalid config: Configuration not found in language configurations";
                 return(ReturnValue);
             }
             DependancyConfigSpecification DepConf = p_GetGlobalDependancySpecification();
@@ -2222,7 +2221,18 @@ namespace MBPM
     MBError Compiler_GCCSyntax::SupportsLanguage(SourceInfo const& SourcesToCheck) 
     {
         MBError ReturnValue = true;
-
+        if(SourcesToCheck.Language != "C++" && SourcesToCheck.Language != "C")
+        {
+            ReturnValue = false;
+            ReturnValue.ErrorMessage = "Only C/C++ supported for "+m_CompilerBase;
+            return(ReturnValue);
+        }
+        std::string Standard = h_MBStandardToGCCStandard(SourcesToCheck.Language,SourcesToCheck.Language);
+        if(Standard == "")
+        {
+            ReturnValue = false;
+            ReturnValue.ErrorMessage = "Unknown standard for "+SourcesToCheck.Language+": "+SourcesToCheck.Standard;   
+        }
         return(ReturnValue);
     }
     std::string Compiler_GCCSyntax::p_GetCompilerName(SourceInfo const& SInfo)
@@ -2353,7 +2363,19 @@ namespace MBPM
     MBError Compiler_MSVC::SupportsLanguage(SourceInfo const& SourcesToCheck) 
     {
         MBError ReturnValue = true;
-
+        if(SourcesToCheck.Language == "C" || SourcesToCheck.Language == "C++")
+        {
+            ReturnValue = false;
+            ReturnValue.ErrorMessage = "Only C and C++ supported for msvc"; 
+            return(ReturnValue);
+        }
+        std::string Config = h_MBStandardToMSVCStandard(SourcesToCheck.Language,SourcesToCheck.Standard);
+        if(Config == "")
+        {
+            ReturnValue = false;
+            ReturnValue.ErrorMessage = "Unkown standard: "+SourcesToCheck.Standard;   
+            return(ReturnValue);
+        }
         return(ReturnValue);
     }
     bool Compiler_MSVC::CompileSource( CompileConfiguration const& CompileConf,
