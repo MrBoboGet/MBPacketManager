@@ -254,7 +254,63 @@ namespace MBPM
 
         MBError UpdateUpdatedFilesDependancies(std::filesystem::path const& SourceDirectory,std::vector<std::string> const& ExtraIncludes);
     };
-
+    
+    class Compiler
+    {
+    public:
+        virtual MBError SupportsLanguage(SourceInfo const& SourcesToCheck) = 0;
+        virtual bool CompileSource( CompileConfiguration const& CompileConfig,
+                                    SourceInfo const& SInfo,
+                                    std::string const& SourcePath,
+                                    std::string const& OutTopDir,
+                                    std::vector<std::string> const& ExtraIncludes) = 0;
+        virtual bool LinkTarget(CompileConfiguration const& CompileConfig,
+                                SourceInfo const& SInfo,
+                                Target const& TargetToLink,
+                                std::string const& SourceDir,
+                                std::string const& OutDir,
+                                std::vector<std::string> const& ExtraLinkLibraries) = 0;
+    };
+    //assumes here that clang and gcc works the same way, not entirely true, and that they support the same versions.
+    //TODO is there a way to dynamically check wheter or not a compiler supports C++20 etc?
+    class Compiler_GCCSyntax : public Compiler
+    {
+        std::string m_CompilerBase = "";
+        std::string p_GetCompilerName(SourceInfo const& SInfo);
+    public:
+        Compiler_GCCSyntax(std::string const& CompilerBase)
+        {
+            m_CompilerBase = CompilerBase;
+        }
+        virtual MBError SupportsLanguage(SourceInfo const& SourcesToCheck) override;
+        virtual bool CompileSource( CompileConfiguration const& CompileConfig,
+                                    SourceInfo const& SInfo,
+                                    std::string const& SourcePath,
+                                    std::string const& OutTopDir,
+                                    std::vector<std::string> const& ExtraIncludes) override;
+        virtual bool LinkTarget(CompileConfiguration const& CompileConfig,
+                                SourceInfo const& SInfo,
+                                Target const& TargetToLink,
+                                std::string const& SourceDir,
+                                std::string const& OutDir,
+                                std::vector<std::string> const& ExtraLinkLibraries) override;
+    };
+    class Compiler_MSVC : public Compiler
+    {
+    public: 
+        virtual MBError SupportsLanguage(SourceInfo const& SourcesToCheck) override;
+        virtual bool CompileSource( CompileConfiguration const& CompileConfig,
+                                    SourceInfo const& SInfo,
+                                    std::string const& SourcePath,
+                                    std::string const& OutTopDir,
+                                    std::vector<std::string> const& ExtraIncludes) override;
+        virtual bool LinkTarget(CompileConfiguration const& CompileConfig,
+                                SourceInfo const& SInfo,
+                                Target const& TargetToLink,
+                                std::string const& SourceDir,
+                                std::string const& OutDir,
+                                std::vector<std::string> const& ExtraLinkLibraries) override;
+    };
     class MBBuild_Extension : public CLI_Extension
     {
     private:
@@ -272,17 +328,11 @@ namespace MBPM
         bool p_VerifyTargets(SourceInfo const& InfoToCompile,std::vector<std::string> const& Targests);
         //Responsible both for verifying that the toolchain is supported, and that the standard is supported by the toolchain 
         bool p_VerifyToolchain(SourceInfo const& InfoToCompile,CompileConfiguration const& TargetToVerify);
-       
-        bool p_Compile(CompileConfiguration const& CompileConf,SourceInfo const& SInfo,std::string const& SourceToCompile,std::string const& OutTopDirectory,std::vector<std::string> const& ExtraIncludeDirectories);
-        bool p_Link(CompileConfiguration const& CompileConfig,SourceInfo const& SInfo, std::string const& ConfigName, Target const& TargetToLink, std::vector<std::string> ExtraLibraries);
+     
 
-        bool p_Compile_MSVC(CompileConfiguration const& CompileConf,SourceInfo const& SInfo,std::string const& SourceToCompile,std::string const& OutTopDirectory,std::vector<std::string> const& ExtraIncludeDirectories);
-        bool p_Link_MSVC(CompileConfiguration const& CompileConfig, SourceInfo const& SInfo,std::string const& ConfigName, Target const& TargetToLink, std::vector<std::string> ExtraLibraries);
+        std::unordered_map<std::string,std::unique_ptr<Compiler>> m_SupportedCompilers;
         
-        bool p_Compile_GCC(std::string const& CompilerName,CompileConfiguration const& CompileConf,SourceInfo const& SInfo,std::string const& SourceToCompile,std::string const& OutTopDirectory,std::vector<std::string> const& ExtraIncludeDirectories);
-        bool p_Link_GCC( std::string const& CompilerName,CompileConfiguration const& CompileConfig, SourceInfo const& SInfo,std::string const& ConfigName, Target const& TargetToLink, std::vector<std::string> ExtraLibraries);
-        
-        MBError p_BuildLanguageConfig(std::filesystem::path const& PacketPath,MBPM_PacketInfo const& PacketInfo,DependancyConfigSpecification const& Dependancies,CompileConfiguration const& CompileConf,std::string const& CompileConfName, SourceInfo const& InfoToCompile,std::vector<std::string> const& Targets,CommandInfo const& CommandInfo);
+        MBError p_BuildLanguageConfig(std::filesystem::path const& PacketPath,MBPM_PacketInfo const& PacketInfo,DependancyConfigSpecification const& Dependancies,CompileConfiguration const& CompileConf,std::string const& CompileConfName, SourceInfo const& InfoToCompile,std::vector<std::string> const& Targets,CommandInfo const& CommandInfo,Compiler& CompilerToUse);
 
 
         MBError p_Handle_Compile(CommandInfo const& CommandToHandle,PacketIdentifier const& PacketToHandle,PacketRetriever & RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal);
@@ -291,6 +341,7 @@ namespace MBPM
         MBError p_Handle_Create(CommandInfo const& CommandToHandle,PacketIdentifier const& PacketToHandle,PacketRetriever& RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal);
         MBError p_Handle_Verify(CommandInfo const& CommandToHandle,PacketIdentifier const& PacketToHandle,PacketRetriever& RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal);
     public:
+        MBBuild_Extension();
         virtual const char* GetName() override; 
         virtual CustomCommandInfo GetCustomCommands() override;
         virtual void SetConfigurationDirectory(const char* ConfigurationDirectory,const char** OutError) override;
@@ -298,8 +349,6 @@ namespace MBPM
         virtual void HandleHelp(CommandInfo const& CommandToHandle,MBCLI::MBTerminal& AssociatedTerminal) override;
 
         MBError BuildPacket(std::filesystem::path const& PacketPath,std::vector<std::string> Configs,std::vector<std::string> Targets,CommandInfo const& Command);
-        MBError ExportPacket(std::filesystem::path const& PacketPath);
-        MBError RetractPacket(std::filesystem::path const& PacketPath);
     };
 }
 }

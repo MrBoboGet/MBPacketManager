@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <ios>
 #include <limits>
+#include <memory>
 #include <stdexcept>
 #include <unordered_map>
 #include <stdint.h>
@@ -764,7 +765,7 @@ namespace MBPM
         for(std::string const& Include : ExtraIncludeDirectories)
         {
             ReturnValue += "-I";
-            ReturnValue += MBUnicode::PathToUTF8(BuildRoot)+"/"+Include;   
+            ReturnValue += Include;
             ReturnValue += ' ';
         }
         return(ReturnValue); 
@@ -1105,6 +1106,12 @@ namespace MBPM
   
     //BEGIN MBBuildCLI 
     
+    MBBuild_Extension::MBBuild_Extension()
+    {
+        m_SupportedCompilers["clang"] = std::make_unique<Compiler_GCCSyntax>("clang");    
+        m_SupportedCompilers["gcc"] = std::make_unique<Compiler_GCCSyntax>("gcc");    
+        m_SupportedCompilers["msvc"] = std::make_unique<Compiler_MSVC>();    
+    }
     UserConfigurationsInfo MBBuild_Extension::p_GetGlobalCompileConfigurations()
     {
        UserConfigurationsInfo ReturnValue;
@@ -1203,12 +1210,12 @@ namespace MBPM
         return(ToolchainSupported);
     }
 
-    std::vector<std::string> h_SourcesToObjectFiles(std::string const& ConfigName, std::vector<std::string> const& Sources, std::string const& Extension)
+    std::vector<std::string> h_SourcesToObjectFiles(std::string const& SourceDir, std::vector<std::string> const& Sources, std::string const& Extension)
     {
         std::vector<std::string> ReturnValue;
         for(std::string const& Source : Sources)
         {
-            ReturnValue.push_back("MBPM_BuildFiles/"+ConfigName+"/"+h_ReplaceExtension(Source.substr(1), Extension));
+            ReturnValue.push_back(SourceDir+"/"+h_ReplaceExtension(Source.substr(1), Extension));
         }
         return(ReturnValue);    
     }
@@ -1223,92 +1230,18 @@ namespace MBPM
         {
             ReturnValue += "c11";   
         }
+        else if(Standard == "C99")
+        {
+            ReturnValue = "c99";
+        }
+        else if(Standard == "C89")
+        {
+            ReturnValue = "c89";
+        }
         ReturnValue += " ";
         return(ReturnValue);
     }
 
-    bool MBBuild_Extension::p_Compile_MSVC(CompileConfiguration const& CompileConf,SourceInfo const& SInfo,std::string const& SourceToCompile,std::string const& OutDir,std::vector<std::string> const& ExtraIncludeDirectories)
-    {
-        //std::string CompileCommand = "vcvars64.bat & cl /c ";
-        bool ReturnValue = true;
-        std::string CompileCommand = "vcvarsall.bat x86_x64 & cl /c ";
-        CompileCommand += h_MBStandardToMSVCStandard(SInfo.Language, SInfo.Standard);
-        for(std::string const& Flag : CompileConf.CompileFlags)
-        {
-            CompileCommand += Flag;
-            CompileCommand += ' ';
-        }
-        for(std::string const& ExtraInclude : ExtraIncludeDirectories)
-        {
-            CompileCommand += "/I \""+ExtraInclude+"\"";
-            CompileCommand += ' ';
-        }
-        CompileCommand += SourceToCompile.substr(1)+' ';
-        //output path
-        CompileCommand += "/Fo\"";
-        std::string OutSourcePath = OutDir+"/"+h_ReplaceExtension(SourceToCompile,"obj");
-        CompileCommand += OutSourcePath;
-        CompileCommand += "\"";
-        CompileCommand += " ";
-        CompileCommand += "/Fd"+OutDir+"/"+h_ReplaceExtension(SourceToCompile,"pdb");
-        std::filesystem::path ParentDirectory = std::filesystem::path(OutSourcePath).parent_path();
-        if(!std::filesystem::exists(ParentDirectory))
-        {
-            std::filesystem::create_directories(ParentDirectory);
-        }
-         
-        int Result = std::system(CompileCommand.c_str());    
-        ReturnValue = Result == 0;
-        return(ReturnValue);
-    }
-    bool MBBuild_Extension::p_Link_MSVC(CompileConfiguration const& CompileConfig,SourceInfo const& SInfo, std::string const& ConfigName, Target const& TargetToLink, std::vector<std::string> ExtraLibraries)
-    {
-        bool ReturnValue = true;
-        std::vector<std::string> ObjectFiles = h_SourcesToObjectFiles(ConfigName,TargetToLink.SourceFiles,"obj");
-        std::string OutputDirectory = "MBPM_Builds/"+ConfigName+"/";
-        if(!std::filesystem::exists(OutputDirectory))
-        {
-            std::filesystem::create_directories(OutputDirectory);
-        }
-        std::string ObjectFilesList = " "; 
-        for(auto const& ObjectFile : ObjectFiles)
-        {
-            ObjectFilesList += ObjectFile;   
-            ObjectFilesList += ' ';   
-        }
-        if(TargetToLink.Type == TargetType::Executable)
-        {
-            std::string LinkCommand = "vcvarsall.bat x86_x64 & link ";    
-            LinkCommand += ObjectFilesList;
-            for(std::string const& Library : ExtraLibraries)
-            {
-                LinkCommand += Library;   
-                LinkCommand += ' ';
-            }
-            for (std::string const& Flag : CompileConfig.LinkFlags)
-            {
-                LinkCommand += Flag;
-                LinkCommand += ' ';
-            }
-            LinkCommand += "/OUT:"+ OutputDirectory+ TargetToLink.OutputName + ".exe";
-            //LinkCommand += "/OUT:"+TargetToLink.OutputName + ".exe & move "+TargetToLink.OutputName + ".exe "+OutputDirectory+TargetToLink.OutputName+".exe";
-            int Result = std::system(LinkCommand.c_str());     
-            ReturnValue = Result == 0;
-        }
-        else if(TargetToLink.Type == TargetType::Library)
-        {
-            std::string LinkCommand =  "vcvarsall.bat x86_x64 & lib ";
-            LinkCommand += ObjectFilesList;
-            LinkCommand += "/OUT:"+OutputDirectory+TargetToLink.OutputName+".lib";
-            int Result = std::system(LinkCommand.c_str());
-            ReturnValue = Result == 0;
-        }
-        else 
-        {
-            throw std::runtime_error("Unsupported target type");   
-        }
-        return(ReturnValue);   
-    }
     std::string h_MBStandardToGCCStandard(std::string const& Language,std::string const& Standard)
     {
         std::string ReturnValue = " -std=";
@@ -1316,109 +1249,16 @@ namespace MBPM
         {
             ReturnValue += "c++17";  
         } 
-        else if(Standard == "c99")
+        else if(Standard == "C99")
         {
             ReturnValue += "c99";
         }
+        else if(Standard == "C89")
+        {
+            ReturnValue += "c89";   
+        }
         ReturnValue += " ";
         return(ReturnValue); 
-    }
-    bool MBBuild_Extension::p_Compile_GCC(std::string const& CompilerName,CompileConfiguration const& CompileConf,SourceInfo const& SInfo,std::string const& SourceToCompile,std::string const& OutDir,std::vector<std::string> const& ExtraIncludeDirectories)
-    {
-        bool ReturnValue = true;
-        std::string CompileCommand =  CompilerName+" -c ";    
-        CompileCommand += h_MBStandardToGCCStandard(SInfo.Language,SInfo.Standard);
-        for(std::string const& Flag : CompileConf.CompileFlags)
-        {
-            CompileCommand += Flag;
-            CompileCommand += ' ';
-        }
-        for(std::string const& ExtraInclude : ExtraIncludeDirectories)
-        {
-            CompileCommand += "-I"+ExtraInclude;
-            CompileCommand += ' ';
-        }
-        CompileCommand += SourceToCompile.substr(1)+' ';
-        std::string OutSourcePath = OutDir+"/"+h_ReplaceExtension(SourceToCompile,"o");
-        std::filesystem::path ParentDirectory = std::filesystem::path(OutSourcePath).parent_path();
-        if(!std::filesystem::exists(ParentDirectory))
-        {
-            std::filesystem::create_directories(ParentDirectory);
-        }
-        CompileCommand += "-o "+OutSourcePath;
-        int Result = std::system(CompileCommand.c_str());
-        ReturnValue = Result == 0;
-        return(ReturnValue);
-    }
-    
-    bool MBBuild_Extension::p_Link_GCC(std::string const& CompilerName,CompileConfiguration const& CompileConfig,SourceInfo const& SInfo,std::string const& ConfigName,Target const& TargetToLink,std::vector<std::string> ExtraLibraries)
-    {
-        bool ReturnValue = true;
-        std::vector<std::string> ObjectFiles = h_SourcesToObjectFiles(ConfigName,TargetToLink.SourceFiles,"o");
-        std::string OutputDirectory = "MBPM_Builds/"+ConfigName+"/";
-        if(!std::filesystem::exists(OutputDirectory))
-        {
-            std::filesystem::create_directories(OutputDirectory);    
-        }
-        if(TargetToLink.Type == TargetType::Executable)
-        {
-            std::string LinkCommand = "g++ ";
-            LinkCommand += "-o "+ MBUnicode::PathToUTF8(OutputDirectory+TargetToLink.OutputName);
-            if constexpr(MBUtility::IsWindows())
-            {
-                LinkCommand += ".exe";   
-            }
-            LinkCommand += " ";
-            for (std::string const& ObjectFile : ObjectFiles)
-            {
-                LinkCommand += ObjectFile;
-                LinkCommand += ' ';
-            }
-            //extra libraries stuff
-            for (std::string const& LibraryPath : ExtraLibraries)
-            {
-                size_t LastSlash = LibraryPath.find_last_of('/');
-                if (LastSlash == LibraryPath.npos) 
-                {
-                    LastSlash = 0;
-                }
-                else
-                {
-                }
-                std::string Directory = LibraryPath.substr(0, LastSlash);
-                std::string Name = LibraryPath.substr(LastSlash+1);
-                LinkCommand += "-L" + Directory+ " ";
-                LinkCommand += "-l:" + Name+" ";
-            }
-            for (std::string const& LinkFlag : CompileConfig.LinkFlags)
-            {
-                LinkCommand += LinkFlag;
-                LinkCommand += ' ';
-            }
-            int LinkResult = std::system(LinkCommand.c_str());
-            ReturnValue = LinkResult == 0;
-        }
-        else if(TargetToLink.Type == TargetType::Library)
-        {
-            std::string LibraryName = TargetToLink.OutputName;
-            if constexpr( MBUtility::IsWindows())
-            {
-                LibraryName = TargetToLink.OutputName+".lib";
-            }
-            else
-            {
-                LibraryName = "lib"+TargetToLink.OutputName+".a";       
-            }
-            std::string LinkCommand = "ar rcs "+OutputDirectory+LibraryName +" ";
-            for (std::string const& ObjectFile : ObjectFiles)
-            {
-                LinkCommand += ObjectFile + " ";
-            }
-            //Dependancy stuff
-            int Result = std::system(LinkCommand.c_str());
-            ReturnValue = Result == 0;
-        }
-        return(ReturnValue);
     }
     std::string h_GetLibraryName(std::string const& TargetName)
     {
@@ -1440,62 +1280,8 @@ namespace MBPM
         }
         return(ReturnValue);
     }
-    bool MBBuild_Extension::p_Compile(CompileConfiguration const& CompileConf,SourceInfo const& SInfo,std::string const& SourceToCompile,std::string const& OutDir,std::vector<std::string> const& ExtraIncludeDirectories)
-    {
-        bool ReturnValue = false;
-        if(CompileConf.Toolchain == "gcc")
-        {
-            std::string CompilerName = "g++";
-            if (SInfo.Language == "C")
-            {
-                CompilerName = "gcc";
-            }
-            ReturnValue = p_Compile_GCC(CompilerName,CompileConf,SInfo,SourceToCompile,OutDir,ExtraIncludeDirectories);
-        }
-        else if(CompileConf.Toolchain == "clang")
-        {
-            std::string CompilerName = "clang++";
-            if (SInfo.Language == "C")
-            {
-                CompilerName = "clang";
-            }
-            ReturnValue = p_Compile_GCC(CompilerName,CompileConf,SInfo,SourceToCompile,OutDir,ExtraIncludeDirectories);
-        }
-        else if(CompileConf.Toolchain == "msvc")
-        {
-            ReturnValue = p_Compile_MSVC(CompileConf,SInfo,SourceToCompile,OutDir,ExtraIncludeDirectories);
-        }
-        return(ReturnValue);
-    }
-    bool MBBuild_Extension::p_Link(CompileConfiguration const& CompileConfig,SourceInfo const& SInfo, std::string const& ConfigName, Target const& TargetToLink, std::vector<std::string> ExtraLibraries)
-    {
-        bool ReturnValue = true;
-        if(CompileConfig.Toolchain == "gcc")
-        {
-            std::string CompilerName = "g++";
-            if(SInfo.Language == "C")
-            {
-                CompilerName = "gcc";   
-            }
-            ReturnValue = p_Link_GCC(CompilerName,CompileConfig, SInfo,ConfigName,TargetToLink,ExtraLibraries);
-        }
-        else if(CompileConfig.Toolchain == "clang")
-        {
-            std::string CompilerName = "clang++";
-            if(SInfo.Language == "C")
-            {
-                CompilerName = "clang";   
-            }
-            ReturnValue = p_Link_GCC(CompilerName,CompileConfig, SInfo,ConfigName,TargetToLink,ExtraLibraries);
-        }
-        else if(CompileConfig.Toolchain == "msvc")
-        {
-            ReturnValue = p_Link_MSVC(CompileConfig, SInfo,ConfigName,TargetToLink,ExtraLibraries);
-        }
-        return(ReturnValue);
-    }
 
-    MBError MBBuild_Extension::p_BuildLanguageConfig(std::filesystem::path const& PacketPath,MBPM_PacketInfo const& PacketInfo,DependancyConfigSpecification const& DependancySpec,CompileConfiguration const& CompileConf,std::string const& CompileConfName, SourceInfo const& InfoToCompile,std::vector<std::string> const& Targets,CommandInfo const& Command)
+    MBError MBBuild_Extension::p_BuildLanguageConfig(std::filesystem::path const& PacketPath,MBPM_PacketInfo const& PacketInfo,DependancyConfigSpecification const& DependancySpec,CompileConfiguration const& CompileConf,std::string const& CompileConfName, SourceInfo const& InfoToCompile,std::vector<std::string> const& Targets,CommandInfo const& Command,Compiler& CompilerToUse)
     {
         MBError ReturnValue = true;
         MBBuildPacketInfo BuildPacketInfo;
@@ -1573,7 +1359,7 @@ namespace MBPM
             }
             //TODO fix
             std::string CompileString = h_CreateCompileString(CompileConf);
-            std::string OutDir = MBUnicode::PathToUTF8(PacketPath/"MBPM_BuildFiles"/CompileConfName)+"/";
+            std::string OutSourceDir = MBUnicode::PathToUTF8(PacketPath/"MBPM_BuildFiles"/CompileConfName)+"/";
             bool CompilationResult = true;
             bool CompilationNeeded = false;
             for (std::string const& Source : TotalSources)
@@ -1583,7 +1369,7 @@ namespace MBPM
                     continue;    
                 }
                 CompilationNeeded = true;
-                CompilationResult = p_Compile(CompileConf,InfoToCompile,Source,OutDir,ExtraIncludes);
+                CompilationResult = CompilerToUse.CompileSource(CompileConf,InfoToCompile,Source,OutSourceDir,ExtraIncludes);
                 if(!CompilationResult)
                 {
                     break;   
@@ -1633,7 +1419,8 @@ namespace MBPM
                 Target const& CurrentTarget =InfoToCompile.Targets.at(TargetName);
                 if(CompilationNeeded || SourceDependancies.IsTargetOutOfDate(TargetName,LatestDependancyUpdate,CurrentTarget,LinkString) || RebuildAll)
                 {
-                    bool Result = p_Link(CompileConf, InfoToCompile,CompileConfName,CurrentTarget,ExtraLibraries);
+                    std::string OutDir = "MBPM_Builds/"+CompileConfName+"/";
+                    bool Result = CompilerToUse.LinkTarget(CompileConf, InfoToCompile,CurrentTarget,OutSourceDir,OutDir,ExtraLibraries);
                     if(!Result)
                     {
                         throw std::runtime_error("Error linking library");
@@ -1707,7 +1494,8 @@ namespace MBPM
             }
             for(std::string const& Config : Configs)
             {
-                ReturnValue = p_BuildLanguageConfig(PacketPath,PacketInfo,DepConf,LanguageInfo.Configurations.at(Config),Config,BuildInfo,Targets,Command);
+                ReturnValue = p_BuildLanguageConfig(PacketPath,PacketInfo,DepConf,LanguageInfo.Configurations.at(Config),Config,BuildInfo,Targets,Command
+                        , *m_SupportedCompilers[LanguageInfo.Configurations.at(Config).Toolchain]);
                 if (!ReturnValue)
                 {
                     return(ReturnValue);
@@ -1721,109 +1509,7 @@ namespace MBPM
         } 
         return(ReturnValue);    
     }
-    MBError MBBuild_Extension::ExportPacket(std::filesystem::path const& PacketPath)
-    {
-        MBError ReturnValue = true;
-        try
-        {
-            SourceInfo BuildInfo = p_GetPacketSourceInfo(PacketPath);
-            UserConfigurationsInfo CompileConfigurations = p_GetGlobalCompileConfigurations();
-            std::string ExecutablesDirectory = MBPM::GetSystemPacketsDirectory()+"/MBPM_ExportedExecutables/";
-            std::string LibraryDirectory = MBPM::GetSystemPacketsDirectory()+"/MBPM_CompiledLibraries/";
-            auto const& ConfigIt = CompileConfigurations.Configurations.find(BuildInfo.Language);
-            if(ConfigIt == CompileConfigurations.Configurations.end())
-            {
-                ReturnValue = false;
-                ReturnValue.ErrorMessage = "Language not supported in compile config: "+BuildInfo.Language;
-                return(ReturnValue);
-            }
-            LanguageConfiguration const& LanguageConfig = ConfigIt->second;
-            for(auto const& Target : BuildInfo.Targets)
-            {
-                std::string TargetFilename;
-                std::string OutDir;
-                if(Target.second.Type == TargetType::Executable)
-                {
-                    OutDir = ExecutablesDirectory;
-                    TargetFilename = h_GetExecutableName(Target.second.OutputName);   
-                }
-                else if(Target.second.Type == TargetType::StaticLibrary || Target.second.Type == TargetType::Library)
-                {
-                    OutDir = LibraryDirectory;
-                    TargetFilename = h_GetLibraryName(Target.second.OutputName);        
-                }
-                else
-                {
-                    throw std::runtime_error("Unsupported target type: DynamicLibrary");
-                }
-                std::filesystem::path PacketFile = PacketPath/"MBPM_Builds"/LanguageConfig.DefaultExportConfig/TargetFilename;
-                std::filesystem::path LinkPath = OutDir+TargetFilename;
-                if(std::filesystem::exists(LinkPath) || std::filesystem::is_symlink(LinkPath))
-                {
-                    std::filesystem::remove(LinkPath);   
-                }
-                std::filesystem::create_symlink(PacketFile,LinkPath);
-            }
-        }
-        catch(std::exception const& e)
-        {
-            ReturnValue = false;
-            ReturnValue.ErrorMessage = e.what(); 
-        } 
-        return(ReturnValue);    
-    }
     //ugly as it is more or less a carbon copy of the function above
-    MBError MBBuild_Extension::RetractPacket(std::filesystem::path const& PacketPath)
-    {
-        MBError ReturnValue = true;
-        try
-        {
-            SourceInfo BuildInfo = p_GetPacketSourceInfo(PacketPath);
-            UserConfigurationsInfo CompileConfigurations = p_GetGlobalCompileConfigurations();
-            std::string ExecutablesDirectory = MBPM::GetSystemPacketsDirectory()+"/MBPM_ExportedExecutables/";
-            std::string LibraryDirectory = MBPM::GetSystemPacketsDirectory()+"/MBPM_CompiledLibraries/";
-            auto const& ConfigIt = CompileConfigurations.Configurations.find(BuildInfo.Language);
-            if(ConfigIt == CompileConfigurations.Configurations.end())
-            {
-                ReturnValue = false;
-                ReturnValue.ErrorMessage = "Language not supported in compile config: "+BuildInfo.Language;
-                return(ReturnValue);
-            }
-            LanguageConfiguration const& LanguageConfig = ConfigIt->second;
-            for(auto const& Target : BuildInfo.Targets)
-            {
-                std::string TargetFilename;
-                std::string OutDir;
-                if(Target.second.Type == TargetType::Executable)
-                {
-                    OutDir = ExecutablesDirectory;
-                    TargetFilename = h_GetExecutableName(Target.second.OutputName);   
-                }
-                else if(Target.second.Type == TargetType::StaticLibrary || Target.second.Type == TargetType::Library)
-                {
-
-                    OutDir = LibraryDirectory;
-                    TargetFilename = h_GetLibraryName(Target.second.OutputName);        
-                }
-                else
-                {
-                    throw std::runtime_error("Unsupported target type: DynamicLibrary");
-                }
-                std::filesystem::path PacketFile = PacketPath/"MBPM_Builds"/LanguageConfig.DefaultExportConfig/TargetFilename;
-                std::filesystem::path LinkPath = OutDir+TargetFilename;
-                if(std::filesystem::exists(LinkPath) || std::filesystem::is_symlink(LinkPath))
-                {
-                    std::filesystem::remove(LinkPath);   
-                }
-            }
-        }
-        catch(std::exception const& e)
-        {
-            ReturnValue = false;
-            ReturnValue.ErrorMessage = e.what(); 
-        } 
-        return(ReturnValue);    
-    }
     const char* MBBuild_Extension::GetName()
     {
         return("MBBuild"); 
@@ -1917,13 +1603,120 @@ namespace MBPM
     MBError MBBuild_Extension::p_Handle_Export(CommandInfo const& CommandToHandle,PacketIdentifier const& PacketToHandle,PacketRetriever& RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal)
     {
         MBError ReturnValue = true;
-        ReturnValue =  ExportPacket(PacketToHandle.PacketURI);
+        try
+        {
+            SourceInfo BuildInfo = p_GetPacketSourceInfo(PacketToHandle.PacketURI);
+            UserConfigurationsInfo CompileConfigurations = p_GetGlobalCompileConfigurations();
+            std::string ExecutablesDirectory = MBPM::GetSystemPacketsDirectory()+"/MBPM_ExportedExecutables/";
+            std::string LibraryDirectory = MBPM::GetSystemPacketsDirectory()+"/MBPM_CompiledLibraries/";
+            auto const& ConfigIt = CompileConfigurations.Configurations.find(BuildInfo.Language);
+            if(ConfigIt == CompileConfigurations.Configurations.end())
+            {
+                ReturnValue = false;
+                ReturnValue.ErrorMessage = "Language not supported in compile config: "+BuildInfo.Language;
+                return(ReturnValue);
+            }
+            LanguageConfiguration const& LanguageConfig = ConfigIt->second;
+            std::string ExportConfiguration = LanguageConfig.DefaultExportConfig;
+            auto const& ItExportOverride = CommandToHandle.SingleValueOptions.find("c");
+            if(ItExportOverride != CommandToHandle.SingleValueOptions.end())
+            {
+                if(ItExportOverride->second.size() > 1)
+                {
+                    ReturnValue = false;
+                    ReturnValue.ErrorMessage = "Only one config can be exported at a time";   
+                    return(ReturnValue);
+                }
+                ExportConfiguration = ItExportOverride->second[0];
+            }
+            for(auto const& Target : BuildInfo.Targets)
+            {
+                std::string TargetFilename;
+                std::string OutDir;
+                if(Target.second.Type == TargetType::Executable)
+                {
+                    OutDir = ExecutablesDirectory;
+                    TargetFilename = h_GetExecutableName(Target.second.OutputName);   
+                }
+                else if(Target.second.Type == TargetType::StaticLibrary || Target.second.Type == TargetType::Library)
+                {
+                    OutDir = LibraryDirectory;
+                    TargetFilename = h_GetLibraryName(Target.second.OutputName);        
+                }
+                else
+                {
+                    throw std::runtime_error("Unsupported target type: DynamicLibrary");
+                }
+                std::filesystem::path PacketFile = PacketToHandle.PacketURI+"/MBPM_Builds/"+ExportConfiguration+"/"+TargetFilename;
+                if(!std::filesystem::exists(PacketFile))
+                {
+                    ReturnValue = false;
+                    ReturnValue.ErrorMessage = "Can't find target to export: "+MBUnicode::PathToUTF8(PacketFile);
+                    return(ReturnValue);
+                }
+                std::filesystem::path LinkPath = OutDir+TargetFilename;
+                if(std::filesystem::exists(LinkPath) || std::filesystem::is_symlink(LinkPath))
+                {
+                    std::filesystem::remove(LinkPath);   
+                }
+                std::filesystem::create_symlink(PacketFile,LinkPath);
+            }
+        }
+        catch(std::exception const& e)
+        {
+            ReturnValue = false;
+            ReturnValue.ErrorMessage = e.what(); 
+        } 
         return(ReturnValue);    
    }
     MBError MBBuild_Extension::p_Handle_Retract(CommandInfo const& CommandToHandle,PacketIdentifier const& PacketToHandle,PacketRetriever& RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal)
     {
-        MBError ReturnValue = true; 
-        ReturnValue =  RetractPacket(PacketToHandle.PacketURI);
+        MBError ReturnValue = true;
+        try
+        {
+            SourceInfo BuildInfo = p_GetPacketSourceInfo(PacketToHandle.PacketURI);
+            UserConfigurationsInfo CompileConfigurations = p_GetGlobalCompileConfigurations();
+            std::string ExecutablesDirectory = MBPM::GetSystemPacketsDirectory()+"/MBPM_ExportedExecutables/";
+            std::string LibraryDirectory = MBPM::GetSystemPacketsDirectory()+"/MBPM_CompiledLibraries/";
+            auto const& ConfigIt = CompileConfigurations.Configurations.find(BuildInfo.Language);
+            if(ConfigIt == CompileConfigurations.Configurations.end())
+            {
+                ReturnValue = false;
+                ReturnValue.ErrorMessage = "Language not supported in compile config: "+BuildInfo.Language;
+                return(ReturnValue);
+            }
+            LanguageConfiguration const& LanguageConfig = ConfigIt->second;
+            for(auto const& Target : BuildInfo.Targets)
+            {
+                std::string TargetFilename;
+                std::string OutDir;
+                if(Target.second.Type == TargetType::Executable)
+                {
+                    OutDir = ExecutablesDirectory;
+                    TargetFilename = h_GetExecutableName(Target.second.OutputName);   
+                }
+                else if(Target.second.Type == TargetType::StaticLibrary || Target.second.Type == TargetType::Library)
+                {
+
+                    OutDir = LibraryDirectory;
+                    TargetFilename = h_GetLibraryName(Target.second.OutputName);        
+                }
+                else
+                {
+                    throw std::runtime_error("Unsupported target type: DynamicLibrary");
+                }
+                std::filesystem::path LinkPath = OutDir+TargetFilename;
+                if(std::filesystem::exists(LinkPath) || std::filesystem::is_symlink(LinkPath))
+                {
+                    std::filesystem::remove(LinkPath);   
+                }
+            }
+        }
+        catch(std::exception const& e)
+        {
+            ReturnValue = false;
+            ReturnValue.ErrorMessage = e.what(); 
+        } 
         return(ReturnValue);
     }
     MBError MBBuild_Extension::p_Handle_Verify(CommandInfo const& CommandToHandle,PacketIdentifier const& PacketToHandle,PacketRetriever& RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal)
@@ -2426,5 +2219,232 @@ namespace MBPM
         return(ReturnValue);
     }
     //END DependancyConfigSpecification
+    MBError Compiler_GCCSyntax::SupportsLanguage(SourceInfo const& SourcesToCheck) 
+    {
+        MBError ReturnValue = true;
+
+        return(ReturnValue);
+    }
+    std::string Compiler_GCCSyntax::p_GetCompilerName(SourceInfo const& SInfo)
+    {
+        std::string ReturnValue = m_CompilerBase; 
+        if(SInfo.Language == "C++")
+        {
+            if(ReturnValue == "gcc")
+            {
+                ReturnValue = "g++";   
+            }
+            else if(ReturnValue == "clang")
+            {
+                ReturnValue = "clang";   
+            }
+        }
+        ReturnValue += ' ';
+        return(ReturnValue);
+    }
+    bool Compiler_GCCSyntax::CompileSource( CompileConfiguration const& CompileConfig,
+                                    SourceInfo const& SInfo,
+                                    std::string const& SourcePath,
+                                    std::string const& OutTopDir,
+                                    std::vector<std::string> const& ExtraIncludeDirectories)
+    {
+
+        bool ReturnValue = true;
+        std::string CompilerName = p_GetCompilerName(SInfo);
+        std::string CompileCommand =  CompilerName+" -c ";    
+        CompileCommand += h_MBStandardToGCCStandard(SInfo.Language,SInfo.Standard);
+        for(std::string const& Flag : CompileConfig.CompileFlags)
+        {
+            CompileCommand += Flag;
+            CompileCommand += ' ';
+        }
+        for(std::string const& ExtraInclude : ExtraIncludeDirectories)
+        {
+            CompileCommand += "-I"+ExtraInclude;
+            CompileCommand += ' ';
+        }
+        CompileCommand += SourcePath.substr(1)+' ';
+        std::string OutSourcePath = OutTopDir+"/"+h_ReplaceExtension(SourcePath,"o");
+        std::filesystem::path ParentDirectory = std::filesystem::path(OutSourcePath).parent_path();
+        if(!std::filesystem::exists(ParentDirectory))
+        {
+            std::filesystem::create_directories(ParentDirectory);
+        }
+        CompileCommand += "-o "+OutSourcePath;
+        int Result = std::system(CompileCommand.c_str());
+        ReturnValue = Result == 0;
+        return(ReturnValue);
+    }
+    bool Compiler_GCCSyntax::LinkTarget(CompileConfiguration const& CompileConfig,
+                                SourceInfo const& SInfo,
+                                Target const& TargetToLink,
+                                std::string const& SourceDir,
+                                std::string const& OutDir,
+                                std::vector<std::string> const& ExtraLinkLibraries) 
+    {
+        bool ReturnValue = true;
+        std::vector<std::string> ObjectFiles = h_SourcesToObjectFiles(SourceDir,TargetToLink.SourceFiles,"o");
+        std::string OutputDirectory = OutDir;
+        if(!std::filesystem::exists(OutputDirectory))
+        {
+            std::filesystem::create_directories(OutputDirectory);    
+        }
+        if(TargetToLink.Type == TargetType::Executable)
+        {
+            std::string LinkCommand = p_GetCompilerName(SInfo);
+            LinkCommand += "-o "+ MBUnicode::PathToUTF8(OutputDirectory+TargetToLink.OutputName);
+            if constexpr(MBUtility::IsWindows())
+            {
+                LinkCommand += ".exe";   
+            }
+            LinkCommand += " ";
+            for (std::string const& ObjectFile : ObjectFiles)
+            {
+                LinkCommand += ObjectFile;
+                LinkCommand += ' ';
+            }
+            //extra libraries stuff
+            for (std::string const& LibraryPath : ExtraLinkLibraries)
+            {
+                size_t LastSlash = LibraryPath.find_last_of('/');
+                if (LastSlash == LibraryPath.npos) 
+                {
+                    LastSlash = 0;
+                }
+                else
+                {
+                }
+                std::string Directory = LibraryPath.substr(0, LastSlash);
+                std::string Name = LibraryPath.substr(LastSlash+1);
+                LinkCommand += "-L" + Directory+ " ";
+                LinkCommand += "-l:" + Name+" ";
+            }
+            for (std::string const& LinkFlag : CompileConfig.LinkFlags)
+            {
+                LinkCommand += LinkFlag;
+                LinkCommand += ' ';
+            }
+            int LinkResult = std::system(LinkCommand.c_str());
+            ReturnValue = LinkResult == 0;
+        }
+        else if(TargetToLink.Type == TargetType::Library)
+        {
+            std::string LibraryName = TargetToLink.OutputName;
+            if constexpr( MBUtility::IsWindows())
+            {
+                LibraryName = TargetToLink.OutputName+".lib";
+            }
+            else
+            {
+                LibraryName = "lib"+TargetToLink.OutputName+".a";       
+            }
+            std::string LinkCommand = "ar rcs "+OutputDirectory+LibraryName +" ";
+            for (std::string const& ObjectFile : ObjectFiles)
+            {
+                LinkCommand += ObjectFile + " ";
+            }
+            //Dependancy stuff
+            int Result = std::system(LinkCommand.c_str());
+            ReturnValue = Result == 0;
+        }
+        return(ReturnValue);
+    }
+    
+    MBError Compiler_MSVC::SupportsLanguage(SourceInfo const& SourcesToCheck) 
+    {
+        MBError ReturnValue = true;
+
+        return(ReturnValue);
+    }
+    bool Compiler_MSVC::CompileSource( CompileConfiguration const& CompileConf,
+                                SourceInfo const& SInfo,
+                                std::string const& SourceToCompile,
+                                std::string const& OutDir,
+                                std::vector<std::string> const& ExtraIncludeDirectories)
+    {
+        bool ReturnValue = true;
+        std::string CompileCommand = "vcvarsall.bat x86_x64 & cl /c ";
+        CompileCommand += h_MBStandardToMSVCStandard(SInfo.Language, SInfo.Standard);
+        for(std::string const& Flag : CompileConf.CompileFlags)
+        {
+            CompileCommand += Flag;
+            CompileCommand += ' ';
+        }
+        for(std::string const& ExtraInclude : ExtraIncludeDirectories)
+        {
+            CompileCommand += "/I \""+ExtraInclude+"\"";
+            CompileCommand += ' ';
+        }
+        CompileCommand += SourceToCompile.substr(1)+' ';
+        //output path
+        CompileCommand += "/Fo\"";
+        std::string OutSourcePath = OutDir+"/"+h_ReplaceExtension(SourceToCompile,"obj");
+        CompileCommand += OutSourcePath;
+        CompileCommand += "\"";
+        CompileCommand += " ";
+        CompileCommand += "/Fd"+OutDir+"/"+h_ReplaceExtension(SourceToCompile,"pdb");
+        std::filesystem::path ParentDirectory = std::filesystem::path(OutSourcePath).parent_path();
+        if(!std::filesystem::exists(ParentDirectory))
+        {
+            std::filesystem::create_directories(ParentDirectory);
+        }
+
+        int Result = std::system(CompileCommand.c_str());    
+        ReturnValue = Result == 0;
+        return(ReturnValue);
+    }
+    bool Compiler_MSVC::LinkTarget(CompileConfiguration const& CompileConfig,
+                            SourceInfo const& SInfo,
+                            Target const& TargetToLink,
+                            std::string const& SourceDir,
+                            std::string const& OutDir,
+                            std::vector<std::string> const& ExtraLibraries) 
+    {
+        bool ReturnValue = true;
+        std::vector<std::string> ObjectFiles = h_SourcesToObjectFiles(SourceDir,TargetToLink.SourceFiles,"obj");
+        std::string OutputDirectory = OutDir;
+        if(!std::filesystem::exists(OutputDirectory))
+        {
+            std::filesystem::create_directories(OutputDirectory);
+        }
+        std::string ObjectFilesList = " "; 
+        for(auto const& ObjectFile : ObjectFiles)
+        {
+            ObjectFilesList += ObjectFile;   
+            ObjectFilesList += ' ';   
+        }
+        if(TargetToLink.Type == TargetType::Executable)
+        {
+            std::string LinkCommand = "vcvarsall.bat x86_x64 & link ";    
+            LinkCommand += ObjectFilesList;
+            for(std::string const& Library : ExtraLibraries)
+            {
+                LinkCommand += Library;   
+                LinkCommand += ' ';
+            }
+            for (std::string const& Flag : CompileConfig.LinkFlags)
+            {
+                LinkCommand += Flag;
+                LinkCommand += ' ';
+            }
+            LinkCommand += "/OUT:"+ OutputDirectory+ TargetToLink.OutputName + ".exe";
+            //LinkCommand += "/OUT:"+TargetToLink.OutputName + ".exe & move "+TargetToLink.OutputName + ".exe "+OutputDirectory+TargetToLink.OutputName+".exe";
+            int Result = std::system(LinkCommand.c_str());     
+            ReturnValue = Result == 0;
+        }
+        else if(TargetToLink.Type == TargetType::Library)
+        {
+            std::string LinkCommand =  "vcvarsall.bat x86_x64 & lib ";
+            LinkCommand += ObjectFilesList;
+            LinkCommand += "/OUT:"+OutputDirectory+TargetToLink.OutputName+".lib";
+            int Result = std::system(LinkCommand.c_str());
+            ReturnValue = Result == 0;
+        }
+        else 
+        {
+            throw std::runtime_error("Unsupported target type");   
+        }
+        return(ReturnValue);   
+    }
 }   
 }
