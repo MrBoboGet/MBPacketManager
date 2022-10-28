@@ -31,11 +31,26 @@ namespace MBPM
         std::vector<std::string> Arguments;
         std::unordered_set<std::string> Flags;
         std::unordered_map<std::string, std::vector<std::string>> SingleValueOptions;
+
+        CommandInfo GetSubCommand() const
+        {
+            CommandInfo ReturnValue;
+            if(Arguments.size() == 0)
+            {
+                throw std::runtime_error("Error creating subcommand: requires atleast 1 argument");   
+            }
+            ReturnValue.CommandName = Arguments[0];
+            ReturnValue.Arguments.insert(ReturnValue.Arguments.end(),Arguments.begin()+1,Arguments.end());
+            ReturnValue.Flags = Flags;
+            ReturnValue.SingleValueOptions = SingleValueOptions;
+            return(ReturnValue);
+        }
     };
     enum class CommandType
     {
         TopCommand,
         SubCommand,
+        TotalCommand,
         Null
     };
     struct CustomCommand
@@ -56,6 +71,7 @@ namespace MBPM
         virtual CustomCommandInfo GetCustomCommands() = 0;
         virtual void SetConfigurationDirectory(const char* ConfigurationDirectory,const char** OutError) = 0;
         virtual MBError HandleCommand(CommandInfo const& CommandToHandle,PacketIdentifier const& PacketToHandle,PacketRetriever& RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal) = 0;
+        virtual int HandleTotalCommand(CommandInfo const& CommandToHandle,PacketRetriever& RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal) {return(0);};
         virtual void HandleHelp(CommandInfo const& CommandToHandle,MBCLI::MBTerminal& AssociatedTerminal) = 0;
     };
     //extern "C"

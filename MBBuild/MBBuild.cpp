@@ -1536,8 +1536,11 @@ namespace MBPM
         RetractCommand.Name = "verify";
         RetractCommand.Type = CommandType::TopCommand;
         RetractCommand.SupportedTypes = {"C","C++"};
+        CustomCommand MBBuildCommand;
+        MBBuildCommand.Type = CommandType::TotalCommand;
+        MBBuildCommand.Name = "mbbuild";//should maybe standardize so that every extension has an appropriate top command with it's name?
 
-        ReturnValue.Commands = {CompileCommand,CreateCommand,ExportCommand,RetractCommand,VerifyCommand};
+        ReturnValue.Commands = {CompileCommand,CreateCommand,ExportCommand,RetractCommand,VerifyCommand,MBBuildCommand};
         return(ReturnValue);
     }
     void MBBuild_Extension::SetConfigurationDirectory(const char* ConfigurationDirectory,const char** OutError)
@@ -1545,6 +1548,102 @@ namespace MBPM
         m_ConfigDirectory =  ConfigurationDirectory; 
         //Should maybe read the contents of the config to make sure it's valid, a question of wheter or not
         //failure should be noticed at runtime for specific packets or not
+    }
+    int MBBuild_Extension::p_Handle_Embedd(CommandInfo const& CommandToHandle,PacketRetriever& RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal)
+    {
+        int ReturnValue = 0;
+        if(CommandToHandle.Arguments.size() == 0)
+        {
+            AssociatedTerminal.PrintLine("embedd requires file to embedd as the first argument");
+            return(1);
+        }
+        std::string VariableName;
+        std::string OutName;
+        auto const& OutNameIt = CommandToHandle.SingleValueOptions.find("o");
+        auto const& VariableNameIt = CommandToHandle.SingleValueOptions.find("v");
+        if(!std::filesystem::exists(CommandToHandle.Arguments[0]))
+        {
+            AssociatedTerminal.PrintLine("File to embedd doesn't exist"); 
+            return(1);
+        }
+        std::ifstream InputFile = std::ifstream(CommandToHandle.Arguments[0],std::ios::in|std::ios::binary);
+        if(!InputFile.is_open())
+        {
+            AssociatedTerminal.PrintLine("Error opening input file");
+            return(1);
+        }
+        if(OutNameIt == CommandToHandle.SingleValueOptions.end() || OutNameIt->second.size() > 1)
+        {
+            AssociatedTerminal.PrintLine("embedd requires exactly 1 output filename as a single value option");   
+            return(1);
+        }
+        OutName = OutNameIt->second[0];
+        if(VariableNameIt == CommandToHandle.SingleValueOptions.end() || VariableNameIt->second.size() > 1)
+        {
+            AssociatedTerminal.PrintLine("embedd requires exactly 1 variable name given as a single value option");   
+            return(1);
+        }
+        VariableName = VariableNameIt->second[0];
+
+        std::ofstream OutHeader = std::ofstream(OutName+".h");
+        if(!OutHeader.is_open())
+        {
+            AssociatedTerminal.PrintLine("Failed opening file \""+OutName+".h\"");
+            return(1);
+        }
+        OutHeader<<"#pragma once\nextern const char* "+VariableName+";\n extern size_t "+VariableName+"_size;";
+
+        std::ofstream OutSource = std::ofstream(OutName+".cpp",std::ios::out|std::ios::binary);
+        //TODO make algorithm acutally able guarantee embedding, this only works most of the time
+        //NOTE while std::fileystem filesize will not work for files >4g on for example rasberry pi so is this fine,
+        //no one wants to load a 4g executable into memory
+        //TODO calculate the odds for 16 bytes string a appearing in file of size x where we assume the file contents to be 
+        //completely randomized
+        OutSource<<"const char* "+VariableName+" = \"";
+        uintmax_t TotalSize = 0;
+        size_t ReadChunkSize = 4096;
+        char CharBuffer[4096];
+        while(true)
+        {
+            size_t ReadBytes = InputFile.read(CharBuffer,ReadChunkSize).gcount();
+            TotalSize += ReadBytes;
+            for(size_t i = 0; i < ReadBytes;i++)
+            {
+                uint8_t CurrentByte = uint8_t(CharBuffer[i]);
+                if(CurrentByte < 32 || CurrentByte == '"' || CurrentByte == '\\' || CurrentByte > 127)
+                {
+                    std::string OctalString = std::to_string(CurrentByte);
+                    OctalString = std::string(3-OctalString.size(),'0')+OctalString;
+                    OutSource << "\\"+OctalString;
+                }
+                else
+                {
+                    OutSource<<char(CurrentByte);
+                }
+            }
+            if(ReadBytes < ReadChunkSize)
+            {
+                break;
+            }
+        }
+        OutSource<<"\";\n";
+        OutSource<<"size_t "+VariableName+"_size="+std::to_string(TotalSize)+"\n";
+        return(ReturnValue);
+    }
+    int MBBuild_Extension::HandleTotalCommand(CommandInfo const& CommandToHandle,PacketRetriever& RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal)
+    {
+        int ReturnValue = 0;       
+        //only mbbuild registered
+        if(CommandToHandle.Arguments.size() == 0)
+        {
+            AssociatedTerminal.PrintLine("mbbuild requires top command");
+            return(1);
+        }
+        if(CommandToHandle.Arguments[0] == "embedd")
+        {
+            return(p_Handle_Embedd(CommandToHandle.GetSubCommand(),RetrieverToUse,AssociatedTerminal));
+        }
+        return(ReturnValue);
     }
     MBError MBBuild_Extension::HandleCommand(CommandInfo const& CommandToHandle,PacketIdentifier const& PacketToHandle,PacketRetriever& RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal)
     {

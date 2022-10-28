@@ -1685,6 +1685,10 @@ namespace MBPM
                 throw std::runtime_error("Extensions trying to register the same custom command with different type: "+Command.Name);   
             }
             m_CustomCommandTypes[Command.Name] = Command.Type;
+            if(Command.Type == CommandType::TotalCommand && m_TopCommandHooks[Command.Name].size() > 0)
+            {
+                throw std::runtime_error("Only one total command can be registered with the same name");
+            }
             m_TopCommandHooks[Command.Name].push_back({Command,m_RegisteredExtensions.size()});
         }
         std::string ExtensionDataPath = MBPM::GetSystemPacketsDirectory() + "/Extensions/" + ExtensionName + "/";
@@ -1995,6 +1999,24 @@ namespace MBPM
     {
         delete (T*)PointerToDelete;
     }
+    CommandInfo h_TopToTotalCommand(MBCLI::ProcessedCLInput const& InputToConvert)
+    {
+        CommandInfo ReturnValue;
+        ReturnValue.CommandName = InputToConvert.TopCommand;
+        for(auto const& Flag : InputToConvert.CommandOptions)
+        {
+            ReturnValue.Flags.insert(Flag.first);   
+        }
+        for(auto const& PositionOption : InputToConvert.CommandPositionalOptions)
+        {
+            for(auto const& OptionValue : InputToConvert.GetSingleArgumentOptionList(PositionOption.first))
+            {
+                ReturnValue.SingleValueOptions[PositionOption.first].push_back(OptionValue.first);
+            }   
+        }
+        ReturnValue.Arguments = InputToConvert.TopCommandArguments;
+        return(ReturnValue);
+    }
     int MBPM_ClI::HandleCommand(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
     {
         int ReturnValue = 0;
@@ -2010,7 +2032,18 @@ namespace MBPM
         p_RegisterExtension(std::move(BuildExtension));
         p_RegisterExtension(std::move(VimExtension));
         p_RegisterExtension(std::move(BashExtension));
-
+        
+        //If a "TotalCommand", skip any parsing done by the rest of the packet and give full controll to the extension
+        auto CommandIt = m_TopCommandHooks.find(CommandInput.TopCommand);
+        if(CommandIt != m_TopCommandHooks.end())
+        {
+            if(CommandIt->second[0].first.Type == CommandType::TotalCommand)
+            {
+                CLI_Extension& HandlingExtension = *m_RegisteredExtensions[CommandIt->second[0].second];
+                CommandInfo CommandToExecute = h_TopToTotalCommand(CommandInput);
+                return(HandlingExtension.HandleTotalCommand(CommandToExecute,m_PacketRetriever,*AssociatedTerminal));
+            }
+        }
         if (CommandInput.CommandOptions.find("computerdiff") != CommandInput.CommandOptions.end())
         {
             m_ClientToUse.SetComputerInfo(MBPM::MBPP_Client::GetSystemComputerInfo());
