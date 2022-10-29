@@ -1591,43 +1591,47 @@ namespace MBPM
             AssociatedTerminal.PrintLine("Failed opening file \""+OutName+".h\"");
             return(1);
         }
-        OutHeader<<"#pragma once\nextern const char* "+VariableName+";\n extern size_t "+VariableName+"_size;";
+        OutHeader<<"#pragma once\n#include <cstddef>\nextern const char* "+VariableName+";\n extern size_t "+VariableName+"_size;";
 
         std::ofstream OutSource = std::ofstream(OutName+".cpp",std::ios::out|std::ios::binary);
         //TODO make algorithm acutally able guarantee embedding, this only works most of the time
         //NOTE while std::fileystem filesize will not work for files >4g on for example rasberry pi so is this fine,
         //no one wants to load a 4g executable into memory
         //TODO calculate the odds for 16 bytes string a appearing in file of size x where we assume the file contents to be 
-        //completely randomized
-        OutSource<<"const char* "+VariableName+" = \"";
+        //completely randomiz
+        OutSource<<"#include <cstddef>\n";
+        OutSource<<"const char* "+VariableName+" = \"\"\n";
         uintmax_t TotalSize = 0;
-        size_t ReadChunkSize = 4096;
-        char CharBuffer[4096];
+        constexpr size_t ReadChunkSize = 400;
+        char CharBuffer[ReadChunkSize];
         while(true)
         {
+            OutSource<<"\"";
             size_t ReadBytes = InputFile.read(CharBuffer,ReadChunkSize).gcount();
             TotalSize += ReadBytes;
             for(size_t i = 0; i < ReadBytes;i++)
             {
                 uint8_t CurrentByte = uint8_t(CharBuffer[i]);
-                if(CurrentByte < 32 || CurrentByte == '"' || CurrentByte == '\\' || CurrentByte > 127)
-                {
-                    std::string OctalString = std::to_string(CurrentByte);
-                    OctalString = std::string(3-OctalString.size(),'0')+OctalString;
-                    OutSource << "\\"+OctalString;
-                }
-                else
-                {
-                    OutSource<<char(CurrentByte);
-                }
+                OutSource<<"\\x"+MBUtility::HexEncodeByte(CurrentByte);
+                //if(CurrentByte < 32 || CurrentByte == '"' || CurrentByte == '\\' || CurrentByte > 127)
+                //{
+                //    std::string OctalString = std::to_string(CurrentByte);
+                //    OctalString = std::string(3-OctalString.size(),'0')+OctalString;
+                //    OutSource << "\\"+OctalString;
+                //}
+                //else
+                //{
+                //    OutSource<<char(CurrentByte);
+                //}
             }
+            OutSource<<"\"\n";
             if(ReadBytes < ReadChunkSize)
             {
                 break;
             }
         }
-        OutSource<<"\";\n";
-        OutSource<<"size_t "+VariableName+"_size="+std::to_string(TotalSize)+"\n";
+        OutSource<<";\n";
+        OutSource<<"size_t "+VariableName+"_size="+std::to_string(TotalSize)+";\n";
         return(ReturnValue);
     }
     int MBBuild_Extension::HandleTotalCommand(CommandInfo const& CommandToHandle,PacketRetriever& RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal)
@@ -1642,6 +1646,11 @@ namespace MBPM
         if(CommandToHandle.Arguments[0] == "embedd")
         {
             return(p_Handle_Embedd(CommandToHandle.GetSubCommand(),RetrieverToUse,AssociatedTerminal));
+        }
+        else 
+        {
+            AssociatedTerminal.PrintLine("Invalid top command for mbbuild: \""+CommandToHandle.Arguments[0]+"\"");
+            return(1);
         }
         return(ReturnValue);
     }
@@ -1745,7 +1754,7 @@ namespace MBPM
                 {
                     throw std::runtime_error("Unsupported target type: DynamicLibrary");
                 }
-                std::filesystem::path PacketFile = PacketToHandle.PacketURI+"/MBPM_Builds/"+ExportConfiguration+"/"+TargetFilename;
+                std::filesystem::path PacketFile = std::filesystem::canonical(PacketToHandle.PacketURI+"/MBPM_Builds/"+ExportConfiguration+"/"+TargetFilename);
                 if(!std::filesystem::exists(PacketFile))
                 {
                     ReturnValue = false;

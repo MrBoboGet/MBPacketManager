@@ -2007,12 +2007,23 @@ namespace MBPM
         {
             ReturnValue.Flags.insert(Flag.first);   
         }
-        for(auto const& PositionOption : InputToConvert.CommandPositionalOptions)
+        for(auto const& Token : InputToConvert.TotalCommandTokens)
         {
-            for(auto const& OptionValue : InputToConvert.GetSingleArgumentOptionList(PositionOption.first))
+            if(Token.size() < 2) continue;
+            if(Token[0] != '-') continue;
+            if(Token.substr(0,2) == "--")
             {
-                ReturnValue.SingleValueOptions[PositionOption.first].push_back(OptionValue.first);
-            }   
+                continue;   
+            }
+            size_t FirstColon = Token.find(':');
+            if(FirstColon == Token.npos)
+            {
+                continue;   
+            }
+            std::string OptionName = Token.substr(1,FirstColon-1);
+            std::string OptionValue = Token.substr(FirstColon+1);
+            //std::cout<<OptionName<<" "<<OptionValue<<std::endl;
+            ReturnValue.SingleValueOptions[OptionName].push_back(OptionValue);
         }
         ReturnValue.Arguments = InputToConvert.TopCommandArguments;
         return(ReturnValue);
@@ -2020,6 +2031,11 @@ namespace MBPM
     int MBPM_ClI::HandleCommand(MBCLI::ProcessedCLInput const& CommandInput, MBCLI::MBTerminal* AssociatedTerminal)
     {
         int ReturnValue = 0;
+        if(CommandInput.TopCommand == "")
+        {
+            AssociatedTerminal->PrintLine("mbpm requires top command as the first argument");   
+            return(1);
+        }
         //denna �r en global inst�llning
         //Extensions
         std::unique_ptr<CLI_Extension, void (*)(void*)> BuildExtension = std::unique_ptr<CLI_Extension, void (*)(void*)>(new MBBuild::MBBuild_Extension(),
@@ -2035,7 +2051,7 @@ namespace MBPM
         
         //If a "TotalCommand", skip any parsing done by the rest of the packet and give full controll to the extension
         auto CommandIt = m_TopCommandHooks.find(CommandInput.TopCommand);
-        if(CommandIt != m_TopCommandHooks.end())
+        if(CommandIt != m_TopCommandHooks.end() && CommandInput.TopCommand != "")
         {
             if(CommandIt->second[0].first.Type == CommandType::TotalCommand)
             {

@@ -21,7 +21,7 @@
         },
         "mbpm":
         {
-            "OutputName":"MBPacketManager",
+            "OutputName":"mbpm",
             "TargetType":"Executable",
             "Sources":
             [
