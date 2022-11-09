@@ -152,26 +152,6 @@ intended to solve.
 
     /#
 
-    _# Absolute packet path
-       
-        //flytta till något annat ställe
-        The philosophy behind mbpm states that packets should be as self
-        contained as possible, and not depend on modifying the filesystem
-        outside it's packet directory, and should only do so by a common
-        interface that is interprated by another program. Programs isn't
-        installed to /usr/bin by the packet, instead the programs available for
-        installation is listed, allowing the user to decide what installation
-        means. 
-
-        This also means the files included in a packet directory is in some
-        sense static, and should provide all information needed to understand
-        the packet. This also gives a natural way to adress files in a packet.
-
-        An absolute packet path is syntactically equivalent to a regular
-        POSIX fileystem absolute path, except that the directory ".." doesn't
-        exist for any directory. The root is the packet directory. 
-        
-    /#
 
 # MBPM_PacketInfo
     

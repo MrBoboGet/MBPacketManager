@@ -1,0 +1,245 @@
+%title MBDependancySpecification
+
+MBBuild doesn't allow the packets themselves to determine which compile
+configurations are valid for the packet, and also which compile configurations
+are valid for that packets dependancies. Idomatic usage of mbpm is to compile a
+packet and all of it's dependancies with the same configuration, which is
+guaranteed to produce compatible libraries, but this also means that having many
+configurations may result in excessive recompilations of libraries. There also
+exists libraries that have extremly large compilation times, and depending on
+such libraries should not require to recompile them for every change in
+compilation configuration. 
+
+This leads to the "DependancySpecification", which is serialised and stored in 
+"$MBPM_PACKETS_INSTALL_DIRECTORY/Extensions/MBBuild/MBDependancySpecification.json".
+
+A dependancy specification specifies, for all compilations, which compile
+configuration it should link against for each of it's dependancies.
+
+
+# Global dependancy specification
+
+    A compilation with MBBuild always requires a DependancySpecification, and unless
+    overriden, will always use the the global configuration located at
+    "$MBPM_PACKETS_INSTALL_DIRECTORY/Extensions/MBBuild/MBDependancySpecification.json".
+
+    This file not existing is not treated as an error, which means that the 
+    the empty specification is assumed, which is equivalent to a dependancy
+    specification on the form
+
+    ```
+{
+    "Specifications":[]
+}
+    ```
+    
+    This in practice means that the compilation links against the same
+    configuration for all of the dependancies.
+
+# Local dependancy specification
+
+    When invoking the compilation process so is it possible to override the
+    dependancy specification used, more about how to invoke MBBuild can be found
+    @[here](CLI.mbd).
+
+    This functionality is intended to support cases where an uncommon niche
+    situation is encountered, where the exact compile configurations for all the
+    dependancies are known and needed. It is therefore assumed that this doesn't
+    need frequent recompilations. 
+
+    This can also be used when compiling code that isn't integrated into the
+    MBBuild system, where an adhoc solution is needed.
+
+    [[Note]]
+    Overrding the build specification this way for packets which are under the
+    control of mbpm is not recommended. As the specific configurations are
+    stored and compared during each compilation for need of relinking,
+    conflicting dependancy specifications will result in a relinking of each
+    target.
+
+# MBDependancySpecification.json
+
+    Following the philosophy of MBBuild, so is the dependancy specification not
+    intended to provide a turing complete or extremly powerful  way to specify
+    dependancies, instead aiming for a simple, human readable and editable
+    format.
+    
+    _# Overview
+
+        The specification file is written in JSON format, and consists of an
+        array of specifications. Each specification consists of a number of
+        predicates. All predicates evaluating to true means that the given
+        result configuration is used in when linking to that dependancy.
+
+        The conditions present in the "Predicates" field can therefore be seen
+        as connected with a "AND" condition, and having multiple Specifications
+        with the same ResultConfiguration can therefore be used in creating "OR"
+        conditions for a specific "ResultConfiguration".
+
+        A dependancy not satisfying any "Specification" will use the same
+        configuration as the current compilation.
+
+    /_
+
+    _# Rationale 
+
+        The peculiar format used to describe the dependancy specification comes
+        from a couple of restrictions and assumptions made about the usage of
+        the dependancy specification.
+
+        The most important restriction, is that only attributes available 
+        from the packets @[PacketInfo](../Packets.mbd#MBPM_PacketInfo) can be
+        used. Depending on specific files to be present/not present or similar
+        is brittle, it can change with updates to the packet files, and rarely
+        enables a generic solution. The predicates are checked against *all*
+        dependancies, and writing a complicated predicate to ensure that a
+        specific packet always uses a specific configuration is never needed, as
+        one can always just add that specific name to the desired specification,
+        or create new one.
+
+        Whenever a user knows that a specific packet needs special care so are
+        these simple predicates sufficient, but complex predicates rarely allows
+        a user to catch cases where packets they don't know about need special
+        care, simply because they don't know about them they can't possibly be
+        expected to know wheter their predicate correctly handles that packet.
+
+        Group of packets that should have the same considerations can therefore
+        be handled with packet attributes. Attributes provide a way to for users
+        and distributors to specify semantics of a packet that are meant to be
+        interpreted and by the user and used ineractivly. Having for example all
+        of the packets which take a long time to compile labeled "Big" can
+        provide a crude, but often times sufficient, way to handle these cases.
+
+        Another important restriction, is that the dependancy specification is
+        not allowed to have any arbitrary code execution. One should be able to
+        share the dependancy specification with other users on order to for
+        example identify an error with the build process, and allowing the
+        dependancy specifiaciton to be arbitraily complex harms the ability for
+        other users to understands ones configuration.
+        
+    /_
+
+    _# Fields and semantics
+        
+        The dependancy specification is a JSON object consisting of exactly one
+        field, the "Specifications" field. This field is an array of 
+        @[specifications](#Specification). Every
+        @[specification](#Specification) defines a rule that determines if a
+        dependancy should use another compile configuration.
+
+        A packet may satisfy multiple Specifications, but only the first
+        specification satisfied is used in determining which configuration is
+        used.
+
+        _# Specification
+
+            A specification is a JSON object that has 2 mandatory fields, the 
+            "Predicates" field and the "ResultConfiguration". The predicate
+            fields describe the predicates used to determine wheter or not a
+            packet should use this specifications. A packet has to satisfy all
+            predicates in order to satisfy the whole specification. A packet
+            satisfying a Specification uses compile configuration in the
+            "ResultConfiguration" field, which means that "ResultConfiguration"
+            has to be a string.
+
+            #_ Predicate
+
+                A predicate consists of only optional fields. Each field is an
+                array of strings, which are checked against fields in the 
+                @[packet info](../Packets.mbd#MBPM_PacketInfo). A matching field
+                means that the predicate is satisfied, and only one type of
+                field has to be satsified for the whole predicate to be
+                satisfied, not all at once.
+
+                A predicate also has a special field "Negatad", which is a
+                boolean. It defaults to false, but setting it to true means that
+                a predicate not being satisfied by a packet is now treated as
+                the satisfying condition, and a predicate being satisfied by a
+                packet is then treated as not being satisfied, functioning
+                exacly as a logical negation.
+
+                # PacketName
+
+                    PacketName is an array of strings. The default value is an
+                    empty array, meaning that no packet can satisfy this
+                    condition.
+
+                    Every string in PacketName is compared against the 
+                    @[PacketName](../Packets.mbd#PacketName) of the packet, and
+                    if any of the strings match the packet name, so is the
+                    predicate satisfied.
+
+                # Attribute
+
+                    Attribute is an array of strings. The default value is an
+                    empty array, meaning that no packet can satsify this
+                    condition.
+
+                    Every string in the array is compared against every
+                    string in the @[Attributes](../Packets.mbd#Attributes) field
+                    of the @[packet info](../Packets.mbd#MBPM_PacketInfo), and
+                    if any strings match the predicate is satisfied.
+
+                # ConfigurationName 
+
+                    ConfigurationName is an array of strings. The default value
+                    is an empty array, meaning that no packet can satsify this
+                    condition.
+
+                    Every string in the array is checked against the compile
+                    configuration during the current compilation, and if any
+                    string match the predicate is satisfied.
+
+                # Negated
+
+                    Negated is a boolean. The default values is false.
+
+                    Negated being true means that any packet satsifying the
+                    predciate now doesn't satisfy it, and any packet not
+                    satisfying the predicate now satisfy the predicate.
+
+                 
+            /_    
+        /# 
+    /#
+
+# Examples
+
+This dependancy specification has 1 specification, that in turn has 2
+predicates. This specification can therefore only change the linked to
+configuration to one possibly different compile configuration, namely "Release".
+The first predicate is true for all packets that has the attribute "NonMBBuild",
+and the second predicate is true whenever the compile configuration isn't 
+"Debug" or "Release".
+
+This configuration can for example be used when all packets with the "NonMBBuild"
+attribute take a long time to compile, but a good debug experience is still
+required. These packets only need to be compiled for 2 configurations, "Release"
+and "Debug".
+
+```     
+{
+    "Specifications":
+        [
+            {
+                "Predicates":
+                    [
+                        {
+                            "PacketName":[],
+                            "Attribute":["NonMBBuild"],
+                            "ConfigurationName":[]
+                        },
+                        {
+                            "Negated": true,
+                            "ConfigurationName":["Debug","Release"]
+                        }
+                    ],
+                    "ResultConfiguration":"Release"
+            }
+        ]
+}
+```
+
+
+
+

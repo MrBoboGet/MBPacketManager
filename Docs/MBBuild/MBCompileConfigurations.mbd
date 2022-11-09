@@ -1,0 +1,34 @@
+%title MBCompileConfigurations 
+
+The compile configurations are in many ways the core of MBBuild. If there
+existed no compile flags that affected to produced binary and all builds used an
+identical configuration, MBBuild would by largely uneccesary. It does still
+serve as a common specification for compiling code, but it would be harder to
+justify converting abiding by this standard if one could just provide a makefile
+or cmake etc etc that just works. We do however not live in a world where this
+is true. We have compilers that are immensly powerful and are can be fine tuned
+to with specific purposes. But this does however come at a cost, and that is
+incompatible compile flags, and loss of optimization from not owning the
+complete build process.
+
+The MBCompileConfigurations.json is a file that describes the different compile
+configurations that are defined by the user. This allows a user to define
+*precisely* which flags and options are used when compiling ones code, and more
+importantly, can be made to specify these flags for *all* code, which for
+example allows one to utilize LTO to it's full extent, or create specific
+reusable configurations for purposes such as benchmarking or coverage testing
+code.
+
+This document describes the semantics of the compile configuration files, and
+how it is serialized. How these compile configurations are in utalized can be
+read about in the @[CLI description](CLI.mbd). It is also possible to configure
+how different packets are linked together with different configurations, which
+can be read about 
+@[in MBDependancySpecification](MBDependancySpecification.mbd).
+
+This document describes the semantics of configurations, but it isn't enough to
+get the complete compile command issued to compile the program. The missing
+flags and options are the ones that are intrinsic to fully specify the language
+and standard aswell as making the packet integrate with the rest of mbpm, 
+and all of this can be read about in the 
+@[description of the build process](Buildsystem.mbd)

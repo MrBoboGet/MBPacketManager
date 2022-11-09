@@ -1,0 +1,175 @@
+% History and Design
+
+This document describes the history motivating the project, aswell as the
+conclusions and design principles that guide the project. The history part is
+entirely optional and written more as an essay, and can be intresting if one
+wants to get some context to the project, but all of the goals and design
+principles are design separately.
+
+# History
+
+The history of MBBuild has a lot of shared history with
+@[MBPacketManager](/{MBPacketManager}), and was originally something that was
+implicitly included in that functionality, but as that project evolved my needs
+got more specific and more clear. This project finally crystalized from
+MBPacketManager when there came a need to make that project more general, and
+when the exact compile commands became important. 
+
+When I first started programming, I mainly used MSBuild and visual studio to
+compile my projects, configuring the build was very scary. Opening the settings
+file revealed an absurd amount of options. Gettign the build right required
+copying the things youtube tutorials did, and without a complete understadning
+of what everything did I didn't want to touch anything, and the amount of
+options available made the task of trying to learn what the build system
+actually did seem sisyphean.
+
+When I wanted to be able to compile for Linux I hade to switch to CMake, and in
+turn I actually hade to learn what everything did. It was during this transition
+that my first problems with the build systems appeared. 
+
+I had understood from a relativly abstract point of view what differenct compile
+configurations where, and how this was related to debugging and performance. In
+order to implement cryptograhpic functionality I needed to link to cryptopp, and
+in order to use these executables I needed to link statically, and used my
+statically compiled cryptopp library for this purpose. But this lead to very
+weird and specific link errors. I realised that this was because the compile
+configurations was incompatible. 
+
+This incompatability was what lead to the first incarnation of my own build
+systrem, which was entirely implemented in MBPacketManager. Calling it a build
+system might be overstating things, it was a way to insert libraries to link for
+CMakeFiles defined in a uniform way. But more importantly, the system compiled
+every library with 2 configurations, one for debug and one for release. This
+made everything work, and was sufficient for my use cases. But then ffmpeg
+entered the picture. 
+
+Getting ffmpeg to compile for windows is not for the faint of heart. Not only
+does it take a lot of time and has a gigantic list of configurations, it also
+requires MinGW or similar. While I didn't reflect much about it at the time,
+different libraries require different tools for compilation, so has this also
+gone on to become on of my main gripes. But apart from those complaints so did
+it also raise another question, what configuration was the finished library?
+
+Only having worked with visual studio I hadn't really reflected over the fact
+that there could be multiple configurations, and when dealing with ffmpeg I
+simply copied the .lib files and used it for both. This was the first point I
+realised that not only was the configuration abstraction really faulty, but
+there also had to be a way to combine different configurations. 
+
+Using ffmpeg is an entirely different beast, but needles to say so is the use
+for library with internal assertions useful. But as compiling ffmpeg sucks, and
+reading through all of the configruations and options needed I also realised
+something else, all of the big projects use a completely monolithic build
+process. It is completely impossible to change which flags are used, unless one
+edits the provided makefile, possibly resulting in undocumented behaviour.
+This was especially apperent when ffmpeg needed external libraries like Zlib. I
+have a zlib that I want to use. How do I tell ffmpeg to use that one? Is it
+really neccessary for all external libraries to require a involved and library
+specific step in order to get dependancies right?
+
+Reading more about the compile flags available I saw that I wanted to use more
+of my compiler, but I also realised that many flags produce ABI breaking
+changes, which meant that in order to use my compiler the way I want to I have
+to enable this options for all my dependancies, which was also the breaking
+point where I decided to create a new build system that can fullfill these
+needs.
+   
+#_ Build system principles 
+    What follows are the principles that I concluded from my experiences
+    described in @[the history](#History). They include both what a buildsystem
+    should and should not do, and more generally how code should be shared.
+    
+    # I don't want your build system, I want your source and header files
+        This is perhaps paradoxically the absolutely most fundamental part of
+        MBBuild, the assertion that build systems are not in any way fundamental
+        to a project and should idealy be implicitly created. 
+
+        This principles expresses the frustration with trying reversee engineer
+        how a project is compiled from looking at the build files, and has
+        more implications than what might seem obvious. 
+
+    # Configuring is hard, compiling is easy
+        When reading documentation of CMake, Make, visual studio or any other
+        build system, the inclusion of *arbitrary commands* is often presented
+        as a killer feature, a way to make the build system infinetly extensible
+        and do exactly what you need. 
+
+        I don't disagree with this, but I do however disagree with the purpose.
+        The final result of a build system always have to be an invocation to a
+        compiler, and this invocation can only follow the semantics of the
+        language. While the sources compiled may be generated from bison, or
+        header files created that reflects the specific configuration, so are
+        they in the end just like any other source or header file. 
+
+        An alternative formulation of this principle is: ***Arbitrary commands
+        are only neccessary for configration, not for compiling***. 
+
+        The problem with a lot of buildsystems however, are that these two steps
+        are rarely separated. I want to be able to compile your source files
+        with any options that I want, but what source files are part of the
+        build system is often times obfuscated by all of the other side effects
+        as a part of the building. But every single operation that is required
+        before the acutal compilation can always be separated, letting other
+        people do what they want with finished project.
+
+    # Compile options are not opaque
+        A lot of buildsystems treat compile options as a implementation detail,
+        something that is not required to be completely understood by the
+        user. This is false. 
+
+        Most apparent is with Make build systems. Make is a buildsystems for
+        arbitrary stuff, which means that compile options are something that
+        aren't really exposed. The problem here is simply that compilation
+        options are often times incompatible and in the worst case leads to ABI
+        incompatability.
+
+        The build system should not in any way be the deciding factor of which
+        compile options are used, and should be completly transparent *to the
+        build system*.
+
+    # Dependancys for sources should be auto generated
+        The way sources and headers depend on each other is something that can
+        be determined purely through the semantics of the language. Needed to
+        manually specify these dependancys are both error prone and gives the
+        wrong impression that they should be determined by a human.
+
+
+
+/_
+
+#_ Project goals
+    The following part describes the goals for MBBuild, which describes what the
+    buildsystem and command line application is intended to do.
+    
+    # Implicitly generated build system from sources.
+        The most fundamental abstraction to whole project, is the idea that
+        compiling code is actually "easy", atleast in terms of what needs to be
+        compiled. The user should be able to only specify which source files
+        constitue a project and be able to compile, and to prodcue executables
+        needed dependancys.
+
+    # Integrated packet managment system
+        This is the goal that makes this in many ways a sibling to
+        MBPacketManager, packet managment is something that is needed in order
+        to convieniently create builds.
+
+        All non trivial executables and libraries have dependancys. But
+        specifying and combining libraries should not require absolute paths or
+        any form of mandatory directory structure that needs to be maintained
+        for all projects. 
+
+        This is also the goal that means that there exist a significant overlap
+        with MBPacketManager. Having this project as a true subproject of
+        MBPacketManager is not entirely 
+
+    # Easy global configuration specification and mixing and matching for builds
+        This goal is in some ways contradictory to previous goals, that the
+        configuration for a build should not be specified by the build. This is
+        still true, but there still needs to be a way to specify a build with
+        specific configurations. They main reason why, is that some projects are
+        expensive to rebuild for a specific configuration, for example ffmpeg or
+        LLVM. In order to be able to specify the compile flags used in a
+        compilation so must there be away to have a build that let's dependancys
+        use different configurations.
+
+/_

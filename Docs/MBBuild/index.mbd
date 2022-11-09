@@ -1,0 +1,32 @@
+%title MBBuild
+
+MBBuild is a build system and extension to
+@[MBPacketManager](/{MBPacketManager}) for compiling C/C++ code,
+but perhaps more importantly it is a set of design principles for how build
+systems should be constructed. 
+
+MBBuild consist mainly of 3 parts, the build system file format, 
+the extensions to the @[mbpm](/{MBPacketManager}) cli, and the design philosophy behind it all. 
+
+# History and philosophy
+    In the @[history](History.mbd) document so can both the background and
+    motivation for the project and the design goals and principles be found.
+
+    This document isn't strictly neccessary to understand how to use the
+    program, but understanding the principles behind the program might help in
+    getting an intuition for why things are as they are. 
+
+# Build system
+
+    The structure of the build system specification and it's semantics is
+    described @[here](Buildsystem.mbd). 
+
+    This document is a prerequisite in order to use the program, and describes
+    most of the functionality the utility provides.
+
+# CLI
+
+    How the build system hooks into the mbpm CLI is described
+    described @[here](CLI.mbd). This document doesn't however describe any of
+    the terminology or concepts used, and assumes that the user has read 
+    @[about the buildsystem](Buildsystem.mbd).

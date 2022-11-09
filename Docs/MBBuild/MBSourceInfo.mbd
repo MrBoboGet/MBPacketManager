@@ -1,0 +1,175 @@
+%title MBSourceInfo
+
+MBSourceInfo.json is the file that is used to describe the build process. 
+The contents and semantics are meant to modell the build process 
+described in @[buildsystem](Buildsystem.mbd).
+
+The MBSourceInfo.json file is the default name used by @[mbbuild](/{MBBuild}), 
+and the name used when looking for a valid build specification. This document
+describes the contents if the file and it's meaning. 
+
+The file is unlike other buildsystems completely declerative and with a
+completely uniform and common structure. The file is meant to *specify* what the
+packet contains and what is needed to compile the targets, but not describe how
+this is done. The specification is meant to be minimal and ideally interoperable
+between different programs. As the build specification is meant too be able to 
+describe the build for sources for different languages, with semantics mapable
+to C/C++ build requirements, so are the exact behaviour of the fields dependant
+on the @[language](#Langauge) that is used. However, as the specification is
+also meant to not only be descriptive but also standardize the build process, so are
+the semantics and behaviour needed to compile the sources for a specific
+build specification and language described in
+@[the document describing the build process](Buildsystem.mbd#Languages).
+
+#_ Fields
+    
+    A build specification is written in JSON format, and has to consist of a
+    single JSON object. This object contains a couple of mandatory fields that
+    need to be included, aswell as optional fields that may be included. A
+    mandatory field not being included is treated as an error, and parsing
+    specification fails. All of the optional fields has a specfied default
+    value. A field with a fieldname that isn't recognized as a mandatory or
+    optional field is silently ignored.
+
+
+    #_ Mandatory fields
+        
+        # Langauge
+
+            This field must be a JSON string.
+
+            This field specifies which language the sources are written in, and
+            is used in 
+            @[determining an appropriate compiler](MBCompileConfigurations.mbd).
+
+
+        # Standard 
+
+            This field must a JSON string.
+
+            This field is read by the compiler and used to set the compiler
+            specific flags needed to ensure that a compilation abides by the
+            standard. 
+
+            The valid values this flag can take are determined by the
+            @[language](#Langauge) of the sources, and encountering and invalid
+            standard upon compiling the sources immidiately ends the compilation
+            process with an error.
+
+
+        #_ Targets
+
+            This field has to be a JSON object consisting of JSON objects, on
+            the form of a @[target](#Target). The field names are the names of
+            the specific target.
+
+
+            _# Target 	
+
+                A target is the ultimate result of a compilation, and can either
+                form an executable or static library, dynamic library etc.
+
+                A target consists of a couple of mandatory fields, and optional
+                fields. A mandatory field not being included results in an error
+                in parsing the while build specification. Optional fields all
+                have specified default values, and field names which aren't
+                the name of a mandatory field or optional field is ignored.
+
+                #_ Mandatory fields
+
+                    # TargetType
+
+                        The value of this field must be a string.
+
+                        This field describes the specific type of output the
+                        source files are intended to generate, and can therefore
+                        take a limited set of valid values. An invalid value
+                        results in an error of parsing the whole build
+                        specification. These values are however depndant on the
+                        specified @[language](#Langauge). 
+
+                        Valid values for C/C++ for example are "Executable", and
+                        "Library".
+
+                    # OutputName
+
+                        This field must be a JSON string, forming a valid
+                        @[singular filename](../Terminology.mbd#Singular
+                        filename).
+
+                        This field determines the name of the resulting file
+                        when creating this target. However, the filename isn't
+                        guaranteed to be exactly the OutputName, and the build
+                        process might for example append ".exe" to the filename.
+
+                        This is meant to provide a way to create platform
+                        idiomatic names, such as "lib"+OutputName+".a" for
+                        static libraries on *nix systems. Another result of this
+                        is that multiple targets can have the same OutputName,
+                        as long as their @[TargetType](#TargetType) results in
+                        different filenames, which is for example guranteed for
+                        "Library" and "Executable" when compiling C/C++ code
+                        with mbpm.
+
+                    # Sources
+
+                        This field must a JSON array consisting only of JSON
+                        strings.
+
+                        This field consists of the filenames of the sources used
+                        in the compilation for the specific target, and
+                        specifies these filenames as an 
+                        @[absolute packet path](../Terminology.mbd#Absolute packet path).
+
+                        A source not being included in the packet during
+                        compilation isn't necessarily immediately identified as
+                        an error, and depending on the compiler some compilation
+                        may still be executed, but the compilation as a whole
+                        will result in an error if a missing source file is
+                        encountered.
+
+                /_
+            /_
+
+        /_
+
+        # Dependancies
+
+            This field specify which @[packets](../{Packets.mbd}) the
+            compilation of the sources depend on.
+
+            This should be mostly the same the dependancies of the packet, but
+            doesn't have to. Exactly how these dependancies affect the build
+            system is dependant on the specific language, but for example C++ it
+            is used to determine which libraries have to be linked, and
+            additional include directories that need to be included, exactly how
+            this affects the build system for the different languages be found
+            @[here]({Buildsystem.mbd).
+
+    /_
+    
+    #_ Optional fields
+
+        #  ExtraIncludes
+      
+            This fields has to be a JSON array of JSON strings. The default
+            value is an empty array.
+
+            This field is only relevant for languages where "include directory"
+            is defined, and is made to work with include directories in C++.
+            This adds the specified include directories when compiling the
+            sources. The include directories MUST be a 
+            @[absolute packet path](../Terminology.mbd#Absolute packet path),
+            meaning that only include directories in the packet can be included,
+            and no extra system include directories can be specified.
+
+            [[Note]]
+            These include directories *are not* exported, meaning that
+            compilations using this library do not have to in turn add these
+            include directories. This can instead be specified in the 
+            @[packet TypeInfo field](../Packets.mbd#MBPM_PacketInfo), 
+            exactly what fields can be included here for the purpose of MBBuild
+            can be read about @[here](Buildsystem.mbd#TypeInfo). However, using
+            this functionality is highly discouraged.
+        
+/_ 
