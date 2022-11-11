@@ -1,0 +1,195 @@
+%title CLI
+
+This part describes the way MBBuild hooks into the mbpm CLI.
+
+MBBuild is an @[extension](../Extensions.mbd) to mbpm, and understanding how
+extensions are implemented and how the modify the behaviour of mbpm in needed in
+order to understand the meaning of this document. Here all of the different
+extensions mechanisms that MBBuild uses are described, and what they do.
+
+
+# Vectorized extensions
+
+    #_ Top command extensions 
+
+        # export
+
+            The export command is handled for packets that have the type 
+            C or C++.
+
+            When exporting a packet to handled by MBBuild, so is a valid 
+            @[MBSourceInfo.json](MBSourceInfo.mbd) required. This file not
+            existing or being invalid results in an error exporting the packet.
+
+            The @[MBSourceInfo.json](MBSourceInfo.mbd) is read, and unless
+            overriden by the @[-c](#export#-c) option so is the  
+            @[default export configuration](MBCompileConfigurations.mbd#DefaultExportConfig) 
+            for the @[language of the sources](MBSourceInfo.mbd#Language) the
+            configuration that is to be exported.
+
+            For each target to be exported, it then checks for the existance for 
+            "{PACKET_DIRECTORY}/MBPM_Builds/{COMPILE_CONFIGURATION_NAME}/{TARGET_NAME}",
+            and if the file exists, it either creates a symlink to it located in 
+            "$MBPM_PACKETS_INSTALL_DIRECTORY/MBPM_ExportedExecutables/{TARGET_NAME}" or 
+            "$MBPM_PACKETS_INSTALL_DIRECTORY/MBPM_CompiledLibraries/{TARGET_NAME}"
+            depending on if the target is a
+            @[library](Buildsystem.mbd#Libraries) or a
+            @[executable](Buildsystem.#Executables).
+
+            [[Note]]
+            The target name is not neccessarily the exact name of the 
+            @[OutputName](MBSourceInfo.mbd#OutputName) in the MBSourceInfo.json
+            file, as MBBuild automatically modifies the name depending on the
+            platform. It for example automatically adds .exe to executables on
+            windows, and "lib"+{OutputName}+".a/so" for executables on POSIX
+            systems when creating the files, and the export command alters the
+            name of the files in the same way.
+
+            _# Flags
+                
+                
+
+            /#
+
+            _# Single value options
+
+                # -c
+                    
+                    The value of this option is the compile configuration to
+                    export instead of the
+                    @[default](MBCompileConfigurations.mbd#DefaultExportConfig).
+
+                    As all packets are exported to the same loctation so can
+                    only one -c be in a export command, exporting multiple
+                    configurations would just override the previous one, and is
+                    therefore treated as an error.
+                
+                # -t
+
+                    Exports a specific @[target](MBSourceInfo.mbd#Target) instead of the default, which is
+                    to export all targets present in the
+                    @[MBSourceInfo.json](MBSourceInfo.mbd). The name of the
+                    target is the name of target as given in the
+                    MBSourceInfo.json, and not the potentially modified name of the target
+                    on disk.
+
+            /#
+            
+
+
+
+            
+
+        # compile 
+
+            The most fundamental command of MBBuild, the command that is
+            responsible for actually compiling the code, and the command that
+            involves the whole of the MBBuild extensions system. 
+
+            In order to compile a packet so is a valid 
+            @[MBSourceInfo.json](MBSourceInfo.mbd) needed in the top part of the
+            packets directory, that is it has the 
+            @[absolute packet path](../Terminology.mbd#Absolute packet path) "/MBSourceInfo.json".
+            An invalid or missing MBSourceInfo.json immediately ends the command
+            with an error.
+
+            Next, the program looks for a valid
+            @[MBCompileConfigurations.json](MBCompileConfigurations.mbd) in
+            MBBuild's 
+            @[extension directory](../Extensions.mbd#Extension directory).
+            An invalid or missing MBCompileConfigurations.json ends the
+            compilation process with an error.
+
+            Upon parsing the MBCompileConfigurations.json so are the compile
+            configurations determined for the current compilation. If 
+            @[the -c option](#compile#-c) is not specified so are the 
+            @[default compile configurations](MBCompileConfigurations.mbd#DefaultConfigs)
+            used as the configurations to compile. Otherwise, all of
+            configurations given by the separate @[-c options](#compile#-c) are
+            compiled. 
+
+            After having determined the name of the compile configurations to
+            compile, so is the
+            @[language config](MBCompileConfigurations..mbd#LanguageConfigs) for
+            the @[language](MBSourceInfo.mbd#Language) of the sources checked
+            for configs of the same names. If no language configuration exists
+            for the given language, or if the language configuration doesn't
+            have the compile configurations specified, so is the compilation
+            ended with an error.
+
+            Now the program checks for the @[targets](MBSourceInfo.mbd#Targets) 
+            to compile. If the @[-t option](#compile#-t) is not given, so are
+            all of the targets in the MBSourceInfo.json compiled, otherwise the
+            MBSourceInfo.json is searched for targets of the name specified by
+            the -t option. If a -t option specifies a target that doesn't exist
+            so is the compilation ended with an error.
+
+            At this point, the targets to compile, and the configurations to
+            compile have both been determined, and now the 
+            @[buildsystem](Buildsystem.mbd) is invoked. More about the exact
+            behaviour for how packets are build can be found 
+            @[at the buildsystem documentation](Buildsystem.mbd).
+
+            _# Flags
+
+                # --rebuild
+
+                    --rebuild makes it so that all of the sources and all of the
+                    targets are recompiled and relinked, instead of only
+                    affecting sources/targets deemed out of date by the
+                    serialzied dependancy info, and the updates the dependancy
+                    info accordingly.
+
+            /#
+
+            _# Single value options
+                
+                # -t
+
+                    The value of this option is the name of a target to compile.
+                    
+                    Having this option appear on the command line makes it so
+                    that only targest which are specified by a -t optino are
+                    compiled, instead of using all of the targets in the
+                    @[MBSourceInfo.json](MBSourceInfo.mbd).
+
+                # -c
+
+                    The value of this option is the name of a 
+                    @[compilation configuration](MBCompileConfigurations.mbd#CompileConfiguration)
+                    to compile.
+
+                    This option appearing on the command line makes it so that
+                    only compile configurations specified by a -c option are
+                    compiled, instead of the 
+                    @[default compile configurations](MBCompileConfigurations.mbd#DefaultConfigs)
+                    that would be used instead.
+            /#
+
+    /_
+
+    #_ Sub command extensions
+
+        _# create
+
+            MBBuild extends the create command with files used by MBBuild,
+            aswell as creating files that allow other tools to work with the
+            same information, such as creating a CMakeLists.txt or makefile with
+            the same behaviour as the buildsystem used by MBBuild, or creating a
+            compile_commands.json with the same flags used by the buildsystem
+            that can be used by for example for IDE's.
+
+            The following subcommands for create are defined by MBBuild for
+            packets of type C/C++.
+
+            # makefile
+
+            # compile_commands.json 
+
+            # CMakeLists.txt
+
+        _#
+
+        
+        
+    /_

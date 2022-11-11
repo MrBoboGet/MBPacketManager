@@ -1,0 +1,10 @@
+{
+    "Sources":[
+        "index.mbd",
+        "History.mbd",
+        "MBDependancySpecification.mbd",
+        "MBCompileConfigurations.mbd",
+        "MBSourceInfo.mbd"
+        ],
+    "SubBuilds":{}
+}

@@ -87,3 +87,12 @@ of the documentation.
     including any directories. This mean that in practice that a singular
     filename is follows the same rules for a @[packet path](#Absolute packet
     path), except that it can't contain '/' or consist only of "." or "..".
+
+
+# Packet list
+
+    The packet list is the list of packets a 
+    @[vectorized](Extensions.mbd#Vectorized commands) command is operating on.
+    They are always created through a 
+    @[packet specification](PacketSpecification.mbd).
+

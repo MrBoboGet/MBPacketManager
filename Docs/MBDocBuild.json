@@ -10,5 +10,7 @@
         "Terminology.mbd",
         "History.mbd"
         ],
-    "SubBuilds":{}
+    "SubBuilds":{
+        "MBBuild":"MBBuild/MBSourceInfo.mbd"
+    }
 }

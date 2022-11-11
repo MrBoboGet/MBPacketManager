@@ -20,15 +20,227 @@ reusable configurations for purposes such as benchmarking or coverage testing
 code.
 
 This document describes the semantics of the compile configuration files, and
-how it is serialized. How these compile configurations are in utalized can be
-read about in the @[CLI description](CLI.mbd). It is also possible to configure
-how different packets are linked together with different configurations, which
-can be read about 
+how it is serialized. How these compile configurations are in turn utalized can
+be read about in the @[CLI description](CLI.mbd). It is also possible to
+configure how different packets are linked together with different
+configurations, which can be read about 
 @[in MBDependancySpecification](MBDependancySpecification.mbd).
 
-This document describes the semantics of configurations, but it isn't enough to
-get the complete compile command issued to compile the program. The missing
-flags and options are the ones that are intrinsic to fully specify the language
-and standard aswell as making the packet integrate with the rest of mbpm, 
-and all of this can be read about in the 
+This document describes the functionality of compile configurations, but it
+isn't enough to get the complete compile command issued to compile the program.
+The missing flags and options are the ones that are intrinsic to fully specify
+the language and standard aswell as making the packet integrate with the rest of
+mbpm, and all of this can be read about in the 
 @[description of the build process](Buildsystem.mbd)
+
+# Global compile configuration
+
+    The global compile configuration is stored at 
+    "$MBPM_PACKETS_INSTALL_DIRECTORY/Extensions/MBBuild/MBCompileConfigurations.json".
+    It is used during the @[compile command](CLI.mbd#compile), and is used to
+    determine the default compile configurations.
+
+    Unless a 
+    @[local compile configuration is used](#Local compile configuration) 
+    is used, so is the file not existing treated as an error, and the
+    compilation is not executed and considered having failed.
+
+# Local compile configuration
+
+    It is possible to override which compile configuration file mbpm reads to
+    determine which compile configuration should parsed and used during
+    compilation, more about this can be read about @[here](CLI.mbd#cf).
+    
+    This functionality is provided in order to make it easy to override the
+    global compile configurations for a build requiring very specific flags, but
+    it should be used sparingly, atleast with packets under the control of mbpm.
+    The flags used during compilation is stored as a part of the dependancies
+    for every source file, meaning that different compile flags triggers a
+    recompilation of the source file, which means that the file is going to be
+    recompiled again if it's recompiled by mbpm with the default compile flags.
+
+
+# MBCompileConfigurations.json
+    
+    This part describes all of the fields in the configuration file and their
+    meaning, aswell as giving an overview of how the file is structured, and how
+    it is used during the compilation process.
+
+    _# Compilation process overview
+
+        As MBBuild was made to be able to compile langauges with similar semantics
+        to C++, which was meant to support C, so are there separate compile
+        configurations for each language. When compiling a 
+        @[MBSourceInfo.json](MBSourceInfo.mbd) so is first the 
+        @[language](MBSourceInfo.mbd#Language) identified, and then the
+        "LanguageConfigs" field in the compilation configuration is checked for
+        wheter or not it contains a fieldname with the same name as the 
+        @[language](MBSourceInfo.mbd#Language) to compile. If that field is not
+        found, so is no compilation made, and the compilation fails with an error.
+
+        Every LanguageConfig in turn specifies a couple of different fields, some
+        like @[DefaultExportConfig](#DefaultExportConfig) and
+        @[DefaultConfigs](#DefaultConfigs) which determine global defaults related
+        to how MBBuild handles langauges, in this example which languages are
+        exported and compiled if no specific configurations are given.
+
+        It also has the field "CompileConfigurations" which contains the actual
+        compilation configurations. Whenever a compilation is issued, the command
+        line is first searched for @["-c:{CONFIG_NAME}"](CLI.mbd#-c), which
+        specifies the compilation configurations to compile. If no such option is
+        present, the languages "DefaultConfigs" are the compilations that are
+        assumed. After determining the compilation configurations, it checks the
+        "CompileConfigurations" if configurations with the same name are present. If
+        not, the compilation ends with an error, and configurations are compiled.
+
+        The compilation configuration has a toolchain, and then checks wheter or not
+        the toolchain can compile the specified language for the specified standard. 
+        If an invalid toolchain is found, or the given toolchain cannot compile the
+        langauge and standard combination, so is the compilation process ended with
+        an error.
+
+        The given packets are then compiled once for each configuration. More about
+        how to controll the compilation process from the command line can be read
+        about in the @[command line interface part](CLI.mbd).
+
+    /#
+
+    #_ fields
+
+        MBCompileConfigurations.json is like every other config file of MBBuild
+        written in the JSON format, and contains both mandatory and optional
+        fields, and "sub objects" which in turn have optional and mandatory
+        fields. Missing mandatory fields results in an error parsing the file,
+        and any command parsing the file in turn fails with an error. Optional
+        fields all have specified default values, and fields not recognized as
+        an mandatory field or optional field are silently ignored.
+
+        MBCompileConfigurations.json consists of a number of subobjects with a
+        specific format, and all of the object types and their contents are
+        described in this part, beginning with the definition of the top most
+        object.
+        
+        # MBCompileConfigurations.json
+           
+            The top most object of the file, currently only has one field, which
+            defines the configurations for each langauge.
+
+            _# Mandatory fields
+
+                _# LanguageConfigs 
+
+                    This field is a JSON object containing 
+                    @[LanguageConfig's](#LanguageConfig).
+
+                    The name of the field in the object is the name of the language
+                    the specific language configuration is for.
+
+                /#
+            
+            /# 
+
+        _# LanguageConfig
+            
+            A language config objects is an object that contains all of the
+            compile definitions and global defaults for a specficic langauge.
+           
+            #_ Mandatory fields
+                
+                # DefaultExportConfig
+
+                    This field is a string, and it's value is the configuration
+                    that is used during the @[export command](CLI.mbd#export) if
+                    no specific configurations is given.
+
+                # DefaultConfigs
+
+                    This field is an array of strings. It gives the default
+                    export configurations to compile for packets during the 
+                    @[compile command](CLI.mbd#compile) if no specific
+                    configuration is specified.
+
+                # CompileConfigurations
+
+                    This field is an JSON object. The fieldname is the name of
+                    the compile configuration, and the value is a 
+                    @[compile configuration](#CompileConfiguration) json object.
+                
+            /_
+
+        /#
+
+        _# CompileConfiguration
+
+            A @[CompileConfiguration](#CompileConfiguration) and a
+            @[MBSourceInfo.json](MBSourceInfo.mbd) contains all information
+            neccesary to actually compile the a packet. The CompileConfiguration
+            contains both information about the compiler toolchain that should
+            be used, aswell as the extra options supplied both at link and
+            compile time.
+
+            MBBuild does however also implictly add some flags to the
+            compilation. These are for linking dependancies, and adding include
+            directories to be able to include headers from installed packets,
+            and include directories required by dependancies, specifying the
+            language for the compilation and the standard. The exact
+            operations required by the compiler are explained in detail at 
+            @[the buildsystem specification](Buildsystem.mbd). 
+
+            As being able to specify these operations are required for each
+            compiler, so does it also mean that MBBuild has to know about the
+            syntax and present options for the compiler, and in turn means that
+            only specific compilers are supported. The currently supported
+            compilers are GCC, Clang and MSVC. Compile and link flags are
+            however not checked for correct syntax or for being meaning full for
+            the compiler, and are added as is during compilation and linking,
+            separated by spaces. The exact behaviour of MBBuild for different
+            recognized toolchains can be read about @[here](#Buildsystem.mbd).
+
+            # Mandatory fields
+
+                # Toolchain
+
+                    The value of the "Toolchain" field is a string, specifiyng
+                    the name of the compiler to use. Valid values are
+                    "gcc","clang" and "msvc". An invalid value result in an
+                    error when compiling the sources.
+
+                # CompileFlags
+
+                    The value of the "CompileFlags" field is an array of
+                    strings.
+
+                    Every string in the array is added to the compile command as
+                    is when compiling a source file. More about how compilation
+                    is done can be read about in the 
+                    @[build system specification](Buildsystem.mbd), and may
+                    have slightly differing behaviour depending on the
+                    toolchaing used.
+
+                    The compile flags are guaranteed to be added to the compile
+                    command in the order they are given in the array.
+
+                # LinkFlags
+
+                    The value of the "LinkFlags" field is an array of strings,
+                    which gives the link option that are added to the command
+                    line whenever a target is linked. 
+
+                    The link flags are not checked for correct syntax or for
+                    existing for the current compiler. 
+
+                    The link flags are guaranteed to be added to the link
+                    command in the order they are given and command line, and
+                    they are furthermore guaranteed to be the last strings of
+                    the compile command.
+
+                    This is in order to ensure that system libraries added to
+                    the compilation are always added last, so they can resolve
+                    symbols for all sources and static libraries with toolchains
+                    that use a unix style linker.
+
+        /#
+
+    /_        
+
+

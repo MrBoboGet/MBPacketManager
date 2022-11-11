@@ -264,7 +264,30 @@ mbpm packspec mbbuild_empty -- compile
 ```
 
         /#
+    
+    # Total command handling
+
+        Total command hanling is where an extension can get the command line as
+        is.
+
+        This is intended to support utility commands that by their nature cannot
+        be vectorized, and that deal with functionality specific to the
+        extensionss used. As the extension get the whole command line as is so
+        can it naturally implement whatever it wants, and in turn any form of
+        command can be added to mbpm. Extensions are however discouraged to add
+        functionality that could be a separate utility, and should only add
+        functionality that by itself doesn't make sense outside of the behaviour
+        of the extensions to mbpm.
+
 /_
+
+# Extension directory
+
+    All of the configurations of a extensions are assumed to be located in 
+    "$MBPM_PACKETS_INSTALL_DIRECTORY/Extensions/{EXTENSION_NAME}/", and the
+    directory is given upon initializng an extension. Nothing can in practice
+    prevent and extension from reading configuration files from other parts of
+    the filesystem, but doing is discouraged.
 
 # Extension semantics
 
