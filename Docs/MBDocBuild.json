@@ -11,6 +11,6 @@
         "History.mbd"
         ],
     "SubBuilds":{
-        "MBBuild":"MBBuild/MBSourceInfo.mbd"
+        "MBBuild":"MBBuild/MBDocBuild.json"
     }
 }

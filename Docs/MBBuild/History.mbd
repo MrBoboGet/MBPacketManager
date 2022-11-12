@@ -60,12 +60,14 @@ Using ffmpeg is an entirely different beast, but needles to say so is the use
 for library with internal assertions useful. But as compiling ffmpeg sucks, and
 reading through all of the configruations and options needed I also realised
 something else, all of the big projects use a completely monolithic build
-process. It is completely impossible to change which flags are used, unless one
-edits the provided makefile, possibly resulting in undocumented behaviour.
-This was especially apperent when ffmpeg needed external libraries like Zlib. I
-have a zlib that I want to use. How do I tell ffmpeg to use that one? Is it
-really neccessary for all external libraries to require a involved and library
-specific step in order to get dependancies right?
+process. It is completely impossible to change which flags are used in a uniform
+way, while most libraries developed under *nix system usally respects the 
+C_FLAGS environemntal variable so is it far from universal, and many libraries
+still add their own flags. The only way to know the *exact* string is to read
+through the whole makefile. This was especially apperent when ffmpeg needed
+external libraries like Zlib. I have a zlib that I want to use. How do I tell
+ffmpeg to use that one? Is it really neccessary for all external libraries to
+require a involved and library specific step in order to get dependancies right?
 
 Reading more about the compile flags available I saw that I wanted to use more
 of my compiler, but I also realised that many flags produce ABI breaking
@@ -75,20 +77,25 @@ point where I decided to create a new build system that can fullfill these
 needs.
    
 #_ Build system principles 
+
     What follows are the principles that I concluded from my experiences
     described in @[the history](#History). They include both what a buildsystem
     should and should not do, and more generally how code should be shared.
     
-    # I don't want your build system, I want your source and header files
+    # I don't want your build system, I want your sources
+
         This is perhaps paradoxically the absolutely most fundamental part of
         MBBuild, the assertion that build systems are not in any way fundamental
         to a project and should idealy be implicitly created. 
 
         This principles expresses the frustration with trying reversee engineer
         how a project is compiled from looking at the build files, and has
-        more implications than what might seem obvious. 
+        more implications than what might seem obvious. While an already
+        configured build system might be convenient, so should it absolutely be
+        possible to use one's own.
 
     # Configuring is hard, compiling is easy
+     
         When reading documentation of CMake, Make, visual studio or any other
         build system, the inclusion of *arbitrary commands* is often presented
         as a killer feature, a way to make the build system infinetly extensible
@@ -113,6 +120,7 @@ needs.
         people do what they want with finished project.
 
     # Compile options are not opaque
+
         A lot of buildsystems treat compile options as a implementation detail,
         something that is not required to be completely understood by the
         user. This is false. 
@@ -128,8 +136,9 @@ needs.
         build system*.
 
     # Dependancys for sources should be auto generated
+
         The way sources and headers depend on each other is something that can
-        be determined purely through the semantics of the language. Needed to
+        be determined purely through the semantics of the language. Need to
         manually specify these dependancys are both error prone and gives the
         wrong impression that they should be determined by a human.
 
@@ -138,10 +147,12 @@ needs.
 /_
 
 #_ Project goals
+
     The following part describes the goals for MBBuild, which describes what the
     buildsystem and command line application is intended to do.
     
     # Implicitly generated build system from sources.
+
         The most fundamental abstraction to whole project, is the idea that
         compiling code is actually "easy", atleast in terms of what needs to be
         compiled. The user should be able to only specify which source files
@@ -149,20 +160,18 @@ needs.
         needed dependancys.
 
     # Integrated packet managment system
+     
         This is the goal that makes this in many ways a sibling to
         MBPacketManager, packet managment is something that is needed in order
         to convieniently create builds.
 
-        All non trivial executables and libraries have dependancys. But
+        All non trivial executables and libraries have dependancies. But
         specifying and combining libraries should not require absolute paths or
         any form of mandatory directory structure that needs to be maintained
         for all projects. 
 
-        This is also the goal that means that there exist a significant overlap
-        with MBPacketManager. Having this project as a true subproject of
-        MBPacketManager is not entirely 
-
     # Easy global configuration specification and mixing and matching for builds
+
         This goal is in some ways contradictory to previous goals, that the
         configuration for a build should not be specified by the build. This is
         still true, but there still needs to be a way to specify a build with

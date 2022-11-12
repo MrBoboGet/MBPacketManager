@@ -79,7 +79,7 @@ configuration it should link against for each of it's dependancies.
         A dependancy not satisfying any "Specification" will use the same
         configuration as the current compilation.
 
-    /_
+    /#
 
     _# Rationale 
 
@@ -117,7 +117,7 @@ configuration it should link against for each of it's dependancies.
         dependancy specifiaciton to be arbitraily complex harms the ability for
         other users to understands ones configuration.
         
-    /_
+    /#
 
     _# Fields and semantics
         
@@ -142,7 +142,7 @@ configuration it should link against for each of it's dependancies.
             "ResultConfiguration" field, which means that "ResultConfiguration"
             has to be a string.
 
-            #_ Predicate
+            _# Predicate
 
                 A predicate consists of only optional fields. Each field is an
                 array of strings, which are checked against fields in the 
@@ -199,7 +199,7 @@ configuration it should link against for each of it's dependancies.
                     satisfying the predicate now satisfy the predicate.
 
                  
-            /_    
+            /#
         /# 
     /#
 

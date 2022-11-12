@@ -105,7 +105,7 @@ mbpm, and all of this can be read about in the
 
     /#
 
-    #_ fields
+    _# fields
 
         MBCompileConfigurations.json is like every other config file of MBBuild
         written in the JSON format, and contains both mandatory and optional
@@ -241,6 +241,6 @@ mbpm, and all of this can be read about in the
 
         /#
 
-    /_        
+    /#
 
 

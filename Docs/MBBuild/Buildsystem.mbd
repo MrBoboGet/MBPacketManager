@@ -1,0 +1,86 @@
+%title The buildsystem
+
+This document describes the abstraction of the buildsystem that is used by mbpm,
+first giving an overview and discussion of what is neccessary to compile the
+sources, giving a modell for how compilation is done. This also includes the
+goals of the buildsystem, aswell as what the buildsystem is intended not to do.
+It the ends with a concrete specification for how all of the fields in 
+@[MBSourceInfo.json](MBSourceInfo.mbd) and  
+@[MBCompileConfigurations.json](MBCompileConfigurations.mbd) are used in order 
+to construct the command line used to compile the sources/link the targets.
+
+The design behind this buildsystem is derived from the 
+@[goals of MBBuild](History.mbd). The whole design philosophy can be read about
+in the @[history of this project](History.mbd), but how these design principles
+in turn affect and influence the buildsystem are described more concretely here.
+
+# A buildsystem overview
+
+    There exists a great number of buildsystems out there.
+
+    Every buildsystem is intended to solve the deceivingly simple problem of 
+    *creating the executable*, or library. But some people might wonder why this
+    is needed, buildsystems can after all be extremly complex, and often times
+    people ask "how do i compile C++ on linux", in some sense implying that the
+    way C++ is compiled differs by platform. But it doesn't. Every buildsystem
+    ultimately boils down to, is a way to invoke the underlying compiler
+    *efficiently*. But it is this *efficiently* that makes the buildsystems so
+    complex, and so different on different platforms.
+
+    Compiling all sources at once is indeed very simple. While not especially
+    portable, providing a shell file that executes the needed command for every
+    source is easy. This is the trivial way to implement a buildsystem, but it
+    quickly runs into a number of problems that more advanced buildsystems
+    intend to solve. The most obvious flaw of this system, is that it is unable
+    to handle incremental compilations, that is it compiles all sources every
+    time wheter or not the source has already been compiled previously. It also
+    has the problem that changing the flags for the compilation doesn't scale
+    well, any change for a compile flag has to be mirrored for every source
+    file. It can also only compile the sources with the same flags, making
+    switching between "release" and "debug" builds impossible. It also is bad
+    at determining which libraries are needed at link time, perhaps the most
+    difficult problem to solve. 
+
+    It is in solving all of these problems that the complexity of buildsystems
+    become apperent. Determining wheter or not a file needs to be recompiled
+    requires extensive knowledge about the semantics of the compiled language,
+    and it requires a way to know wheter or not a file itself has been updated.
+    Changing the flags for all of the sources at once requires that these flags
+    can be stored and extracted on disk in some capacity, and determining which
+    libraries needs to be linked is well, if you ask me, something that no
+    C++ buildsystem I know of really solves. And that is because it because it
+    in many ways requires the functionality of a packet manager.
+
+    While this might give a perspective why buildsystems are required to do
+    non-trivial work, so is it ultimately no to complicated. This is not
+    sufficient to explain why they can be so extremly large and difficult to
+    understand. And this is where the most fundamental assertion of MBBuild is
+    comes in: The problem with existing buildsystems are that they are to
+    expressive and general.
+
+    What I described previously is the process of compiling C++ sources. It is not
+    neccesarily the process of creating the documentation. It is not neccesarily
+    the process of configuring the compilation. It is not neccesarily the
+    process of "installing" the software. But all of these, I would argue
+    fundamentally different operations are all usually handled by the same
+    program. This means that the program has to be able to describe and handle
+    many different operations, and this in turn leads to the inclusion of 
+    *arbitray commands*, the inclusion of a programmable interface, the
+    inclusion of user defined behaviour. All of these are things that make
+    building other people code suck. They create a system where a person has to
+    understand exactly the way every dependancy is compiled, and where modifying
+    the sources lead to results that are difficult to understand.
+
+    This is where difference in philosophy of MBBuild comes in. MBBuild is
+    intended to be the most minimal system neccessary to compile C/C++/ other
+    languages with similar semantics. It makes to attempt to be able to compile
+    any other form of input, and it aims to create a completely standardized way
+    to compile the code. All of these tenets are summarized in the following
+    part.
+
+# MBBuild principles and goals
+
+
+# MBBuild specification
+    
+    

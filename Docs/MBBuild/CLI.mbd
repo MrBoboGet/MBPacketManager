@@ -41,15 +41,9 @@ extensions mechanisms that MBBuild uses are described, and what they do.
             @[OutputName](MBSourceInfo.mbd#OutputName) in the MBSourceInfo.json
             file, as MBBuild automatically modifies the name depending on the
             platform. It for example automatically adds .exe to executables on
-            windows, and "lib"+{OutputName}+".a/so" for executables on POSIX
+            windows, and "lib"+{OutputName}+".a/so" for libraries on POSIX
             systems when creating the files, and the export command alters the
             name of the files in the same way.
-
-            _# Flags
-                
-                
-
-            /#
 
             _# Single value options
 
@@ -183,13 +177,107 @@ extensions mechanisms that MBBuild uses are described, and what they do.
             packets of type C/C++.
 
             # makefile
+                
+                This sub command creates a makefile that is inteded to be able
+                to compile the given packet, without the use of mbpm. This is
+                intended to be human readable and editable.
+
+                [[Note]]
+                The way the the makefile is constructed still makes use of the
+                MBPM_PACKETS_INSTALL_DIRECTORY variables, which means that it
+                still assumes the existance of a mbpm installation, without
+                using the specific executable. This is inteded to make it so
+                that it more closely follows the semantics of MBBuild. It can
+                however be made to use "installed libraries", the way the are
+                installed in a usual POSIX system.
+
+                # --use-installed
+
+                    Modify the creation of the cmake file so that it link to
+                    libraries that are "installed libraries" on a regular posix
+                    system, which in practice means that the link command
+                    linking the libraries is simply "-l:PACKET_NAME".
 
             # compile_commands.json 
 
+                This file creates a
+                @[compile_commands.json](https://clang.llvm.org/docs/JSONCompilationDatabase.html)
+                that defines all of the flags and options that are used to
+                compile each source in the
+                @[MBSourceInfo.json](MBSourceInfo.mbd). The compile string used
+                for each source are the exact string that MBBuild would use
+                internally when compiling the source, with the exception that
+                the assumed working directory might be different, and that
+                options specifing the outputname of the file are omitted.
+
+                This command requires that a valid @[MBSourceInfo.json](MBSourceInfo.mbd)
+                has to exist in the packet directory, and that a valid 
+                @[global compile configuration](MBCompileConfigurations.mbd#Global compile configuration)
+                exists, the command otherwise results in an error.
+
             # CMakeLists.txt
 
-        _#
+                This sub command has a similar purpose as
+                @[makefile](#makefile), in that it creates a another buildsystem
+                intended to have similar semantics to the one used by MBBuild.
+                Like the @[makefile](#makefile) so is this CMakeLists.txt still
+                assuming that the libraries exist on a mbpm installation, that
+                is to say the can be found at
+                "$MBPM_PACKETS_INSTALL_DIRECTORY/{PacketName}", and the the
+                compiled versions of the targets can be found at 
+                "$MBPM_PACKETS_INSTALL_DIRECTORY/{PacketName}/{COMPILE_CONFIGURATION_NAME}/{MODIFIED_TARGET_NAME}".
 
-        
-        
+                It can like @[makefile](#makefile) be modified to instead use
+                libraries that are "installed" on the system.
+
+                # --use-installed
+
+                    Modifies the created CMakeLists.txt to use packets that are
+                    "installed" on the system, accoring to CMake semantics.
+
+        /#
+
+    /_
+
+    #_ Total command handling
+
+        # embedd
+
+            This command generates sources and header files for a given input
+            file, that makes it so that the input file can be embedded in the
+            compiled program C/C++ program.
+
+            It does this by creating a source file that defines a const char*
+            array with the contents of the input file and a size_t variable with
+            the size of the file, and a header file that
+            includes the const char* array as file size as externally defined
+            symbols.
+
+            This command requires a binary file to embedd as the first argument,
+            and has 2 mandatory value options, "-o" which defines the name of
+            the ouput file, and "-v" that defines the name of the created
+            variable.
+
+            All file names which are given to this command are looked up with
+            respect to the current working directory.
+
+            _# Mandatory value options
+                
+                # -o
+
+                    The value of this option is the base name of the created
+                    source and header file. The command then creates
+                    "{VALUE}.cpp", which has the definition of the const char*
+                    array and size_t size, answell as "{VALUE}.h" which is the
+                    header file that includes these definitions as external
+                    symbols.
+
+                # -v 
+
+                    The value of this option is the base for the variable names. The name of the
+                    included const char* array is "{VALUE}", and the name of the
+                    the size of the file is "{VALUE}_size".
+
+            /#
+
     /_
