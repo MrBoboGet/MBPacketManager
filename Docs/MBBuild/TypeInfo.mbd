@@ -1,0 +1,4 @@
+%title MBBuild type info
+
+This part documents the format of the @[type info](../Packets.mbd#TypeInfo) that
+is expected of packets that are using the MBBuild system.

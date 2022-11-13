@@ -22,7 +22,7 @@ in turn affect and influence the buildsystem are described more concretely here.
     *creating the executable*, or library. But some people might wonder why this
     is needed, buildsystems can after all be extremly complex, and often times
     people ask "how do i compile C++ on linux", in some sense implying that the
-    way C++ is compiled differs by platform. But it doesn't. Every buildsystem
+    way C++ is compiled differs by platform. But it doesn't. What every buildsystem
     ultimately boils down to, is a way to invoke the underlying compiler
     *efficiently*. But it is this *efficiently* that makes the buildsystems so
     complex, and so different on different platforms.
@@ -48,7 +48,7 @@ in turn affect and influence the buildsystem are described more concretely here.
     Changing the flags for all of the sources at once requires that these flags
     can be stored and extracted on disk in some capacity, and determining which
     libraries needs to be linked is well, if you ask me, something that no
-    C++ buildsystem I know of really solves. And that is because it because it
+    C++ buildsystem I know of really solves. And that is because it 
     in many ways requires the functionality of a packet manager.
 
     While this might give a perspective why buildsystems are required to do
@@ -56,18 +56,18 @@ in turn affect and influence the buildsystem are described more concretely here.
     sufficient to explain why they can be so extremly large and difficult to
     understand. And this is where the most fundamental assertion of MBBuild is
     comes in: The problem with existing buildsystems are that they are to
-    expressive and general.
+    expressive and generic.
 
     What I described previously is the process of compiling C++ sources. It is not
     neccesarily the process of creating the documentation. It is not neccesarily
     the process of configuring the compilation. It is not neccesarily the
     process of "installing" the software. But all of these, I would argue
-    fundamentally different operations are all usually handled by the same
+    fundamentally different, operations are all usually handled by the same
     program. This means that the program has to be able to describe and handle
     many different operations, and this in turn leads to the inclusion of 
-    *arbitray commands*, the inclusion of a programmable interface, the
+    *arbitray commands*, the inclusion of a programmable behaviour, the
     inclusion of user defined behaviour. All of these are things that make
-    building other people code suck. They create a system where a person has to
+    building other peoples code suck. They create a system where a person has to
     understand exactly the way every dependancy is compiled, and where modifying
     the sources lead to results that are difficult to understand.
 
@@ -78,9 +78,412 @@ in turn affect and influence the buildsystem are described more concretely here.
     to compile the code. All of these tenets are summarized in the following
     part.
 
-# MBBuild principles and goals
+#_ MBBuild principles and goals
 
+    # Compile flags are not opaque
+
+        Compile flags are often times described as a sort of customization,
+        fiddling and fine tuning the process with options that affect the
+        behaviour in noticable, but are ultimately an implementation detail.
+        This is not always the case. 
+
+        The are flags that affect the behaviour in ways that are neccessary for
+        the dependee to know. When using these flags, 
+
+    # Compile flags are never unique to a project
+
+        What this principle says, is that the flags used when compiling packets
+        rarely form a set of flags that are only applicable to this specific
+        build. Rather, they always solve a specific problem or achieve a desired
+        effect. 
+
+    # Configuration is always explicit, not implicit
+
+        The quinisenntial form of not interactive configuration is 
+        autoconf. When compiling with this tool, what configurations are made
+        are often times not easily discerned. Exactly what these 
+
+    # The buildsystem should improve control, not abstract it away
+/_
 
 # MBBuild specification
     
+    Compiling C++ in a way that the code compiles with the desired
+    flags and configurations and what not is one thing, making other people able
+    to use the result is an entirely different problem. One some systems, the
+    result of a compilation can usually be "installed", in a way that uses a
+    system default respected by most applications. The problem with this method
+    is that it only allows a single configuration to be used, and doesn't allow
+    a user to modify the process programatically. Other buildsystems, like
+    CMake allow buildsystems to include other builds, but does like make not
+    place any restrictions on how these dependancies are compiled, only that
+    they allow the results to be linked against in a uniform way, placing some
+    restrictions on the process. MBBuild asserts that in generall, the more
+    "powerful" and generic a buildsystem is the less guarantees it can make and
+    the less interoperable it becomes. MBBuild aims for maximal interoperability
+    and portability, which means that it places firm restrictions on how the
+    build can be constructed. The way a build is constructed aswell as the
+    assumption that are used are described here. In particular, all of the
+    compiler agnostic functionality that are required for a compiler to be used
+    by mbpm are described here. 
+
+    _# Compiler agnostic functionality 
+
+        # Include directories
+
+            Every compiler is required to have the ability to add additional
+            include directories. These directories determines from which
+            directory header files are searched for. Using the 
+            line '#include <foo/bar>', the header that is located at
+            "{INCLUDE_DIRECTORY}/foo/bar" if it exists for any value of
+            INCLUDE_DIRECTORY from the list of include directories. It is
+            unspecified what happens if multiple include directires contains the
+            file foo/bar, and builds should not depend on for example the
+            specific order of include directories. 
+
+
+        # Output path for compiled sources/linked libraries and executables
+
+            MBBuild requires that every output of a compilation can be
+            designated a specific path. This is because the buildsystems stores
+            the compiled sources in a compiler agnostic way so that it can
+            determine the files to link and wheter or not a source is out of
+            date compiler agnostically. The compiled executables/libraries are
+            also stored at predetermined locations, which means that these
+            locations also have to be specified.
+
+        # Link libraries by absolute path
+
+            A compiler must be able to link libraries from an absolute path.
+            This is used in order to have multiple compiled libraries for
+            different configurations present on the system.
+
+        # Specify language of sources, and standard used for language
+
+            Compiling "C" or "C++" is not supported in MBBuild. The only way to
+            compile "C" is through specifying that the standard you want is
+            C99, or C89, or whatever standard you want. No programming language
+            can be compiled in a vacuum, and the only thing defining a
+            programming language is some form of standard. This
+            means that being able to demand standard compliance from a compiler
+            is a neccessity. This does not mean that a compiler must support
+            all standards, only that the supported standards are explicitly
+            listed, and that it can specify the standard when needed.
+
+        # Ability to create static library from sources
+
+            A compiler, or more accurately in this case a toolchain, has to
+            provide a way given a list for sources, to create a static library,
+            that in turn can be used to resolve symbols for all of the sources
+            in build depending on these sources.
+
+            The distinction between toolchain and compiler here, is that the
+            compiler frontend does not need to implement this functionality.
+            Another tool, like ar or lib, provide this functionality, provided
+            it is guaranteed to work with the output of the compiler.
     
+
+        # Ability to create dynamic library from sources and dependancies
+
+            A compiler, or more accurately in this case a toolchain, has to
+            provide a way given a list for sources, to create a static library,
+            that in turn can be used to resolve symbols for all of the sources
+            in build depending on these sources.
+
+            The distinction between toolchain and compiler here, is that the
+            compiler frontend does not need to implement this functionality.
+            Another tool can provide this functionality, provided
+            it is guaranteed to work with the output of the compiler.
+
+    /#    
+
+    Now to define what a *build* is. This part describes in a more abstract
+    sense what a build consists of, and how these are in turn serialized is
+    described at @[MBSourceInfo.json](MBSourceInfo.mbd).
+
+    _# Build contents
+
+        This part exactly what can be specified in a build. Additionally, the
+        things specified here are assumed to be static, as in not calculated
+        from some command or determined at runtime. In practice so are all parts
+        here the contents of the @[MBSourceInfo.json](MBSourceInfo.mbd).
+
+        # Langauge and standard
+
+            Compiling a packet assumes that all sources are of the same language
+            and standard, meaning that mixed language build aren't implementable
+            requires different packets.
+        
+        # Targets
+
+            Targets are the result of a compilation, and can have the type of
+            either a library or an executable. Libraries can in turn, 
+            with @[MBCompileConfigurations.json](MBCompileConfigurations.json),
+            be compiled as either static or dynamic.
+            
+            A target always consists of a list of sources, and a compiler must
+            be able to create a library given a list of sources, and any
+            libraries these sources in turn depend on.
+
+            A target also has a name, which specifies the name of the file that
+            is created as a result of the linking.
+
+        # Dependancies
+
+            Every compilation has a list of dependancies, which are needed in
+            order to create the targes and compile the sources.
+
+    /#
+
+    And that is all that a build consists of. This most notably doesn't allow
+    the build to specify any form of compile options modifying optimization
+    levels. This brings aligns with the one of the most core principles of
+    MBBuild, which is the separation of specifying the build, from determining
+    the flags added by the configuration and the way dependancies are resolved.
+    These two last steps are described more in depth at
+    @[MBCompileConfigurations.json](MBCompileConfigurations.mbd) and 
+    @[MBDependancySpecification.json](MBDependancySpecification.mnd).
+
+    With all of these definitions, the way a target is compiled can be described
+    in full.
+
+    # Build process
+
+        Building a target in a @[MBSourceInfo.json](MBSourceInfo.mbd) requires
+        a valid @[compile configuratino](MBCompileConfigurations.mbd) and a 
+        @[dependancy specification](MBDependancySpecification).
+
+        Every @[compile configuration](MBCompileConfigurations.mbd) has a name.
+        First of all, the file
+        "MBPM_BuildFiles/{CONIGURATION_NAME}/MBDepependancyInfo" is read. If the
+        file doesn't exist, a new one is created. If the file is in an invalid
+        format so is an error reported and the building stops. The exact
+        contents of this file are in turn described
+        @[here](MBDepependancyInfo.mbd), but the functionality it provides is
+        that given a @[compile configuration](MBCompileConfigurations.mbd) and 
+        @[dependancy specification](MBDependancySpecification.mbd) so can it
+        determine wheter or not a given source file needs to be recompiled, or
+        if a targets needs to be relinked. 
+
+        For the given target so are all of it's sources checked for wheter or
+        not it needs to be compiled, and compiled if it's needed. If the
+        compilation is unsuccesfull so is the build process terminated with an
+        error. Otherwise, the @[MBDependancyInfo](MBDepependancyInfo.mbd)
+        updated. Then it checks wheter or not the target needs to be relinked.
+        This can happen even if none of the sources are recompiled, for example
+        and executable might have libraries it depends on that are updated.
+
+        This last part also requires a distinct step that is implemented
+        compiler agnostically, which is the 
+        @[dependant library lookup](Dependant library lookup). This part is also
+        used when determining wheter or not a target needs to be relinked, and
+        is documented below.
+
+        This gives all of the steps used in how a build is conducted. But is
+        insufficient in order to understand *exactly* what is done. Another
+        design philosophy of MBBuild is that no magic is involved, which means
+        that all of the steps and the exact command line used to accomplish them
+        should be able to be determined from only the 
+        @[MBSourceInfo.json](MBSourceInfo.mbd),
+        @[MBCompileConfigurations.json](MBCompileConfigurations.mbd) and
+        @[MBDependancySpecification.json](MBDependancySpecification.json). To
+        accomplish this, the process for how the command line for the given
+        process is determined is also documented below, at
+        @[Toolchains](#Toolchains).
+
+    # Dependant library lookup
+
+        The dependnat library lookup constructs a list of absolute paths to the
+        libraries that needs to be linked to a target. It requires a list of
+        dependancies, and a
+        @[MBDependancySpecification.json](MBDependancySpecification.mbd).
+
+        First, given a list of dependancies, the total list of dependancies are
+        calculcated, that all dependancies and transitative dependancies are
+        retrieved. After that, for each packet, it's packet info is examined for
+        it's "DefaultLinkTargets". A missing "DefaultLinkTargets" means that the
+        default link target is used, which is the name of the packet. After
+        that, the configuration for the dependancy is calculated, as described
+        in @[MBDependancySpecification.json](MBDependancySpecification.mbd).
+        Then each path to the link targets for the given compile configuration
+        is added.
+
+    # Exported include directories 
+
+         
+
+
+    # Target name modification
+        
+        The actual filename of a target is modified from it's target name to apply to the operating
+        systems standard. This part describes how the different target names are
+        modified for the different targets types in different operating systems. 
+
+        _# Windows
+            
+            # Executables
+                
+                Executables gets the name "{TARGET_NAME}.exe"
+
+            #_ Libraries
+
+                # Shared
+
+                    Shared libraries get the name "{TARGET_NAME}.dll" 
+
+                # Static
+
+                    Static libraries get the name "{TARGET_NAME}.lib"
+
+            /_
+            
+        /#
+
+        _# Posix
+
+            # Executables
+                
+                Executables gets the name "{TARGET_NAME}"
+
+            #_ Libraries
+
+                # Shared
+
+                    Shared libraries get the name "lib{TARGET_NAME}.so" 
+
+                # Static
+
+                    Static libraries get the name "lib{TARGET_NAME}.a"
+
+            /_
+        /#
+
+    #_ Toolchains
+
+        This part describes how the command line is constructed for the
+        different steps, compilation and linking, for the different toolchains,
+        given the total list of dependancies for the packet, the 
+        @[compilation configuration](MBCompileConfigurations.mbd) for the
+        packet, and the path to all of the 
+        @[dependant libraries](#Depenant library lookup).
+
+        The supported toolchains are gcc,clang, and msvc.
+
+        # gcc
+
+            _# Compilation 
+                
+                First of all, the name of the executable is determined. If the
+                language to compile is C so is gcc used, if it's C++ g++ is
+                used.
+
+                The first thing added is the standard. The langauge is implicit
+                from the version of the compiler name used. The langauge in the 
+                @[MBSourceInfo.json](MBSourceInfo.mbd) is mapped in the followng
+                way:
+
+                _# Standards
+
+                    # "Standard"="C99"
+
+                        'std=c99' is added to the command line.
+
+                    # "Standard"="C89"
+
+                        'std=c89' is added to the command line.
+                    
+                    # "Standard"="C++17"
+
+                        'std=c++17' is added to the command line.
+
+                    # "Standard"="C++20"
+
+                        'std=c++20' is added to the command line.
+
+                /#
+
+                After that, the include directories are added. Include
+                directories are added with the -I option.
+
+                After that, the name of the source is added. Then, the -o option
+                is used to set the output of the resulting object file to 
+                "MBPM_BuildFiles/{CONFIGURATION_NAME}/{SOURCE_STEM}.o", where
+                SOURCE_STEM is the absolute packet path to the source, with the
+                filename extension removed. 
+
+                After that, all of the 
+                @[compile flags](MBCompileConfigurations.mbd) for the current
+                compilation configuration are added as is, separated with
+                spaces.
+
+
+            /#
+
+            _# Linking
+                    
+                The linking step varies depedning on if the target is an
+                exectuable or library, and in turn if that library is dynamic or
+                not.
+
+                # Executable
+
+                    As with compilation, first the executable named is
+                    determined. If the code is C so is gcc used, or if the
+                    sources are written in C++ g++ is used. 
+
+                    The the sources to link are determined. For all sources in
+                    the current target,
+                    "MBPM_BuildFiles/{CONFIGURATION_NAME}/{SOURCE_STEM}.o" is
+                    added to the command line, where {SOURCE_STEM} is the
+                    absolute packet path to the source with the filename
+                    extension remvoed.
+
+                    After that all of the 
+                    @[dependant libraries](#Dependant library lookup) are added.
+                    This is done in a extremly hacky way. First the absolute
+                    path is added to the library search path with the -L option,
+                    and then the name of the library is added with the -l
+                    option. Note that the libraries are added in 
+                    @[reverse packet order](../Terminology.mbd#Packet order), to
+                    comply with the way unix linker works, which is by only
+                    resolving the symbols that the current library specifies the
+                    currently unresolved symbols.
+
+                    After that, the @[linker flags](MBCompileConfigurations.mbd)
+                    are added as is for the current configuration. After that,
+                    the output name the library is specified, which is 
+                    "MBPM_Builds/{CONFIGURATION_NAME}/{MODIFIED_TARGET_NAME}",
+                    where {MODIFIED_TARGET_NAME} is the
+                    @[modified name](#Target name modification) of the target.
+                     
+                # Static library
+
+                   The static library is created with the ar command. 
+
+                   First the ar -cf is added as the start of the command line.
+                   Then all of the object files are added just like when
+                   @[creating an executable](#gcc#Linking#Executable). Then the
+                   ouput name is specified with: 
+
+                # Dynamic library
+                    
+            /#
+        
+        # clang
+            
+            The behaviour of clang is exactly the same as for gcc, with the
+            exception that the compiler name is clang for C code, and clang++
+            for C++ code.
+
+        # msvc
+
+            _# Compilation 
+
+            /#
+
+            _# Linking
+
+            /#
+           
+
+    /_
