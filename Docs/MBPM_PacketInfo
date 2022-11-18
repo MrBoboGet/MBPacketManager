@@ -1,0 +1,10 @@
+{
+    "PacketName":"mbpm_docs",
+    "PacketType":"MBDoc",
+    "TypeInfo":
+    {
+        "Name":"MBPacketManager"
+    }
+    "Attributes":[],
+    "Dependancies":[]
+}

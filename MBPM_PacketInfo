@@ -1,7 +1,7 @@
 {
-	"PacketName":"MBPacketManager",
-	"Version":"0.1.0",
-	"Attributes":[],
-    "SubPackets":["/Bash/mbpm_bash","/Vim/mbpm_vim"],
-	"Dependancies":["MrBoboSockets","MBParsing","MBCrypto","MBUtility","MBSystem","MBUnicode","MBCLI"]
+    "PacketName":"MBPacketManager",
+    "Version":"0.1.0",
+    "Attributes":[],
+    "SubPackets":["/Bash/mbpm_bash","/Vim/mbpm_vim","/Docs/"],
+    "Dependancies":["MrBoboSockets","MBParsing","MBCrypto","MBUtility","MBSystem","MBUnicode","MBCLI"]
 }

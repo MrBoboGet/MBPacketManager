@@ -1,10 +1,14 @@
 {
-    "Sources":[
-        "index.mbd",
-        "History.mbd",
-        "MBDependancySpecification.mbd",
-        "MBCompileConfigurations.mbd",
-        "MBSourceInfo.mbd"
-        ],
-    "SubBuilds":{}
+    "TopDirectory":
+    {
+        "Files":       
+        [
+            "index.mbd",
+            "History.mbd",
+            "MBCompileConfigurations.mbd",
+            "MBDependancySpecification.mbd",
+            "MBSourceInfo.mbd",
+            "CLI.mbd"
+        ]
+    }
 }

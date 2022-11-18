@@ -16,6 +16,7 @@
 #include "MBBuild/MBBuild.h"
 #include "Vim/MBPM_Vim.h"
 #include "Bash/MBPM_Bash.h"
+#include "MBDoc/MBPM_MBDoc.h"
 //#include "MBBuild/MBBuild.h"
 //#include "MBCLI/"
 
@@ -1693,6 +1694,10 @@ namespace MBPM
         }
         std::string ExtensionDataPath = MBPM::GetSystemPacketsDirectory() + "/Extensions/" + ExtensionName + "/";
         const char* Error = nullptr;
+        if(!std::filesystem::exists(ExtensionDataPath))
+        {
+            std::filesystem::create_directories(ExtensionDataPath); 
+        }
         ExtensionToRegister->SetConfigurationDirectory(ExtensionDataPath.c_str(),&Error);
         m_RegisteredExtensions.push_back(std::move(ExtensionToRegister));
     }
@@ -2044,10 +2049,13 @@ namespace MBPM
             __Delete<MBPM_Vim>);
         std::unique_ptr<CLI_Extension, void (*)(void*)> BashExtension = std::unique_ptr<MBPM_Bash, void (*)(void*)>(new MBPM_Bash(),
             __Delete<MBPM_Bash>);
+        std::unique_ptr<CLI_Extension, void (*)(void*)> MBDocExtension = std::unique_ptr<MBPM_MBDoc, void (*)(void*)>(new MBPM_MBDoc(),
+                __Delete<MBPM_MBDoc>);
         //
         p_RegisterExtension(std::move(BuildExtension));
         p_RegisterExtension(std::move(VimExtension));
         p_RegisterExtension(std::move(BashExtension));
+        p_RegisterExtension(std::move(MBDocExtension));
         
         //If a "TotalCommand", skip any parsing done by the rest of the packet and give full controll to the extension
         auto CommandIt = m_TopCommandHooks.find(CommandInput.TopCommand);
@@ -2103,7 +2111,15 @@ namespace MBPM
             }
         }
         MBError RetrievePacketResult = true;
-        RetrievePacketResult = p_GetCommandPackets(VectorizedCommandInput,PacketLocationType::Installed,VectorizedPackets);
+        size_t ArgumentOffset = 0;
+        if(CommandIt != m_TopCommandHooks.end())
+        {
+            if(CommandIt->second[0].first.Type == CommandType::SubCommand)
+            {
+                ArgumentOffset += 1;
+            }
+        }
+        RetrievePacketResult = p_GetCommandPackets(VectorizedCommandInput,PacketLocationType::Installed,VectorizedPackets,ArgumentOffset);
         if(!RetrievePacketResult)
         {
             AssociatedTerminal->PrintLine("Error evaluating packet specification: "+RetrievePacketResult.ErrorMessage);   

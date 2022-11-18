@@ -1,16 +1,21 @@
 {
-    "Sources":[
-        "index.mbd",
-        "CLI.mbd",
-        "DevelopmentStructure.mbd",
-        "Packets.mbd",
-        "PacketsSpecification.mbd",
-        "SubPackets.mbd",
-        "Extensions.mbd",
-        "Terminology.mbd",
-        "History.mbd"
+    "TopDirectory":
+    {
+        "Files":
+        [
+            "index.mbd",
+            "CLI.mbd",
+            "DevelopmentStructure.mbd",
+            "Packets.mbd",
+            "PacketsSpecification.mbd",
+            "SubPackets.mbd",
+            "Extensions.mbd",
+            "Terminology.mbd",
+            "History.mbd"
         ],
-    "SubBuilds":{
-        "MBBuild":"MBBuild/MBDocBuild.json"
+        "SubDirectories":
+        {
+            "MBBuild":"MBBuild/MBDocBuild.json"
+        }
     }
 }
