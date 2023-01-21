@@ -367,7 +367,12 @@ in turn affect and influence the buildsystem are described more concretely here.
         packet, and the path to all of the 
         @[dependant libraries](#Depenant library lookup).
 
-        The supported toolchains are gcc,clang, and msvc.
+        The supported toolchains are gcc,clang, and msvc. Invocation of all of
+        these commands assume that the executables can be found in the "PATH"
+        environemntal variable. This in turn also means that only one version of
+        gcc, clang msvc etc are currently supported. Multiple versions of the
+        same compiler, with user specified name, is planned to be supported in
+        the future.
 
         # gcc
 
@@ -421,7 +426,7 @@ in turn affect and influence the buildsystem are described more concretely here.
 
             _# Linking
                     
-                The linking step varies depedning on if the target is an
+                The linking step varies depending on if the target is an
                 exectuable or library, and in turn if that library is dynamic or
                 not.
 
@@ -435,8 +440,8 @@ in turn affect and influence the buildsystem are described more concretely here.
                     the current target,
                     "MBPM_BuildFiles/{CONFIGURATION_NAME}/{SOURCE_STEM}.o" is
                     added to the command line, where {SOURCE_STEM} is the
-                    absolute packet path to the source with the filename
-                    extension remvoed.
+                    @[absolute packet path](../Terminology.mbd#Absolute packet path)
+                    to the source with the filename extension remvoed.
 
                     After that all of the 
                     @[dependant libraries](#Dependant library lookup) are added.
@@ -458,14 +463,32 @@ in turn affect and influence the buildsystem are described more concretely here.
                      
                 # Static library
 
-                   The static library is created with the ar command. 
+                    The static library is created with the ar command. 
 
-                   First the ar -cf is added as the start of the command line.
-                   Then all of the object files are added just like when
-                   @[creating an executable](#gcc#Linking#Executable). Then the
-                   ouput name is specified with: 
+                    First the "ar rcs " is added as the start of the command line.
+                    The name of the static library is then appended, as 
+                    "MBPM_Builds/{CONFIGURATION_NAME}/{@[{MODIFIED_TARGET_NAME}](#Target name modification)".
+                    Then all of the object files are added just like when
+                    @[creating an executable](#gcc#Linking#Executable).
+
+                    [[Note]]
+                    Creating static libraries requires that the "ar" executable
+                    is on path, and in turn that it actually is an executable
+                    that follows the same semantics as the one provided by 
+                    GNU Binutils.
+                   
 
                 # Dynamic library
+
+                    Dynamic libraries are not currently supported. Supporting
+                    dynamic libraries most likely imply that additional compile
+                    time options and link time options are specified, as sources
+                    need to be compiled with "-fPIC". The main reason that they
+                    aren't supported yet is that I don't use them, and that
+                    providing the same semantics for MSVC might provde difficult
+                    without source level support.
+              
+                  
                     
             /#
         
@@ -477,7 +500,67 @@ in turn affect and influence the buildsystem are described more concretely here.
 
         # msvc
 
+            MSVC is apparently a toolchain that is not really intended to be
+            used directly. Unlike GCC so requires it enviroment variables are
+            correctly set, and exactly which these are not really specified. The
+            way one is assumed to use it is by first invoking "vcvarsall.bat
+            x86_x64", where the argument depends on the platform. A problem with
+            this system, is that this has to be done for every single
+            source file and target to be linked, which introduces uneccesary
+            spam and even changes the default terminal settings. Furthermore,
+            creating dynamic libraries with msvc is not as easy as with unix
+            compilers. It requires explicitly importing and exporting symbols,
+            and creating a separate def file to determine which symbols are to
+            be exported, while unix compilers by default exports every symbol.
+            This behaviour is what most closely aligns with the principles of 
+            MBBuild, requiring compiler specific macros and files that are only
+            used on specific platforms reduce the portability, or atleast makes
+            programming for portability a chore, and furthermore, it should be
+            equally easy to use both static and dynamic libraries, and the
+            choice should not lie with the packet being compiled. 
+
+            All in all so is the conclusion that the support implemented and the
+            support possible to implement is not optimal, and is I want all of
+            the compilers to support the same semantics and operations, so is
+            the creation of dynamic libraries not implemented. Implementing them 
+            would either require automatic creation if the def file, or allowing
+            different compilers to implement different capabilities.
+
+
             _# Compilation 
+                
+                The first part of the command line in order to compile a
+                specific source is "vcvarsall.bat & msvc ", setting up the
+                required environment variables and adding the name of the
+                compiler. The next step is determining the standard. 
+
+                _# Standards
+
+                    Any standard or language not explicitly listed here means
+                    that trying to compile for that language + standard
+                    combination fill fail with an error. 
+
+                    _# C++
+
+                        # C++17
+
+                            "/std:c++17 " is added to the command string.
+
+                        # C++20
+
+                            "/std:c++20 " is added to the command string.
+
+                    /#    
+
+                    _# C
+
+                        # C89
+
+                            C89 isn't really 
+                        
+                    /#    
+
+                /#
 
             /#
 

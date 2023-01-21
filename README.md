@@ -1,4 +1,7 @@
-Program assumes that msbuild and cmake is on path.
+Packet manager designed to support source only distributions, with a modular
+design so that support for arbitrary packets can be added.  Also implements
+the build system used by all my projects. Currently has support for C/C++,vim
+and bash packets.
 
-Environment variables used:
-* MBPM_PACKETS_INSTALL_DIRECTORY: The directory where packets are downloaded and looked for. Needs to be set in order to use client functionality.
+Documentation can be found at
+[mrboboget.github.io](https://mrboboget.github.io/MBPacketManager/index.html).

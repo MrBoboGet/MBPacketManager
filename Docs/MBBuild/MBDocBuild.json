@@ -5,6 +5,7 @@
         [
             "index.mbd",
             "History.mbd",
+            "Buildsystem.mbd",
             "MBCompileConfigurations.mbd",
             "MBDependancySpecification.mbd",
             "MBSourceInfo.mbd",

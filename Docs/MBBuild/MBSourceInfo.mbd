@@ -32,7 +32,7 @@ build specification and language described in
     optional field is silently ignored.
 
 
-    #_ Mandatory fields
+    _# Mandatory fields
         
         # Langauge
 
@@ -57,7 +57,7 @@ build specification and language described in
             process with an error.
 
 
-        #_ Targets
+        _# Targets
 
             This field has to be a JSON object consisting of JSON objects, on
             the form of a @[target](#Target). The field names are the names of
@@ -75,7 +75,7 @@ build specification and language described in
                 have specified default values, and field names which aren't
                 the name of a mandatory field or optional field is ignored.
 
-                #_ Mandatory fields
+                _# Mandatory fields
 
                     # TargetType
 
@@ -128,10 +128,9 @@ build specification and language described in
                         will result in an error if a missing source file is
                         encountered.
 
-                /_
-            /_
-
-        /_
+                /#
+            /#
+        /#
 
         # Dependancies
 
@@ -146,7 +145,7 @@ build specification and language described in
             this affects the build system for the different languages be found
             @[here]({Buildsystem.mbd).
 
-    /_
+    /#
     
     #_ Optional fields
 
@@ -171,5 +170,6 @@ build specification and language described in
             exactly what fields can be included here for the purpose of MBBuild
             can be read about @[here](Buildsystem.mbd#TypeInfo). However, using
             this functionality is highly discouraged.
+    /_
         
 /_ 
