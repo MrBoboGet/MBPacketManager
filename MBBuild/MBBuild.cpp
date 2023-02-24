@@ -25,6 +25,35 @@ namespace MBPM
 {
     namespace MBBuild
 {
+
+    ExtraLanguageInfo_Cpp ParseExtraLanguageInfo_Cpp(MBParsing::JSONObject const& ObjectToParse)
+    {
+        ExtraLanguageInfo_Cpp ReturnValue;        
+        if(ObjectToParse.HasAttribute("Headers"))
+        {
+            for(auto const& Header : ObjectToParse["Headers"].GetArrayData())
+            {
+                ReturnValue.Headers.push_back(Header.GetStringData());
+            }
+        }
+        return(ReturnValue);
+    }
+    ExtraLanguageInfo_Cpp ParseExtraLanguageInfo_Cpp(MBParsing::JSONObject const& ObjectToParse,MBError& OutError)
+    {
+        ExtraLanguageInfo_Cpp ReturnValue;       
+        try
+        {
+            ReturnValue = ParseExtraLanguageInfo_Cpp(ObjectToParse);        
+        }
+        catch(std::exception const& e)
+        {
+            OutError = false;       
+            OutError.ErrorMessage = e.what();
+        }
+        return(ReturnValue);
+    }
+
+
     std::string h_ReplaceExtension(std::string OriginalString,std::string const& NewExtension)
     {
         size_t LastDot = OriginalString.find_last_of('.');    
@@ -219,6 +248,10 @@ namespace MBPM
                 std::sort(TargetInfo.SourceFiles.begin(),TargetInfo.SourceFiles.end());
                 Result.Targets[TargetData.first] = std::move(TargetInfo);
             }
+            if(JSONData.HasAttribute("ExtraLanguageInfo"))
+            {
+                Result.ExtraLanguageInfo = JSONData["ExtraLanguageInfo"]; 
+            }  
         }
         catch(std::exception const& Exception)
         {
@@ -736,7 +769,7 @@ namespace MBPM
         }  
         return(ReturnValue);
     }
-    std::vector<std::string> h_GetAllSources(SourceInfo const& BuildToInspect)
+    std::vector<std::string> GetAllSources(SourceInfo const& BuildToInspect)
     {
         //std::vector<std::string> ReturnValue = BuildToInspect.Targets.at("MBBuild").SourceFiles;
         std::unordered_set<std::string> Sources;
@@ -777,7 +810,7 @@ namespace MBPM
         //Test, assumes same working directory as build root
         //Result. = CompileConfig.CompileFlags;
         //Result.m_ToolChain = CompileConfig.Toolchain;
-        std::vector<std::string> AllSources = h_GetAllSources(CurrentBuild);
+        std::vector<std::string> AllSources = GetAllSources(CurrentBuild);
         for (std::string& Source : AllSources)
         {
             Source = Source.substr(1);
@@ -1292,7 +1325,7 @@ namespace MBPM
         }
         //Create build info   
         DependancyInfo SourceDependancies; 
-        std::vector<std::string> TotalSources = h_GetAllSources(InfoToCompile);
+        std::vector<std::string> TotalSources = GetAllSources(InfoToCompile);
         std::filesystem::path BuildFilesDirectory = PacketPath/("MBPM_BuildFiles/"+CompileConfName);
         std::filesystem::path PreviousWD = std::filesystem::current_path();
         std::filesystem::current_path(PacketPath);
@@ -1835,7 +1868,7 @@ namespace MBPM
         {
             return(ReturnValue);
         }
-        std::vector<std::string> AllSources = h_GetAllSources(LocalSourceInfo);
+        std::vector<std::string> AllSources = GetAllSources(LocalSourceInfo);
         try
         {
             for(std::string const& Source : AllSources)
@@ -2160,7 +2193,7 @@ namespace MBPM
                 return(ReturnValue);
             }
             std::vector<MBParsing::JSONObject> ObjectsToWrite;
-            std::vector<std::string> Sources = h_GetAllSources(LocalSourceInfo);
+            std::vector<std::string> Sources = GetAllSources(LocalSourceInfo);
             for(std::string const& Source : Sources)
             {
                 MBParsing::JSONObject NewSource(MBParsing::JSONObjectType::Aggregate);   

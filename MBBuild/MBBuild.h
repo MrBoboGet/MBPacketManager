@@ -12,6 +12,8 @@
 
 #include "../MBPM_CLI.h"
 
+
+#include <MBUtility/Optional.h>
 namespace MBPM
 {
     namespace MBBuild
@@ -34,14 +36,26 @@ namespace MBPM
         std::string OutputName;
         std::vector<std::string> SourceFiles;   
     };
+
+    struct ExtraLanguageInfo_Cpp
+    {
+        std::vector<std::string> Headers;
+    };
+    ExtraLanguageInfo_Cpp ParseExtraLanguageInfo_Cpp(MBParsing::JSONObject const& ObjectToParse);
+    ExtraLanguageInfo_Cpp ParseExtraLanguageInfo_Cpp(MBParsing::JSONObject const& ObjectToParse,MBError& OutError);
+
     struct SourceInfo
     {
         std::string Language;
         std::string Standard;
+        MBParsing::JSONObject ExtraLanguageInfo;
         std::vector<std::string> ExtraIncludes;
         std::vector<std::string> ExternalDependancies;
         std::unordered_map<std::string, Target> Targets;
     };
+
+    std::vector<std::string> GetAllSources(SourceInfo const& BuildToInspect);
+
     struct CompileConfiguration
     {
         std::string Toolchain;   
