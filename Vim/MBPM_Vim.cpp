@@ -48,6 +48,10 @@ namespace MBPM
         {
             ReturnValue = p_HandleExport(CommandToHandle,PacketToHandle,RetrieverToUse,AssociatedTerminal);
         }
+        else if(CommandToHandle.CommandName == "retract")
+        {
+            ReturnValue = p_HandleExport(CommandToHandle,PacketToHandle,RetrieverToUse,AssociatedTerminal);   
+        }
         return(ReturnValue);     
     }
     MBError ParseVimPacketInfo(std::filesystem::path const& FilePath,VimPacketInfo& OutInfo)

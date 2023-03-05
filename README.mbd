@@ -41,9 +41,10 @@ mbpm compile --allinstalled -na:NonMBBuild
         minimal and aim to be as standardized as possible.
 
         Building C/C++ therefore only support a very limited set of
-        for every target: What kind, executable or library, what sources
-        it contains, and which language and standard the sources are written
-        in. The whole build can also specify which other packet it depends on.
+        configurations for every target: What kind, executable or library, what
+        sources it contains, and which language and standard the sources are
+        written in. The whole build can also specify which other packets it
+        depends on.
 
         Compile flags and which compiler to use is specified in a separate
         config file, which means that compatible compile flags are up to the
@@ -80,7 +81,7 @@ mbpm compile --allinstalled -na:NonMBBuild
 ```
     
             The file specifying the compile flags can look like this:
-```
+```json
 {
     "LanguageConfigs":
     {
@@ -89,24 +90,24 @@ mbpm compile --allinstalled -na:NonMBBuild
             "Debug":
             {
                 "Toolchain":"gcc",
-                "CompileFlags":"-g -Wall"],
+                "CompileFlags":["-g", "-Wall"],
                 "LinkFlags":[]
             },
             "Release":
             {
                 "Toolchain":"gcc",
-                "CompileFlags":"-O2 -Wall"],
+                "CompileFlags":["-O2","-Wall"],
                 "LinkFlags":[]
             }
         }
     }
 }
 ```
-            This allows for compilation with for example the command, assuming that
-            you are in the same directory as `MBSourceInfo.json`
-            `mbpm compile ./ -c:Debug`. I also means that, as the compile flags is
-            located elsewhere, that configurations for specific tasks like code
-            coverage are easily reused.
+            This allows for compilation with for example the command, assuming
+            that you are in the same directory as `MBSourceInfo.json`, `mbpm
+            compile ./ -c:Debug`. It also means that, as the compile flags are
+            separate from the build specification, that configurations for
+            specific tasks like code coverage are easily reused.
         /#
 
 
@@ -118,9 +119,11 @@ mbpm compile --allinstalled -na:NonMBBuild
         different for this specific packet type when it's encountered.
 
         MBBuild is for example implemented by specializing `mbpm compile` to
-        execute the build process, while packet types not implementing this
-        operation are skipped. 
-
+        execute the build process for packets of type "C" or "C++". Packet
+        types that aren't overriden by any extensions are skipped, allowing for
+        modular extension of the capabilities without breaking existing
+        configurations.
+        
         Some commands like `mbpm upload` however, can specify that they
         operate on the whole set of packet specified, granting generic
         functionality.
@@ -159,4 +162,3 @@ mbpm compile --allinstalled -na:NonMBBuild
     This code is licensed under CC-zero, and the only external dependency
     @[cryptopp](https://github.com/weidai11/cryptopp) is also in the public
     domain.
-/_ 
