@@ -2457,18 +2457,21 @@ namespace MBPM
             //extra libraries stuff
             for (std::string const& LibraryPath : ExtraLinkLibraries)
             {
-                size_t LastSlash = LibraryPath.find_last_of('/');
-                if (LastSlash == LibraryPath.npos) 
-                {
-                    LastSlash = 0;
-                }
-                else
-                {
-                }
-                std::string Directory = LibraryPath.substr(0, LastSlash);
-                std::string Name = LibraryPath.substr(LastSlash+1);
-                LinkCommand += "-L" + Directory+ " ";
-                LinkCommand += "-l:" + Name+" ";
+                LinkCommand += " ";
+                LinkCommand += LibraryPath;
+                LinkCommand += " ";
+                //size_t LastSlash = LibraryPath.find_last_of('/');
+                //if (LastSlash == LibraryPath.npos) 
+                //{
+                //    LastSlash = 0;
+                //}
+                //else
+                //{
+                //}
+                //std::string Directory = LibraryPath.substr(0, LastSlash);
+                //std::string Name = LibraryPath.substr(LastSlash+1);
+                //LinkCommand += "-L" + Directory+ " ";
+                //LinkCommand += "-l:" + Name+" ";
             }
             for (std::string const& LinkFlag : CompileConfig.LinkFlags)
             {

@@ -29,12 +29,11 @@ namespace MBPM
         ExportCommand.Name = "export";
         ExportCommand.SupportedTypes = {"Vim"};
         ExportCommand.Type = CommandType::TopCommand;
-        ReturnValue.Commands = {std::move(ExportCommand)};
         CustomCommand RetractCommand;
         RetractCommand.Name = "retract";
         RetractCommand.SupportedTypes = {"Vim"};
         RetractCommand.Type = CommandType::TopCommand;
-        ReturnValue.Commands = {std::move(RetractCommand)};
+        ReturnValue.Commands = {std::move(RetractCommand),std::move(ExportCommand)};
         return(ReturnValue);
     }
     void MBPM_Vim::SetConfigurationDirectory(const char* ConfigurationDirectory,const char** OutError) 
@@ -50,7 +49,7 @@ namespace MBPM
         }
         else if(CommandToHandle.CommandName == "retract")
         {
-            ReturnValue = p_HandleExport(CommandToHandle,PacketToHandle,RetrieverToUse,AssociatedTerminal);   
+            ReturnValue = p_HandleRetract(CommandToHandle,PacketToHandle,RetrieverToUse,AssociatedTerminal);   
         }
         return(ReturnValue);     
     }
