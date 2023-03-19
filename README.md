@@ -1,4 +1,4 @@
-![Logo](Logo.png)
+![Logo](Logo_Small.png)
 # MBPacketManager
 
 MBPacketManager is a generic packet manager, with a builtin build system for C/C++. Other builtin packet types include Vim extensions and Bash extensions. 
