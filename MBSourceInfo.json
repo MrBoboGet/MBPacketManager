@@ -17,7 +17,8 @@
                 "/MBBuild/MBBuild.cpp",
                 "/Vim/MBPM_Vim.cpp",
                 "/Bash/MBPM_Bash.cpp",
-                "/MBDoc/MBPM_MBDoc.cpp"
+                "/MBDoc/MBPM_MBDoc.cpp",
+                "/MBSlippi/MBPM_MBSlippi.cpp"
             ]
         },
         "mbpm":
@@ -33,7 +34,9 @@
                 "/Vim/MBPM_Vim.cpp",
                 "/Bash/MBPM_Bash.cpp",
                 "/MBDoc/MBPM_MBDoc.cpp",
-                "/MBPMCLIMain.cpp"
+                "/Generic/GenericExtension.cpp",
+                "/MBPMCLIMain.cpp",
+                "/MBSlippi/MBPM_MBSlippi.cpp"
             ]
         }
     }

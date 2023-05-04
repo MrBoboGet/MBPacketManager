@@ -17,6 +17,8 @@
 #include "Vim/MBPM_Vim.h"
 #include "Bash/MBPM_Bash.h"
 #include "MBDoc/MBPM_MBDoc.h"
+#include "MBSlippi/MBPM_MBSlippi.h"
+#include "Generic/GenericExtension.h"
 //#include "MBBuild/MBBuild.h"
 //#include "MBCLI/"
 
@@ -2041,7 +2043,6 @@ namespace MBPM
             AssociatedTerminal->PrintLine("mbpm requires top command as the first argument");   
             return(1);
         }
-        //denna �r en global inst�llning
         //Extensions
         std::unique_ptr<CLI_Extension, void (*)(void*)> BuildExtension = std::unique_ptr<CLI_Extension, void (*)(void*)>(new MBBuild::MBBuild_Extension(),
             __Delete<MBBuild::MBBuild_Extension>);
@@ -2051,11 +2052,25 @@ namespace MBPM
             __Delete<MBPM_Bash>);
         std::unique_ptr<CLI_Extension, void (*)(void*)> MBDocExtension = std::unique_ptr<MBPM_MBDoc, void (*)(void*)>(new MBPM_MBDoc(),
                 __Delete<MBPM_MBDoc>);
+        std::unique_ptr<CLI_Extension, void (*)(void*)> MBSlippiExtension = std::unique_ptr<MBPM_MBSlippi, void (*)(void*)>(new MBPM_MBSlippi(),
+                __Delete<MBPM_MBDoc>);
+        //MPV extensions
+        OSConfigurations MPVConfigs;
+        ExportConfig WindowsMPVExport;
+        WindowsMPVExport.ApplicationName = "mpv";
+        WindowsMPVExport.Root = RootType::Roaming;
+        WindowsMPVExport.RootSuffix = "scripts";
+        ExportConfig DefaultMPVExport;
+        DefaultMPVExport.RootSuffix = ".config/mpv/scripts";
+        DefaultMPVExport.Root = RootType::Home;
+        p_RegisterExtension(std::unique_ptr<CLI_Extension,void(*)(void*)>(new GenericExtension("MPV",{"MPVPlugin"},std::move(MPVConfigs)),
+                    __Delete<GenericExtension>));
         //
         p_RegisterExtension(std::move(BuildExtension));
         p_RegisterExtension(std::move(VimExtension));
         p_RegisterExtension(std::move(BashExtension));
         p_RegisterExtension(std::move(MBDocExtension));
+        p_RegisterExtension(std::move(MBSlippiExtension));
         
         //If a "TotalCommand", skip any parsing done by the rest of the packet and give full controll to the extension
         auto CommandIt = m_TopCommandHooks.find(CommandInput.TopCommand);
