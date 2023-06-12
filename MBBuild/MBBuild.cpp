@@ -1861,7 +1861,10 @@ namespace MBPM
     }
     MBError MBBuild_Extension::p_Handle_Verify(CommandInfo const& CommandToHandle,PacketIdentifier const& PacketToHandle,PacketRetriever& RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal)
     {
+        //Can add this again when there is a proper way to 
+        //opt out for third party libraries
         MBError ReturnValue = true;
+        return(ReturnValue);
         SourceInfo LocalSourceInfo;
         ReturnValue = ParseSourceInfo(PacketToHandle.PacketURI+"/MBSourceInfo.json",LocalSourceInfo);
         if(!ReturnValue)

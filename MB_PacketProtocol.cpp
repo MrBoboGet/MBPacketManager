@@ -337,6 +337,7 @@ namespace MBPM
 		ReaderToUpdate.DeleteObjects(FileInfoDiff.DeletedDirectories);
 		ReaderToUpdate.DeleteObjects(FileInfoDiff.RemovedFiles);
 		ReaderToUpdate.UpdateInfo(DiffNode);
+        ReaderToUpdate.m_ExtensionData = p_GetLatestVersionExtensionData();
 	}
 	void MBPP_FileInfoReader::UpdateFileInfo(MBUtility::Filesystem& Filesystem, std::string DirectoryToUpdate, MBPP_FileInfoReader& ReaderToUpdate)
 	{

@@ -88,7 +88,7 @@ int main(int argc,const char** argv)
 	//debug för compile av locala packets
 	//std::cout << "Current path: " << std::filesystem::current_path()<<std::endl;
 	//std::filesystem::current_path("../../");
-	//const char* NewArgv[] = { "mbpm","compile","--allinstalled","-na:NonMBBuild"};
+	//const char* NewArgv[] = { "mbpm","upload","MBPacketManager","--local","--user"};
 	//argc = sizeof(NewArgv) / sizeof(const char*);
 	//argv = NewArgv;
 	return(MBPM::MBCLI_Main(argc, argv));

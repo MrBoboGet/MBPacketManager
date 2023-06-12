@@ -18,6 +18,7 @@
                 "/Vim/MBPM_Vim.cpp",
                 "/Bash/MBPM_Bash.cpp",
                 "/MBDoc/MBPM_MBDoc.cpp",
+                "/Generic/GenericExtension.cpp",
                 "/MBSlippi/MBPM_MBSlippi.cpp"
             ]
         },

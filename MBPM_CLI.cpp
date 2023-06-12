@@ -2053,7 +2053,7 @@ namespace MBPM
         std::unique_ptr<CLI_Extension, void (*)(void*)> MBDocExtension = std::unique_ptr<MBPM_MBDoc, void (*)(void*)>(new MBPM_MBDoc(),
                 __Delete<MBPM_MBDoc>);
         std::unique_ptr<CLI_Extension, void (*)(void*)> MBSlippiExtension = std::unique_ptr<MBPM_MBSlippi, void (*)(void*)>(new MBPM_MBSlippi(),
-                __Delete<MBPM_MBDoc>);
+                __Delete<MBPM_MBSlippi>);
         //MPV extensions
         OSConfigurations MPVConfigs;
         ExportConfig WindowsMPVExport;
@@ -2063,6 +2063,8 @@ namespace MBPM
         ExportConfig DefaultMPVExport;
         DefaultMPVExport.RootSuffix = ".config/mpv/scripts";
         DefaultMPVExport.Root = RootType::Home;
+        MPVConfigs.ExportConfigs[OSType::Windows] = std::move(WindowsMPVExport);
+        MPVConfigs.ExportConfigs[OSType::Default] = std::move(DefaultMPVExport);
         p_RegisterExtension(std::unique_ptr<CLI_Extension,void(*)(void*)>(new GenericExtension("MPV",{"MPVPlugin"},std::move(MPVConfigs)),
                     __Delete<GenericExtension>));
         //
