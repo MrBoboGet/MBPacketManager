@@ -267,8 +267,18 @@ namespace MBPM
 	MBError ParseSourceInfo(std::filesystem::path const& FilePath, SourceInfo& OutInfo)
 	{
 		MBError ReturnValue = true;
-		std::string TotalData = MBUtility::ReadWholeFile(MBUnicode::PathToUTF8(FilePath));
-		ReturnValue = ParseSourceInfo(TotalData.data(), TotalData.size(), OutInfo);
+        std::string TotalData;
+        try {
+            TotalData = MBUtility::ReadWholeFile(MBUnicode::PathToUTF8(FilePath));
+        }
+        catch (std::exception const& e)
+        {
+            ReturnValue = false;
+        }
+        if (ReturnValue)
+        {
+		    ReturnValue = ParseSourceInfo(TotalData.data(), TotalData.size(), OutInfo);
+        }
 		return(ReturnValue);
 	}
     MBError ParseMBBuildPacketInfo(MBPM_PacketInfo const& TotalPacketInfo,MBBuildPacketInfo& OutInfo)
@@ -1313,7 +1323,88 @@ namespace MBPM
         return(ReturnValue);
     }
 
-    MBError MBBuild_Extension::p_BuildLanguageConfig(std::filesystem::path const& PacketPath,MBPM_PacketInfo const& PacketInfo,DependancyConfigSpecification const& DependancySpec,CompileConfiguration const& CompileConf,std::string const& CompileConfName, SourceInfo const& InfoToCompile,std::vector<std::string> const& Targets,CommandInfo const& Command,Compiler& CompilerToUse)
+    std::vector<MBBuild_Extension::CompilationDependancy> MBBuild_Extension::GetCompilationDependancies(std::string const& PacketPath,MBPM_PacketInfo const& PacketInfo,PacketRetriever const& AssociatedRetriever)
+    {
+        std::vector<MBBuild_Extension::CompilationDependancy> ReturnValue;
+        PacketIdentifier LocalPacket;
+        LocalPacket.PacketName = PacketInfo.PacketName;
+        LocalPacket.PacketURI = PacketPath;
+        LocalPacket.PacketLocation = PacketLocationType::Local;
+        MBError Result = true;
+        //TODO use the source info instead of the MBPM_PacketInfo
+        std::vector<PacketIdentifier> TotalDependancies = AssociatedRetriever.GetPacketDependancies(LocalPacket,Result);
+        if(!Result)
+        {
+            throw std::runtime_error("Failed retrieving packet dependancies: "+Result.ErrorMessage);
+        }
+        for(PacketIdentifier const& Packet : TotalDependancies)
+        {
+            CompilationDependancy NewDependancy;
+            NewDependancy.PacketPath = Packet.PacketURI;
+            //std::cout<<"Dependancies "<<Packet.PacketName<<std::endl;
+            NewDependancy.PacketInfo = AssociatedRetriever.GetPacketInfo(Packet);
+            //Should check that packet is 
+
+            Result = ParseMBBuildPacketInfo(NewDependancy.PacketInfo,NewDependancy.BuildInfo);
+            if(!Result)
+            {
+                throw std::runtime_error("Error parsing dependancy packet build info: "+Result.ErrorMessage);
+            }
+
+            Result = ParseSourceInfo(Packet.PacketURI + "/MBSourceInfo.json",NewDependancy.Sources);
+            //if(!Result)
+            //{
+            //    throw std::runtime_error("Error parsing dependancy packet source info: "+Result.ErrorMessage);
+            //}
+            ReturnValue.push_back(std::move(NewDependancy));
+            //for(std::string const& IncludePath : DependancyBuildInfo.ExtraIncludeDirectories)
+            //{
+            //    ExtraIncludes.push_back(InstallDirectory+"/"+DependancyInfo.PacketName+"/"+IncludePath);
+            //}
+        }
+        return(ReturnValue);
+    }
+    MBError MBBuild_Extension::p_BuildDependancy(CompilationDependancy const& DependancyToBuild,bool RebuildRecursive,std::string const& Config,std::promise<bool>& VariableToSignal) const
+    {
+        MBError Result = true;
+        if (DependancyToBuild.Sources.Language == "")
+        {
+            VariableToSignal.set_value(true);
+            return(Result);
+        }
+        auto PacketKey = MBUnicode::PathToUTF8(DependancyToBuild.PacketPath) + " BS "+ Config;
+        //a bit inefficient
+        if (m_CompiledDependancies.Contains(PacketKey))
+        {
+            VariableToSignal.set_value(true);
+            return(m_CompiledDependancies[PacketKey].Get());
+        }
+        m_CompiledDependancies.Add(PacketKey);
+        try {
+            
+            std::vector<std::string> Targets;
+            for (auto const& Target : DependancyToBuild.Sources.Targets)
+            {
+                Targets.push_back(Target.first);
+            }
+            CompileConfiguration const& CompileConf =
+                m_UserCompilationConfigs.Configurations.at(DependancyToBuild.Sources.Language).Configurations.at(Config);
+            Compiler const& CompilerToUse = *m_SupportedCompilers.at(CompileConf.Toolchain);
+            Result =
+                p_BuildLanguageConfig(DependancyToBuild.PacketPath, DependancyToBuild.PacketInfo, m_UserDependancyConfigs,
+                    CompileConf, Config, DependancyToBuild.Sources, Targets, RebuildRecursive == true, RebuildRecursive,VariableToSignal, CompilerToUse);
+            m_CompiledDependancies[PacketKey].Store(MBError(Result));
+        }
+        catch (std::exception const& e)
+        {
+            MBError ErrorToStore = false;
+            ErrorToStore.ErrorMessage = e.what();
+            m_CompiledDependancies[PacketKey].Store(std::move(ErrorToStore));
+        }
+
+        return Result;
+    }
+    MBError MBBuild_Extension::p_BuildLanguageConfig(std::filesystem::path const& PacketPath,MBPM_PacketInfo const& PacketInfo,DependancyConfigSpecification const& DependancySpec,CompileConfiguration const& CompileConf,std::string const& CompileConfName, SourceInfo const& InfoToCompile,std::vector<std::string> const& Targets,bool Rebuild,bool RebuildRecursive,std::promise<bool>& VariableToSignal,Compiler const& CompilerToUse) const
     {
         MBError ReturnValue = true;
         MBBuildPacketInfo BuildPacketInfo;
@@ -1327,54 +1418,26 @@ namespace MBPM
         DependancyInfo SourceDependancies; 
         std::vector<std::string> TotalSources = GetAllSources(InfoToCompile);
         std::filesystem::path BuildFilesDirectory = PacketPath/("MBPM_BuildFiles/"+CompileConfName);
-        std::filesystem::path PreviousWD = std::filesystem::current_path();
-        std::filesystem::current_path(PacketPath);
-        bool RebuildAll = Command.Flags.find("rebuild") != Command.Flags.end();
+        //std::filesystem::path PreviousWD = std::filesystem::current_path();
+        //std::filesystem::current_path(PacketPath);
+        //bool RebuildAll = Command.Flags.find("rebuild") != Command.Flags.end();
         if(!std::filesystem::exists(BuildFilesDirectory))
         {
             std::filesystem::create_directories(BuildFilesDirectory);
         }
         std::filesystem::path DependancyInfoPath = BuildFilesDirectory/"MBBuildDependancyInfo";
+        bool ValueSet = false;
         try
         {
             std::string InstallDirectory = GetSystemPacketsDirectory();
             std::vector<std::string> ExtraIncludes = {InstallDirectory};
             for(std::string const& Include : BuildPacketInfo.ExtraIncludeDirectories)
             {
-                ExtraIncludes.push_back("."+Include);   
-            }
-            PacketIdentifier LocalPacket;
-            LocalPacket.PacketName = PacketInfo.PacketName;
-            LocalPacket.PacketURI = "./";
-            LocalPacket.PacketLocation = PacketLocationType::Local;
-            //TODO use the source info instead of the MBPM_PacketInfo
-            std::vector<PacketIdentifier> TotalDependancies = m_AssociatedRetriever->GetPacketDependancies(LocalPacket,ReturnValue);
-            if(!ReturnValue)
-            {
-                throw std::runtime_error("Failed retrieving packet dependancies: "+ReturnValue.ErrorMessage);
-            }
-            std::vector<MBPM_PacketInfo> DependancyInfos;
-            std::vector<MBBuildPacketInfo> BuildInfos;
-            for(PacketIdentifier const& Packet : TotalDependancies)
-            {
-                //std::cout<<"Dependancies "<<Packet.PacketName<<std::endl;
-                MBPM_PacketInfo DependancyInfo = m_AssociatedRetriever->GetPacketInfo(Packet);
-                MBBuildPacketInfo DependancyBuildInfo;
-                ReturnValue = ParseMBBuildPacketInfo(DependancyInfo,DependancyBuildInfo);
-                if(!ReturnValue)
-                {
-                    throw std::runtime_error("Error parsing dependancy packet build info: "+ReturnValue.ErrorMessage);
-                }
-                for(std::string const& IncludePath : DependancyBuildInfo.ExtraIncludeDirectories)
-                {
-                    ExtraIncludes.push_back(InstallDirectory+"/"+DependancyInfo.PacketName+"/"+IncludePath);
-                }
-                DependancyInfos.push_back(std::move(DependancyInfo));
-                BuildInfos.push_back(std::move(DependancyBuildInfo));
+                ExtraIncludes.push_back("./"+Include);   
             }
 
             MBError DependancyInfoResult = true;
-            if (!std::filesystem::exists(DependancyInfoPath) || RebuildAll)
+            if (!std::filesystem::exists(DependancyInfoPath) || Rebuild)
             {
                 DependancyInfoResult = DependancyInfo::CreateDependancyInfo(InfoToCompile, CompileConf, PacketPath,ExtraIncludes, &SourceDependancies);
             }
@@ -1391,45 +1454,120 @@ namespace MBPM
             }
             //TODO fix
             std::string CompileString = h_CreateCompileString(CompileConf);
+            std::string LinkString = h_CreateLinkString(CompileConf);
+            std::vector<std::string> ExtraLibraries = {};
+            std::string DependancyString;
             std::string OutSourceDir = MBUnicode::PathToUTF8(PacketPath/"MBPM_BuildFiles"/CompileConfName)+"/";
             bool CompilationResult = true;
             bool CompilationNeeded = false;
+
+            std::vector<CompilationDependancy> Dependancies = GetCompilationDependancies(MBUnicode::PathToUTF8(PacketPath),PacketInfo,*m_AssociatedRetriever);
+            for(auto const& Dependancy : Dependancies)
+            {
+                for(auto const& ExtraInclude : Dependancy.BuildInfo.ExtraIncludeDirectories)
+                {
+                    ExtraIncludes.push_back(InstallDirectory+"/"+Dependancy.PacketInfo.PacketName+"/"+ExtraInclude);    
+                }
+            }
+            std::vector<std::pair<std::string,std::future<bool>>> CompilationResults;
             for (std::string const& Source : TotalSources)
             {
-                if(!SourceDependancies.IsSourceOutOfDate(PacketPath,Source,CompileString,DependancyInfoResult) && !RebuildAll)
+                if(!SourceDependancies.IsSourceOutOfDate(PacketPath,Source,CompileString,DependancyInfoResult) && !Rebuild)
                 {
                     continue;    
                 }
                 CompilationNeeded = true;
-                CompilationResult = CompilerToUse.CompileSource(CompileConf,InfoToCompile,Source,OutSourceDir,ExtraIncludes);
-                if(!CompilationResult)
-                {
-                    break;   
-                }
-                SourceDependancies.UpdateSource(Source,CompileString);
+                CompilationResults.push_back(std::make_pair(Source,
+                            m_ThreadPool->AddTask(
+                                    [&,this,SourceString=Source]() mutable -> bool
+                                    {
+                                        if(!CompilationResult)
+                                        {
+                                            return false;
+                                        }
+                                        std::string AbsoluteSourcePath = MBUnicode::PathToUTF8(PacketPath / SourceString.substr(1));
+                                        bool NewCompileResult = CompilerToUse.CompileSource(CompileConf,InfoToCompile,AbsoluteSourcePath,SourceString,OutSourceDir,ExtraIncludes);
+                                        CompilationResult = CompilationResult && NewCompileResult;
+                                        return NewCompileResult;
+                                    }
+                                )));
             }
+            VariableToSignal.set_value(true);
+            ValueSet = true;
+            //compile dependancies recursively
+            //OBS! Important that they are added after the source files. As tasks
+            //are guaranteed to be finished in the order they are added, so sources 
+            //can be compile before the result of the dependancies are needed
+            std::vector<std::future<MBError>> DependanciesResult;
+            for (int i = int(Dependancies.size()) - 1; i >= 0; i--)
+            {
+                auto const& CurrentDependancy = Dependancies[i];
+                DependancyString += CurrentDependancy.PacketInfo.PacketName;
+                DependancyString += ' ';
+                std::string PacketConfig = DependancySpec.GetDependancyConfig(CurrentDependancy.PacketInfo, CompileConfName);
+                for (auto const& LinkTarget : CurrentDependancy.BuildInfo.DefaultLinkTargets)
+                {
+                    ExtraLibraries.push_back(InstallDirectory + CurrentDependancy.PacketInfo.PacketName + "/MBPM_Builds/" + PacketConfig + "/" + h_GetLibraryName(LinkTarget));
+                }
+            }
+            for(auto const& CurrentDependancy : Dependancies)
+            {
+                std::string PacketConfig = DependancySpec.GetDependancyConfig(CurrentDependancy.PacketInfo, CompileConfName);
+                std::promise<bool> WaitDependanciesDone;
+
+                std::future<bool>WaitFuture = WaitDependanciesDone.get_future();
+                DependanciesResult.push_back(m_ThreadPool->AddTask([this, Dep = CurrentDependancy, Config = PacketConfig, RebuildRecursive,WaitDependanciesDone=std::move(WaitDependanciesDone)]() mutable -> MBError
+                {
+                    return(p_BuildDependancy(Dep, RebuildRecursive, Config,WaitDependanciesDone));
+                }));
+                WaitFuture.wait();
+            }
+            //
+            for(auto& Result : CompilationResults)
+            {
+                Result.second.wait();
+                if(Result.second.valid() && Result.second.get())
+                {
+                    SourceDependancies.UpdateSource(Result.first,CompileString);
+                }
+            }
+
+
+
             if(!CompilationResult)
             {
                 //kinda ugly
                 throw std::runtime_error("Error compiling sources");
             }
-            //Link step
-            std::vector<std::string> ExtraLibraries = {};
-            std::reverse(DependancyInfos.begin(),DependancyInfos.end());
-            std::reverse(BuildInfos.begin(),BuildInfos.end());
-            std::string LinkString = h_CreateLinkString(CompileConf);
-            std::string DependancyString;
-            for(int i = 0; i < DependancyInfos.size();i++)
+            //Link step, requires dependancy works
+            bool DependancyResult = true;
+            std::string FailedDependancy;
+            MBError DependancyError;
+            int DepIndex = 0;
+            for(auto& Result : DependanciesResult)
             {
-                MBPM_PacketInfo& CurrentInfo = DependancyInfos[i];
-                MBBuildPacketInfo& CurrentBuildInfo = BuildInfos[i];
-                DependancyString += CurrentInfo.PacketName;
-                DependancyString += ' ';
-                std::string PacketConfig = DependancySpec.GetDependancyConfig(CurrentInfo,CompileConfName);
-                for(auto const& LinkTarget : CurrentBuildInfo.DefaultLinkTargets)
+                Result.wait();
+                if(!Result.valid())
                 {
-                    ExtraLibraries.push_back(InstallDirectory+ CurrentInfo.PacketName +"/MBPM_Builds/"+PacketConfig+"/"+h_GetLibraryName(LinkTarget));
+                    DependancyResult = false;
+                    DepIndex++;
+                    continue;
                 }
+                MBError AssociatedResult = Result.get();
+                if(!AssociatedResult)
+                {
+                    if(DependancyResult)
+                    {
+                        FailedDependancy = Dependancies[DepIndex].PacketInfo.PacketName;
+                        DependancyError = AssociatedResult;
+                    }
+                    DependancyResult = false;
+                }
+                DepIndex++;
+            }
+            if(!DependancyResult)
+            {
+                throw std::runtime_error("Error compiling dependancy '"+FailedDependancy+"': "+DependancyError.ErrorMessage+": skipping linking");
             }
             uint64_t LatestDependancyUpdate = 0;
             for(std::string const& DependantLibrary : ExtraLibraries)
@@ -1445,24 +1583,33 @@ namespace MBPM
                     LatestDependancyUpdate = NewTimestamp;
                 }
             }
+            std::vector<std::pair<std::string, std::future<bool>>> LinkPromises;
             for(std::string const& TargetName : Targets)
             {
                 bool ShouldLink = false;
                 Target const& CurrentTarget =InfoToCompile.Targets.at(TargetName);
-                if(CompilationNeeded || SourceDependancies.IsTargetOutOfDate(TargetName,LatestDependancyUpdate,CurrentTarget,LinkString) || RebuildAll)
+                if(CompilationNeeded || SourceDependancies.IsTargetOutOfDate(TargetName,LatestDependancyUpdate,CurrentTarget,LinkString) || Rebuild)
                 {
-                    std::string OutDir = "MBPM_Builds/"+CompileConfName+"/";
-                    bool Result = CompilerToUse.LinkTarget(CompileConf, InfoToCompile,CurrentTarget,OutSourceDir,OutDir,ExtraLibraries);
-                    if(!Result)
-                    {
-                        throw std::runtime_error("Error linking library");
-                    }
-                    else
-                    {
-                        SourceDependancies.UpdateTarget(TargetName,CurrentTarget, LinkString);
-                    }
+                    std::string OutDir = MBUnicode::PathToUTF8(PacketPath/"MBPM_Builds/"/CompileConfName) + "/";
+                    LinkPromises.push_back(std::make_pair(TargetName,m_ThreadPool->AddTask( [&,OutDir=OutDir]() -> bool
+                                {
+                                    return(CompilerToUse.LinkTarget(CompileConf, InfoToCompile,CurrentTarget,OutSourceDir,OutDir,ExtraLibraries));
+                                })));
                 }
             } 
+            for(auto& LinkResult : LinkPromises)
+            {
+                LinkResult.second.wait();
+                if(!LinkResult.second.valid() || !LinkResult.second.get())
+                {
+                    throw std::runtime_error("Error linking library");
+                }
+                else
+                {
+                    Target const& TargetToCompile = InfoToCompile.Targets.at(LinkResult.first);
+                    SourceDependancies.UpdateTarget(LinkResult.first,TargetToCompile, LinkString);
+                }
+            }
             MBError UpdateDependanciesResult = SourceDependancies.UpdateUpdatedFilesDependancies(PacketPath,ExtraIncludes);
             if(!UpdateDependanciesResult)
             {
@@ -1471,10 +1618,14 @@ namespace MBPM
         }
         catch(std::exception const& e)
         {
+            if(!ValueSet)
+            {
+                VariableToSignal.set_value(true);   
+            }
             ReturnValue = false;
             ReturnValue.ErrorMessage = "Error compiling packet: "+std::string(e.what());        
         }
-        std::filesystem::current_path(PreviousWD);
+        //std::filesystem::current_path(PreviousWD);
         std::ofstream DependancyFile = std::ofstream(DependancyInfoPath,std::ios::out|std::ios::binary);
         MBUtility::MBFileOutputStream DependancyOutputStream(&DependancyFile);
         SourceDependancies.WriteDependancyInfo(DependancyOutputStream);
@@ -1487,7 +1638,7 @@ namespace MBPM
         try
         {
             SourceInfo BuildInfo = p_GetPacketSourceInfo(PacketPath);
-            UserConfigurationsInfo CompileConfigurations = p_GetGlobalCompileConfigurations();
+            m_UserCompilationConfigs = p_GetGlobalCompileConfigurations();
             bool TargetsAreValid = p_VerifyTargets(BuildInfo,Targets);
             MBPM_PacketInfo PacketInfo = p_GetPacketInfo(PacketPath);
             if(!TargetsAreValid)
@@ -1496,8 +1647,8 @@ namespace MBPM
                 ReturnValue.ErrorMessage = "Invalid targets for compilation: Target not found in MBSourceInfo.json";
                 return(ReturnValue);
             }
-            auto const& ConfIt = CompileConfigurations.Configurations.find(BuildInfo.Language);
-            if(ConfIt == CompileConfigurations.Configurations.end())
+            auto const& ConfIt = m_UserCompilationConfigs.Configurations.find(BuildInfo.Language);
+            if(ConfIt == m_UserCompilationConfigs.Configurations.end())
             {
                 ReturnValue = false;
                 ReturnValue.ErrorMessage = "No compile configurations exist for language: "+BuildInfo.Language;
@@ -1511,7 +1662,7 @@ namespace MBPM
                 ReturnValue.ErrorMessage = "Invalid config: Configuration not found in language configurations";
                 return(ReturnValue);
             }
-            DependancyConfigSpecification DepConf = p_GetGlobalDependancySpecification();
+            m_UserDependancyConfigs = p_GetGlobalDependancySpecification();
             if(Configs.size() == 0)
             {
                 Configs = LanguageInfo.DefaultConfigs;
@@ -1526,8 +1677,8 @@ namespace MBPM
             }
             for(std::string const& Config : Configs)
             {
-                ReturnValue = p_BuildLanguageConfig(PacketPath,PacketInfo,DepConf,LanguageInfo.Configurations.at(Config),Config,BuildInfo,Targets,Command
-                        , *m_SupportedCompilers[LanguageInfo.Configurations.at(Config).Toolchain]);
+                std::promise<bool> ValueToSet;
+                ReturnValue = p_BuildLanguageConfig(PacketPath,PacketInfo,m_UserDependancyConfigs,LanguageInfo.Configurations.at(Config),Config,BuildInfo,Targets, Command.Flags.find("rebuild") != Command.Flags.end() , Command.Flags.find("rebuild-all") != Command.Flags.end(),ValueToSet, *m_SupportedCompilers[LanguageInfo.Configurations.at(Config).Toolchain]);
                 if (!ReturnValue)
                 {
                     return(ReturnValue);
@@ -1689,6 +1840,7 @@ namespace MBPM
     }
     MBError MBBuild_Extension::HandleCommand(CommandInfo const& CommandToHandle,PacketIdentifier const& PacketToHandle,PacketRetriever& RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal)
     {
+        m_AssociatedRetriever = &RetrieverToUse;
         MBError ReturnValue = true;
         if(CommandToHandle.CommandName == "compile")
         {
@@ -1718,6 +1870,10 @@ namespace MBPM
     }
     MBError MBBuild_Extension::p_Handle_Compile(CommandInfo const& CommandToHandle,PacketIdentifier const& PacketToHandle,PacketRetriever & RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal)
     {
+        if(m_ThreadPool == nullptr)
+        {
+            m_ThreadPool = std::make_unique<MBUtility::ThreadPool>();   
+        }
         MBError ReturnValue = true;
         std::vector<std::string> Targets; 
         std::vector<std::string> Configurations;
@@ -2379,7 +2535,7 @@ namespace MBPM
         }
         return(ReturnValue);
     }
-    std::string Compiler_GCCSyntax::p_GetCompilerName(SourceInfo const& SInfo)
+    std::string Compiler_GCCSyntax::p_GetCompilerName(SourceInfo const& SInfo) const
     {
         std::string ReturnValue = m_CompilerBase; 
         if(SInfo.Language == "C++")
@@ -2398,9 +2554,10 @@ namespace MBPM
     }
     bool Compiler_GCCSyntax::CompileSource( CompileConfiguration const& CompileConfig,
                                     SourceInfo const& SInfo,
-                                    std::string const& SourcePath,
+                                    std::string const& SourceAbsolutPath,
+                                    std::string const& SourceRelativePath,
                                     std::string const& OutTopDir,
-                                    std::vector<std::string> const& ExtraIncludeDirectories)
+                                    std::vector<std::string> const& ExtraIncludeDirectories) const
     {
 
         bool ReturnValue = true;
@@ -2417,8 +2574,8 @@ namespace MBPM
             CompileCommand += "-I"+ExtraInclude;
             CompileCommand += ' ';
         }
-        CompileCommand += SourcePath.substr(1)+' ';
-        std::string OutSourcePath = OutTopDir+"/"+h_ReplaceExtension(SourcePath,"o");
+        CompileCommand += SourceAbsolutPath +' ';
+        std::string OutSourcePath = OutTopDir+"/"+h_ReplaceExtension(SourceRelativePath,"o");
         std::filesystem::path ParentDirectory = std::filesystem::path(OutSourcePath).parent_path();
         if(!std::filesystem::exists(ParentDirectory))
         {
@@ -2434,7 +2591,7 @@ namespace MBPM
                                 Target const& TargetToLink,
                                 std::string const& SourceDir,
                                 std::string const& OutDir,
-                                std::vector<std::string> const& ExtraLinkLibraries) 
+                                std::vector<std::string> const& ExtraLinkLibraries)  const
     {
         bool ReturnValue = true;
         std::vector<std::string> ObjectFiles = h_SourcesToObjectFiles(SourceDir,TargetToLink.SourceFiles,"o");
@@ -2525,11 +2682,12 @@ namespace MBPM
         }
         return(ReturnValue);
     }
-    bool Compiler_MSVC::CompileSource( CompileConfiguration const& CompileConf,
+    bool Compiler_MSVC::CompileSource( CompileConfiguration const& CompileConf, 
                                 SourceInfo const& SInfo,
-                                std::string const& SourceToCompile,
+                                std::string const& SourceAbsolutePath,
+                                std::string const& SourceRelativePath,
                                 std::string const& OutDir,
-                                std::vector<std::string> const& ExtraIncludeDirectories)
+                                std::vector<std::string> const& ExtraIncludeDirectories) const
     {
         bool ReturnValue = true;
         std::string CompileCommand = "vcvarsall.bat x86_x64 & cl /c ";
@@ -2544,14 +2702,14 @@ namespace MBPM
             CompileCommand += "/I \""+ExtraInclude+"\"";
             CompileCommand += ' ';
         }
-        CompileCommand += SourceToCompile.substr(1)+' ';
+        CompileCommand += SourceAbsolutePath +' ';
         //output path
         CompileCommand += "/Fo\"";
-        std::string OutSourcePath = OutDir+"/"+h_ReplaceExtension(SourceToCompile,"obj");
+        std::string OutSourcePath = OutDir+"/"+h_ReplaceExtension(SourceRelativePath,"obj");
         CompileCommand += OutSourcePath;
         CompileCommand += "\"";
         CompileCommand += " ";
-        CompileCommand += "/Fd"+OutDir+"/"+h_ReplaceExtension(SourceToCompile,"pdb");
+        CompileCommand += "/Fd"+OutDir+"/"+h_ReplaceExtension(SourceRelativePath,"pdb");
         std::filesystem::path ParentDirectory = std::filesystem::path(OutSourcePath).parent_path();
         if(!std::filesystem::exists(ParentDirectory))
         {
@@ -2567,7 +2725,7 @@ namespace MBPM
                             Target const& TargetToLink,
                             std::string const& SourceDir,
                             std::string const& OutDir,
-                            std::vector<std::string> const& ExtraLibraries) 
+                            std::vector<std::string> const& ExtraLibraries)  const
     {
         bool ReturnValue = true;
         std::vector<std::string> ObjectFiles = h_SourcesToObjectFiles(SourceDir,TargetToLink.SourceFiles,"obj");

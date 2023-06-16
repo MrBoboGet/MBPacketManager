@@ -1,6 +1,7 @@
 #pragma once
 #include "../MBPacketManager.h"
 #include <MBUtility/MBInterfaces.h>
+#include <mutex>
 #include <stdint.h>
 #include <unordered_set>
 #include <vector>
@@ -9,6 +10,7 @@
 #include <MBUtility/MBErrorHandling.h>
 #include <filesystem>
 #include <MBCLI/MBCLI.h>
+#include <MBUtility/ThreadPool.h>
 
 #include "../MBPM_CLI.h"
 
@@ -58,6 +60,7 @@ namespace MBPM
 
     struct CompileConfiguration
     {
+        std::string Name;
         std::string Toolchain;   
         std::vector<std::string> CompileFlags;
         std::vector<std::string> LinkFlags;
@@ -275,22 +278,23 @@ namespace MBPM
         virtual MBError SupportsLanguage(SourceInfo const& SourcesToCheck) = 0;
         virtual bool CompileSource( CompileConfiguration const& CompileConfig,
                                     SourceInfo const& SInfo,
-                                    std::string const& SourcePath,
+                                    std::string const& SourceAbsolutePath,
+                                    std::string const& SourceRelativePath,
                                     std::string const& OutTopDir,
-                                    std::vector<std::string> const& ExtraIncludes) = 0;
+                                    std::vector<std::string> const& ExtraIncludes) const = 0;
         virtual bool LinkTarget(CompileConfiguration const& CompileConfig,
                                 SourceInfo const& SInfo,
                                 Target const& TargetToLink,
                                 std::string const& SourceDir,
                                 std::string const& OutDir,
-                                std::vector<std::string> const& ExtraLinkLibraries) = 0;
+                                std::vector<std::string> const& ExtraLinkLibraries) const = 0;
     };
     //assumes here that clang and gcc works the same way, not entirely true, and that they support the same versions.
     //TODO is there a way to dynamically check wheter or not a compiler supports C++20 etc?
     class Compiler_GCCSyntax : public Compiler
     {
         std::string m_CompilerBase = "";
-        std::string p_GetCompilerName(SourceInfo const& SInfo);
+        std::string p_GetCompilerName(SourceInfo const& SInfo) const;
     public:
         Compiler_GCCSyntax(std::string const& CompilerBase)
         {
@@ -299,15 +303,16 @@ namespace MBPM
         virtual MBError SupportsLanguage(SourceInfo const& SourcesToCheck) override;
         virtual bool CompileSource( CompileConfiguration const& CompileConfig,
                                     SourceInfo const& SInfo,
-                                    std::string const& SourcePath,
+                                    std::string const& SourceAbsolutePath,
+                                    std::string const& SourceRelativePath,
                                     std::string const& OutTopDir,
-                                    std::vector<std::string> const& ExtraIncludes) override;
+                                    std::vector<std::string> const& ExtraIncludes) const override;
         virtual bool LinkTarget(CompileConfiguration const& CompileConfig,
                                 SourceInfo const& SInfo,
                                 Target const& TargetToLink,
                                 std::string const& SourceDir,
                                 std::string const& OutDir,
-                                std::vector<std::string> const& ExtraLinkLibraries) override;
+                                std::vector<std::string> const& ExtraLinkLibraries) const override;
     };
     class Compiler_MSVC : public Compiler
     {
@@ -315,16 +320,68 @@ namespace MBPM
         virtual MBError SupportsLanguage(SourceInfo const& SourcesToCheck) override;
         virtual bool CompileSource( CompileConfiguration const& CompileConfig,
                                     SourceInfo const& SInfo,
-                                    std::string const& SourcePath,
+                                    std::string const& SourceAbsolutePath, 
+                                    std::string const& SourceRelativePath,
                                     std::string const& OutTopDir,
-                                    std::vector<std::string> const& ExtraIncludes) override;
+                                    std::vector<std::string> const& ExtraIncludes) const override;
         virtual bool LinkTarget(CompileConfiguration const& CompileConfig,
                                 SourceInfo const& SInfo,
                                 Target const& TargetToLink,
                                 std::string const& SourceDir,
                                 std::string const& OutDir,
-                                std::vector<std::string> const& ExtraLinkLibraries) override;
+                                std::vector<std::string> const& ExtraLinkLibraries) const override;
     };
+   
+    template<typename T>
+    class AsyncStore
+    {
+        private:
+            std::unique_ptr<std::mutex> m_Lock = std::make_unique<std::mutex>();
+            std::condition_variable m_WaitCond;
+            T m_Value;
+            bool m_ValueStored = false;
+        public:
+        T const& Get()
+        {
+            std::unique_lock<std::mutex> Lock(*m_Lock);
+            while(!m_ValueStored)
+            {
+                m_WaitCond.wait(Lock);
+            }
+            return(m_Value);
+        }
+        void Store(T&& ValueToStore)
+        {
+            std::lock_guard<std::mutex> Lock(*m_Lock);
+            m_ValueStored = true;
+            m_Value = ValueToStore;
+            m_WaitCond.notify_all();
+        }
+    };
+    
+    template<typename KeyType,typename ValueType >
+    class i_ConcurrentDict
+    {
+        std::mutex m_ContentMutex;
+        std::unordered_map<KeyType,ValueType> m_Contents;
+    public:
+        bool Contains(KeyType const& Key)
+        {
+            std::lock_guard<std::mutex> Lock(m_ContentMutex);
+            return(m_Contents.find(Key) != m_Contents.end());
+        }
+        void Add(KeyType const& Key)
+        {
+            std::lock_guard<std::mutex> Lock(m_ContentMutex);
+            m_Contents[Key];
+        }
+        ValueType& operator[](KeyType const& Key)
+        {
+            std::lock_guard<std::mutex> Lock(m_ContentMutex);
+            return(m_Contents[Key]);
+        }
+    };
+    
     class MBBuild_Extension : public CLI_Extension
     {
     private:
@@ -344,9 +401,44 @@ namespace MBPM
         bool p_VerifyToolchain(SourceInfo const& InfoToCompile,CompileConfiguration const& TargetToVerify);
      
 
+        mutable std::mutex m_ThreadPoolMutex;
+        mutable std::unique_ptr<MBUtility::ThreadPool> m_ThreadPool;
+        mutable i_ConcurrentDict<std::string,AsyncStore<MBError>> m_CompiledDependancies;
+
+        //Cached, constant in regards to p_BuildLangaugeConfig
         std::unordered_map<std::string,std::unique_ptr<Compiler>> m_SupportedCompilers;
-        
-        MBError p_BuildLanguageConfig(std::filesystem::path const& PacketPath,MBPM_PacketInfo const& PacketInfo,DependancyConfigSpecification const& Dependancies,CompileConfiguration const& CompileConf,std::string const& CompileConfName, SourceInfo const& InfoToCompile,std::vector<std::string> const& Targets,CommandInfo const& CommandInfo,Compiler& CompilerToUse);
+        UserConfigurationsInfo m_UserCompilationConfigs;
+        DependancyConfigSpecification m_UserDependancyConfigs;
+       
+
+
+        struct CompilationDependancy
+        {
+            std::filesystem::path PacketPath;
+            MBPM_PacketInfo PacketInfo;     
+            MBBuildPacketInfo BuildInfo;
+            SourceInfo Sources;
+        };
+
+        static std::vector<CompilationDependancy> GetCompilationDependancies(std::string const& PacketPath, MBPM_PacketInfo const& PacketInfo, PacketRetriever const& AssociatedRetriever);
+
+
+        MBError p_BuildDependancy(CompilationDependancy const& DependancyToBuild,bool RebuildRecursive,std::string const& Config,std::promise<bool>& VariableToSignal) const;
+        //cachable, paralellised
+        //
+        //Probably reqquires complete rework
+        MBError p_BuildLanguageConfig(
+                    std::filesystem::path const& PacketPath,
+                    MBPM_PacketInfo const& PacketInfo,
+                    DependancyConfigSpecification const& Dependancies,
+                    CompileConfiguration const& CompileConf,
+                    std::string const& CompileConfName, 
+                    SourceInfo const& InfoToCompile,
+                    std::vector<std::string> const& Targets,
+                    bool Rebuild,
+                    bool RebuildRecursive,
+                    std::promise<bool>& VariableToSignal,
+                    Compiler const& CompilerToUse) const;
 
 
         MBError p_Handle_Compile(CommandInfo const& CommandToHandle,PacketIdentifier const& PacketToHandle,PacketRetriever & RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal);
