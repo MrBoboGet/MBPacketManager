@@ -1583,7 +1583,7 @@ namespace MBPM
                     LatestDependancyUpdate = NewTimestamp;
                 }
             }
-            std::vector<std::pair<std::string, std::future<bool>>> LinkPromises;
+            //std::vector<std::pair<std::string, std::future<bool>>> LinkPromises;
             for(std::string const& TargetName : Targets)
             {
                 bool ShouldLink = false;
@@ -1591,25 +1591,34 @@ namespace MBPM
                 if(CompilationNeeded || SourceDependancies.IsTargetOutOfDate(TargetName,LatestDependancyUpdate,CurrentTarget,LinkString) || Rebuild)
                 {
                     std::string OutDir = MBUnicode::PathToUTF8(PacketPath/"MBPM_Builds/"/CompileConfName) + "/";
-                    LinkPromises.push_back(std::make_pair(TargetName,m_ThreadPool->AddTask( [&,OutDir=OutDir]() -> bool
-                                {
-                                    return(CompilerToUse.LinkTarget(CompileConf, InfoToCompile,CurrentTarget,OutSourceDir,OutDir,ExtraLibraries));
-                                })));
+                    bool Result = CompilerToUse.LinkTarget(CompileConf, InfoToCompile,CurrentTarget,OutSourceDir,OutDir,ExtraLibraries);
+                    if(!Result)
+                    {
+                        throw std::runtime_error("Error linking library");
+                    }
+                    else
+                    {
+                        SourceDependancies.UpdateTarget(TargetName,CurrentTarget, LinkString);    
+                    }
+                    //LinkPromises.push_back(std::make_pair(TargetName,m_ThreadPool->AddTask( [&,OutDir=OutDir]() -> bool
+                    //            {
+                    //                return(CompilerToUse.LinkTarget(CompileConf, InfoToCompile,CurrentTarget,OutSourceDir,OutDir,ExtraLibraries));
+                    //            })));
                 }
             } 
-            for(auto& LinkResult : LinkPromises)
-            {
-                LinkResult.second.wait();
-                if(!LinkResult.second.valid() || !LinkResult.second.get())
-                {
-                    throw std::runtime_error("Error linking library");
-                }
-                else
-                {
-                    Target const& TargetToCompile = InfoToCompile.Targets.at(LinkResult.first);
-                    SourceDependancies.UpdateTarget(LinkResult.first,TargetToCompile, LinkString);
-                }
-            }
+            //for(auto& LinkResult : LinkPromises)
+            //{
+            //    LinkResult.second.wait();
+            //    if(!LinkResult.second.valid() || !LinkResult.second.get())
+            //    {
+            //        throw std::runtime_error("Error linking library");
+            //    }
+            //    else
+            //    {
+            //        Target const& TargetToCompile = InfoToCompile.Targets.at(LinkResult.first);
+            //        SourceDependancies.UpdateTarget(LinkResult.first,TargetToCompile, LinkString);
+            //    }
+            //}
             MBError UpdateDependanciesResult = SourceDependancies.UpdateUpdatedFilesDependancies(PacketPath,ExtraIncludes);
             if(!UpdateDependanciesResult)
             {
