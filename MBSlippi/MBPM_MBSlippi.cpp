@@ -5,7 +5,20 @@ namespace MBPM
     MBError MBPM_MBSlippi::p_HandleExport(MBPM::CommandInfo const& CommandToHandle,MBPM::PacketIdentifier const& PacketToHandle,MBPM::PacketRetriever& RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal)
     {
         MBError ReturnValue = true;
-        std::filesystem::path UserReplaysDirectory = MBSystem::GetUserHomeDirectory()/".mbslippi/Replays";
+        std::filesystem::path UserReplaysDirectory = MBSystem::GetUserHomeDirectory()/".mbslippi";
+        if(RetrieverToUse.GetPacketInfo(PacketToHandle).Type == "SLPReplays")
+        {
+            UserReplaysDirectory /= "Replays";
+        }
+        else if(RetrieverToUse.GetPacketInfo(PacketToHandle).Type == "MQL")
+        {
+            UserReplaysDirectory /= "Libs";
+        }
+        else
+        {
+            assert(false && "MBSlippi only handles packets of type MQL And SLPRepalys");   
+        }
+
         if(!std::filesystem::exists(UserReplaysDirectory))
         {
             std::filesystem::create_directories(UserReplaysDirectory);
@@ -36,11 +49,11 @@ namespace MBPM
         MBPM::CustomCommandInfo ReturnValue; 
         CustomCommand ExportCommand;
         ExportCommand.Name = "export";
-        ExportCommand.SupportedTypes = {"SLPReplays"};
+        ExportCommand.SupportedTypes = {"SLPReplays","MQL"};
         ExportCommand.Type = CommandType::TopCommand;
         CustomCommand RetractCommand;
         RetractCommand.Name = "retract";
-        RetractCommand.SupportedTypes = {"SLPReplays"};
+        RetractCommand.SupportedTypes = {"SLPReplays","MQL"};
         RetractCommand.Type = CommandType::TopCommand;
         ReturnValue.Commands = {std::move(RetractCommand),std::move(ExportCommand)};
         return(ReturnValue);
