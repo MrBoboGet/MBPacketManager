@@ -77,9 +77,13 @@ namespace MBPM
     MBError GenericExtension::p_HandleExport(MBPM::CommandInfo const& CommandToHandle,MBPM::PacketIdentifier const& PacketToHandle,MBPM::PacketRetriever& RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal)
     {
         MBError Result = true;
-        std::filesystem::path Root = GetRootPath(m_ExportConfig)/m_ExportConfig.RootSuffix;
+        std::filesystem::path Root = std::filesystem::absolute(GetRootPath(m_ExportConfig)/m_ExportConfig.RootSuffix);
         if(m_ExportConfig.ExportedFiles.size() == 0)
         {
+            if(!std::filesystem::exists(Root))
+            {
+                std::filesystem::create_directories(Root);   
+            }
             if(std::filesystem::exists(Root/PacketToHandle.PacketName))
             {
                 std::filesystem::remove(Root/PacketToHandle.PacketName);
@@ -90,7 +94,7 @@ namespace MBPM
         {
 
         }
-        std::filesystem::create_directory_symlink(PacketToHandle.PacketURI,Root/PacketToHandle.PacketName);
+        std::filesystem::create_directory_symlink(std::filesystem::absolute(PacketToHandle.PacketURI),Root/PacketToHandle.PacketName);
         return(Result);
     }
     MBError GenericExtension::p_HandleRetract(MBPM::CommandInfo const& CommandToHandle,MBPM::PacketIdentifier const& PacketToHandle,MBPM::PacketRetriever& RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal)

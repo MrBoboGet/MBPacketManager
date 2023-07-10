@@ -2067,7 +2067,16 @@ namespace MBPM
         MPVConfigs.ExportConfigs[OSType::Default] = std::move(DefaultMPVExport);
         p_RegisterExtension(std::unique_ptr<CLI_Extension,void(*)(void*)>(new GenericExtension("MPV",{"MPVPlugin"},std::move(MPVConfigs)),
                     __Delete<GenericExtension>));
-        //
+        //MBLisp
+        OSConfigurations MBLispConfig;
+        ExportConfig DefaultMBLispExport;
+        DefaultMBLispExport.RootSuffix = ".mblisp/libs/";
+        DefaultMBLispExport.Root = RootType::Home;
+        MBLispConfig.ExportConfigs[OSType::Default] = std::move(DefaultMBLispExport);
+        p_RegisterExtension(std::unique_ptr<CLI_Extension,void(*)(void*)>(new GenericExtension("MBLisp",{"MBLisp"},std::move(MBLispConfig)),
+                    __Delete<GenericExtension>));
+
+
         p_RegisterExtension(std::move(BuildExtension));
         p_RegisterExtension(std::move(VimExtension));
         p_RegisterExtension(std::move(BashExtension));
