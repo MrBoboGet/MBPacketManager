@@ -108,7 +108,7 @@ namespace MBPM
         {
             std::filesystem::remove(VimPluginDirectory/PacketToHandle.PacketName);
         }
-        std::filesystem::create_directory_symlink(PacketToHandle.PacketURI,VimPluginDirectory/PacketToHandle.PacketName);
+        std::filesystem::create_directory_symlink(std::filesystem::absolute(PacketToHandle.PacketURI),VimPluginDirectory/PacketToHandle.PacketName);
         return(ReturnValue);
     }
     MBError MBPM_Vim::p_HandleRetract(MBPM::CommandInfo const& CommandToHandle,MBPM::PacketIdentifier const& PacketToHandle,MBPM::PacketRetriever& RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal)

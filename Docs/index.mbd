@@ -1,5 +1,8 @@
 %title MBPacketManager
 
+!#(../Logo.png)
+
+
 MBPacketManager is a packet manager program, with a focus on simple packet
 and generic packet structures, with a bias towards easing development for
 programming languages with the same dependancy and build semantics as C/C++.

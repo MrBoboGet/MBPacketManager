@@ -1699,6 +1699,7 @@ namespace MBPM
             ReturnValue = false;
             ReturnValue.ErrorMessage = e.what(); 
         } 
+        m_ThreadPool->Join();
         return(ReturnValue);    
     }
     //ugly as it is more or less a carbon copy of the function above
@@ -1903,6 +1904,7 @@ namespace MBPM
             } 
         }
         ReturnValue =  BuildPacket(PacketToHandle.PacketURI,Configurations,Targets,CommandToHandle);
+        m_ThreadPool->Join();
         return(ReturnValue);    
     }
     MBError MBBuild_Extension::p_Handle_Export(CommandInfo const& CommandToHandle,PacketIdentifier const& PacketToHandle,PacketRetriever& RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal)

@@ -26,8 +26,9 @@ namespace MBPM
         if(std::filesystem::exists(UserReplaysDirectory/PacketToHandle.PacketName))
         {
             std::filesystem::remove(UserReplaysDirectory/PacketToHandle.PacketName);
+
         }
-        std::filesystem::create_directory_symlink(PacketToHandle.PacketURI,UserReplaysDirectory/PacketToHandle.PacketName);
+        std::filesystem::create_directory_symlink(std::filesystem::canonical(PacketToHandle.PacketURI), UserReplaysDirectory/PacketToHandle.PacketName);
         return(ReturnValue);
     }
     MBError MBPM_MBSlippi::p_HandleRetract(MBPM::CommandInfo const& CommandToHandle,MBPM::PacketIdentifier const& PacketToHandle,MBPM::PacketRetriever& RetrieverToUse,MBCLI::MBTerminal& AssociatedTerminal)

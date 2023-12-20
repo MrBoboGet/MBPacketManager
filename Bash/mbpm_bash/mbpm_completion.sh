@@ -25,3 +25,4 @@ mbpm_completion()
     mbpm packets --allinstalled --name | mbpm_filter_result $2
     return 0
 }
+complete -C mbpm_completion mbpm
