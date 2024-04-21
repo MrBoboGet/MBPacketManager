@@ -20,6 +20,7 @@
 #include <MBUtility/MBStrings.h>
 #include <MBUtility/MBErrorHandling.h>
 #include <MBUtility/MBInterfaces.h>
+#include <MBUtility/LineRetriever.h>
 #include <limits>
 namespace MBPM
 {
